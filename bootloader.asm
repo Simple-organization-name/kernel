@@ -1,9 +1,8 @@
 bits    16
 org     0x7C00
 
-main:
-    jmp main
-
+boot_main:
+    jmp boot_main
 
 times 510-($-$$) db 0
-dw 0x55AA
+dw 0xAA55
