@@ -1,8 +1,8 @@
-.PHONY : all run
+.PHONY:all
 
-all: bootloader.asm run
+all: bootloader run
 
-bootloader.asm:
+bootloader:
 	nasm -f bin -o bootloader.bin bootloader.asm
 
 run:
