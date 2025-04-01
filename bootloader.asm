@@ -9,6 +9,20 @@ realMode:
         mov     bp,     0x7BFF
         mov     sp,     bp
 
+        ; loads the next 63 sectors right after
+        .loadBigBoot:
+            mov     ah,     0x02
+            mov     al,     63
+            mov     ch,     0
+            mov     cl,     2
+            mov     dh,     0
+            mov     dl,     byte [bootDriveId]
+            xor     bx,     bx
+            mov     es,     bx
+            mov     bx,     0x7E00
+            int     0x13
+            ret
+        
         ; Enabling A20-gate
         mov     ax,     0x2403      ; Ask if A20-gate is supported
         int     0x15
@@ -134,3 +148,9 @@ bootDriveId     db  0
 
 times   510 - ($-$$) db 0   ; Fill up rest of first sector 
 dw      0xAA55              ; Boot signature to tell BIOS it can boot the disk
+
+mbrEnd:
+
+; rest of bootloader here
+
+times  (512*63) - ($ - mbrEnd) db 0
