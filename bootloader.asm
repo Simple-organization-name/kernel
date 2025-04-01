@@ -4,7 +4,7 @@
 mov     [bootDriveId],  dl      ; Keep this, might be handy later on
 
 realMode:
-    .realMain:
+    .main:
         ; Init 16-bit mode temporary stack
         mov     bp,     0x7BFF
         mov     sp,     bp
@@ -86,7 +86,7 @@ realMode:
 [bits    32]
 
 protectedMode:
-    .protectedMain:
+    .main:
         call    .clear
 
         mov     esi,    .testString
@@ -95,7 +95,7 @@ protectedMode:
         hlt
 
         ; switch to long mode first
-        jmp     0x8:longMode.longMain
+        jmp     0x8:longMode.main
 
     .videoMemory equ 0xB8000
     .videoMemoryEnd equ 0xBFFFF
@@ -138,7 +138,7 @@ protectedMode:
 [bits    64]
 
 longMode:
-    .longMain:
+    .main:
         jmp $
 
 
