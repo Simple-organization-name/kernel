@@ -1,10 +1,9 @@
 [org     0x7C00]      ; BIOS put us in RAM at address 0x7C00
+
 [bits    16]          ; On first load, CPU is in 16-bit "real" mode
-
-mov     [bootDriveId],  dl      ; Keep this, might be handy later on
-
 realMode:
     .main:
+        mov     [bootDriveId],  dl      ; Keep this, might be handy later on
         ; Init 16-bit mode temporary stack
         mov     bp,     0x7BFF
         mov     sp,     bp
@@ -85,7 +84,6 @@ realMode:
 
 
 [bits    32]
-
 protectedMode:
     .main:
         call    .clear
@@ -137,7 +135,6 @@ protectedMode:
 
 
 [bits    64]
-
 longMode:
     .main:
         jmp $
