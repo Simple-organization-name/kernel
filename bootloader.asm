@@ -1,30 +1,56 @@
-bits    16
-org     0x7C00
+bits    16          ; On first load, CPU is in 16-bit "real" mode
+org     0x7C00      ; And the BIOS put us in RAM at address 0x7C00
 
 
-main:
-    mov     si,     helloWorld
-    call    print
+mov     [bootDriveId],  dl      ; Keep this, might be handy later on
+
+realMain:
+
+    ; Switch to 32-bit "protected" mode
+    cli         ; disable interrupts
+    lgdt    [gdt.descriptor]    ; load gdt
+    
     jmp     $
+    ; switch to protected mode first
+    jmp     0x8:protectedMain
 
-helloWorld  db 'Hello World !', 0
-print:
-    ; Print a string
-    ; Args:
-    ;   si: pointer to the string to print
-    mov     ah,     0x0E
-    .loop:
-        mov     al,     byte [si]
-        cmp     al,     0
-        je      .end
+bits    32
+protectedMain:
 
-        int     0x10
+    jmp $
+    ; switch to long mode first
+    jmp     0x8:longMain
 
-        inc     si
-        jmp     .loop
+bits    64
+longMain:
+    jmp $
 
-    .end:
-        ret
 
-times 510 - ($-$$) db 0
-dw 0xAA55
+bootDriveId     db  0
+
+gdt:
+.null:
+    dq  0
+.code:
+    dw  0xffff      ; segment length bits 0-15
+    dw  0x0000      ; segment base bits 0-15
+    db  0x00        ; segment base bits 16-23
+    db  0b10011111  ; access byte (refer to docs online)
+    db  0b11001111  ; flags (bits) + segment length bits 16-19
+    db  0x00        ; segment base bits 24-31
+.data:
+    dw  0xffff
+    dw  0x0000
+    db  0x00
+    db  0b10010011
+    db  0b11001111
+    db  0x00
+.end:
+.descriptor:
+    dw  .end - .null    ; gdt size
+    dd  gdt             ; gdt address
+
+    
+
+times   510 - ($-$$) db 0   ; Fill up rest of first sector 
+dw      0xAA55              ; Boot signature to tell BIOS it can boot the disk
