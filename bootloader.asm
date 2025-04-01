@@ -11,16 +11,17 @@ realMode:
 
         ; loads the next 63 sectors right after
         .loadBigBoot:
-            mov     ah,     0x02
-            mov     al,     63
-            mov     ch,     0
-            mov     cl,     2
-            mov     dh,     0
-            mov     dl,     byte [bootDriveId]
-            xor     bx,     bx
-            mov     es,     bx
-            mov     bx,     0x7E00
-            int     0x13
+            mov     ah,     0x02    ; sub-function read sectors from drive
+            mov     al,     63      ; how many sectors to read
+            mov     ch,     0       ; nb of the cylinder from which to read
+            mov     cl,     2       ; starting sector (drives are indexed from 1. cursed.)
+            mov     dh,     0       ; head ? idk man just put 0
+            mov     dl,     byte [bootDriveId]  ; what drive to read from, saved that at first instruction
+            xor     bx,     bx      ; put 0 in bx cuz you can only move regs to es
+            mov     es,     bx      ; segment of the address
+            mov     bx,     0x7E00  ; offset of the address         (address es:bx is es*16 + bx)
+            int     0x13            ; call interrupt
+            jc      .loadBigBoot    ; cf is set on error
         
         ; Enabling A20-gate
         mov     ax,     0x2403      ; Ask if A20-gate is supported
