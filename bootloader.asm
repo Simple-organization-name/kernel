@@ -17,7 +17,7 @@ realMode:
         mov     ax,     0x2402      ; Check the status of the A20-gate
         int     0x15
         jc      .a20StatusError
-        cmp     al,     1
+        cmp     al,     1           ; Check if A20-gate us already enabled
         jmp     .a20Enabled
 
         mov     ax,     0x2401      ; Activate the A20-gate
@@ -25,8 +25,8 @@ realMode:
         jc      .a20NotToggleableByBIOS
 
     .a20Enabled:
-        mov     si,     .a20EnabledMsg
-        call    .print
+        ; mov     si,     .a20EnabledMsg
+        ; call    .print
 
         ; Switch to 32-bit "protected" mode
         cli                             ; disable interrupts
@@ -37,35 +37,35 @@ realMode:
         or      eax,    1
         mov     cr0,    eax
 
-        jmp     0x8:protectedMode.protectedMain
+        jmp     0x8:protectedMode
         hlt
 
     .a20NotSupported:
     .a20StatusError:
     .a20NotToggleableByBIOS:
-        mov     si,     .a20ErrorMsg
-        call    .print
-        jmp     $
+        ; mov     si,     .a20ErrorMsg
+        ; call    .print
+        hlt
 
-    .a20EnabledMsg db "A20 enabled", 0x0A, 0x0D, 0
-    .a20ErrorMsg db "Error when trying to enable A20", 0x0A , 0x0D, 0
+    ; .a20EnabledMsg db "A20 enabled", 0x0A, 0x0D, 0
+    ; .a20ErrorMsg db "Error when trying to enable A20", 0x0A , 0x0D, 0
 
-    .print:
-        ; Print a string in 16 bit mode
-        ; Args:
-        ;   si: pointer to the string to print
-        mov     ah,     0x0E
-        .print.loop:
-            mov     al,     byte [si]
-            cmp     al,     0
-            je      .print.end
+    ; .print:
+    ;     ; Print a string in 16 bit mode
+    ;     ; Args:
+    ;     ;   si: pointer to the string to print
+    ;     mov     ah,     0x0E
+    ;     .print.loop:
+    ;         mov     al,     byte [si]
+    ;         cmp     al,     0
+    ;         je      .print.end
 
-            int     0x10
+    ;         int     0x10
 
-            inc     si
-            jmp     .print.loop
-        .print.end:
-            ret
+    ;         inc     si
+    ;         jmp     .print.loop
+    ;     .print.end:
+    ;         ret
 
     %include "gdt32.inc"
 
@@ -74,11 +74,52 @@ realMode:
 
 protectedMode:
     .protectedMain:
+        call    .clear
 
-        jmp $
+        mov     esi,    .testString
+        xor     edi,    edi
+        call    .print
+        hlt
 
         ; switch to long mode first
         jmp     0x8:longMode.longMain
+
+    .videoMemory equ 0xB8000
+    .videoMemoryEnd equ 0xBFFFF
+
+    .testString db 'This is a print in 32bit mode', 0
+
+    .print:
+        ; Print a string in 32 bit protected mode
+        ; Args:
+        ;   esi: Pointer to the string to print
+        ;   edi: The offset in the video memory (1 char is 2 byte)
+        mov     edx,    .videoMemory
+        add     edx,    edi
+        mov     ah,     0x0f            ; White char on black
+        .print.loop:
+            mov     al,     byte [esi]
+            cmp     al,     0
+            je      .print.end
+
+            mov     [edx],  ax              ; Move the char in the char video memory
+            inc     esi
+            add     edx,    2               ; Seek to the next position in video memory (1 char printed is a dword ah:color, ax:char)
+            jmp     .print.loop
+
+        .print.end:
+            ret
+
+    .clear:
+        ; Clear the screen
+        xor     eax,    eax                 ; Set the value to store in the video memory to 0
+
+        mov     edi,    .videoMemory        ; Set the buffer to clear to the video memory 
+        mov     ecx,    .videoMemoryEnd
+        sub     ecx,    edx                 ; Set ecx to the size of the buffer
+
+        rep stosb
+        ret
 
 
 [bits    64]
@@ -86,6 +127,7 @@ protectedMode:
 longMode:
     .longMain:
         jmp $
+
 
 bootDriveId     db  0
 

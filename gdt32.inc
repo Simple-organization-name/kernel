@@ -4,6 +4,7 @@ gdt32:
     .code:
         dw  0xffff      ; segment length bits 0-15
         dw  0x0000      ; segment base bits 0-15
+
         db  0x00        ; segment base bits 16-23
         db  0b10011111  ; access byte (refer to docs online)
         db  0b11001111  ; flags (bits) + segment length bits 16-19
@@ -11,6 +12,7 @@ gdt32:
     .data:
         dw  0xffff
         dw  0x0000
+
         db  0x00
         db  0b10010011
         db  0b11001111
