@@ -2,17 +2,16 @@ BITS 16
 jmp 07c0h:WORD __START__
 
 __START__:
-  mov ax, cs
-  mov ss, ax
-  xor sp, sp
-  push cs
-  pop ds
-  push WORD 0b800h
-  pop es
+  ; mov ax, cs
+  ; mov ss, ax
+  ; xor sp, sp
+  ; push cs
+  ; pop ds
+  ; push WORD 0b800h
+  ; pop es
 
-  mov ax, 03h
-  int 10h
-
+  ; mov ax, 03h
+  ; int 10h
 
 
   ;^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^     
@@ -20,7 +19,8 @@ __START__:
   ;  v   v   v   v   v   v   v   v   v   v   v   v   v   v   v   v   v
 
   ;Check APM service is present
-  mov BYTE [error], 'A'  
+  ; mov BYTE [error], 'A'  
+  ; error db 'A'
 
   mov ax, 5300h
   xor bx, bx
@@ -109,7 +109,7 @@ jmp .end
   cli
   hlt
 
-  error db 0
+  error db 'A'
 
   TIMES 505-($-__START__) db 0
   dw 0aa55h
