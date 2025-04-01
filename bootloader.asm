@@ -1,22 +1,25 @@
-bits    16          ; On first load, CPU is in 16-bit "real" mode
-org     0x7C00      ; And the BIOS put us in RAM at address 0x7C00
-
+[org     0x7C00]      ; BIOS put us in RAM at address 0x7C00
+[bits    16]          ; On first load, CPU is in 16-bit "real" mode
 
 mov     [bootDriveId],  dl      ; Keep this, might be handy later on
 
 realMain:
+    ; Init 16-bit mode temporary stack
+    mov     bp,     0x7BFF
+    mov     sp,     bp
+
     ; Enabling A20-gate
-    mov     ax,     0x2403 ; Ask if A20-gate is supported
+    mov     ax,     0x2403      ; Ask if A20-gate is supported
     int     0x15
     jc      a20NotSupported
 
-    mov     ax,     0x2402 ; Check the status of the A20-gate
+    mov     ax,     0x2402      ; Check the status of the A20-gate
     int     0x15
     jc      a20StatusError
     cmp     al,     1
     jmp     .a20Enabled
 
-    mov     ax,     0x2401 ; Activate the A20-gate
+    mov     ax,     0x2401      ; Activate the A20-gate
     int     0x15
     jc      a20NotToggleableByBIOS
 
@@ -26,7 +29,7 @@ realMain.a20Enabled:
 
     ; Switch to 32-bit "protected" mode
     cli         ; disable interrupts
-    lgdt    [gdt.descriptor]    ; load gdt
+    lgdt    [gdt32.descriptor]    ; load gdt
     
     jmp     $
     ; switch to protected mode first
@@ -59,6 +62,9 @@ _print16:
     .end:
         ret
 
+%include "gdt32.inc"
+
+
 bits    32
 protectedMain:
 
@@ -66,35 +72,12 @@ protectedMain:
     ; switch to long mode first
     jmp     0x8:longMain
 
+
 bits    64
 longMain:
     jmp $
 
-
 bootDriveId     db  0
-
-gdt:
-.null:
-    dq  0
-.code:
-    dw  0xffff      ; segment length bits 0-15
-    dw  0x0000      ; segment base bits 0-15
-    db  0x00        ; segment base bits 16-23
-    db  0b10011111  ; access byte (refer to docs online)
-    db  0b11001111  ; flags (bits) + segment length bits 16-19
-    db  0x00        ; segment base bits 24-31
-.data:
-    dw  0xffff
-    dw  0x0000
-    db  0x00
-    db  0b10010011
-    db  0b11001111
-    db  0x00
-.end:
-.descriptor:
-    dw  .end - .null    ; gdt size
-    dd  gdt             ; gdt address
-
     
 
 times   510 - ($-$$) db 0   ; Fill up rest of first sector 
