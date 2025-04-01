@@ -21,7 +21,6 @@ realMode:
             mov     es,     bx
             mov     bx,     0x7E00
             int     0x13
-            ret
         
         ; Enabling A20-gate
         mov     ax,     0x2403      ; Ask if A20-gate is supported
