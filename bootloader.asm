@@ -153,8 +153,7 @@ bootloaderMBREnd:
     dw      0xAA55              ; Boot signature to tell BIOS it can boot the disk
 
 
-mbrEnd:
 
 ; rest of bootloader here
 
-times  (512*63) - ($ - mbrEnd) db 0
+times  (512*64) - ($ - $$) db 0
