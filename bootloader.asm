@@ -85,6 +85,37 @@ realMode:
 
 [bits    32]
 protectedMode:
+    jmp     .main
+    .testCPUIDAvailable:
+        pushfd          ;   > Put EFLAGS in eax
+        pop     eax     ; /
+        mov     ecx,    eax     ; save in ecx
+        xor     eax,    1 << 21 ; flip CPUID bit
+        push    eax     ;   > put altered flags back
+        popfd           ; /
+        pushfd          ;   > retrieve it again
+        pop     eax     ; /
+        push    ecx     ;   > put back original flags 
+        popfd           ; /
+        cmp     eax,    ecx     ; check if altered CPUID bit has been reset
+        je      .noCPUID
+        jmp     .testLongModeAvailable
+
+    .noCPUID:
+    .noLongMode:
+        jmp     $
+    .testLongModeAvailable:
+        mov     eax,    0x80000000  ; get highest cpuid call available
+        cpuid
+        cmp     eax,    0x80000000  ; if lower or equal to that, no long mode available
+        jbe     .noLongMode
+        mov     eax,    0x80000001  ; Extended processor information
+        cpuid
+        test    edx,    1 << 29     ; check if long mode bit is set
+        jz      .noLongMode         ; if not set, well then bruh
+        ; jmp     .setupLongMode      ; we can start setup now i guess
+
+
     .main:
         call    .clear
 
