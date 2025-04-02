@@ -2,26 +2,28 @@
 
 [bits    16]          ; On first load, CPU is in 16-bit "real" mode
 realMode:
-    .main:
-        mov     [bootDriveId],  dl      ; Keep this, might be handy later on
+    mov     [bootDriveId],  dl      ; Keep this, might be handy later on
+
+    .setupStack:
         ; Init 16-bit mode temporary stack
         mov     bp,     0x7BFF
         mov     sp,     bp
 
-        ; loads the next 63 sectors right after
-        .loadBigBoot:
-            mov     ah,     0x02    ; sub-function read sectors from drive
-            mov     al,     63      ; how many sectors to read
-            mov     ch,     0       ; nb of the cylinder from which to read
-            mov     cl,     2       ; starting sector (drives are indexed from 1. cursed.)
-            mov     dh,     0       ; head ? idk man just put 0
-            mov     dl,     byte [bootDriveId]  ; what drive to read from, saved that at first instruction
-            xor     bx,     bx      ; put 0 in bx cuz you can only move regs to es
-            mov     es,     bx      ; segment of the address
-            mov     bx,     0x7E00  ; offset of the address         (address es:bx is es*16 + bx)
-            int     0x13            ; call interrupt
-            jc      .loadBigBoot    ; cf is set on error
-        
+    ; loads the next 63 sectors right after
+    .loadBigBoot:
+        mov     ah,     0x02    ; sub-function read sectors from drive
+        mov     al,     63      ; how many sectors to read
+        mov     ch,     0       ; nb of the cylinder from which to read
+        mov     cl,     2       ; starting sector (drives are indexed from 1. cursed.)
+        mov     dh,     0       ; head ? idk man just put 0
+        mov     dl,     byte [bootDriveId]  ; what drive to read from, saved that at first instruction
+        xor     bx,     bx      ; put 0 in bx cuz you can only move regs to es
+        mov     es,     bx      ; segment of the address
+        mov     bx,     0x7E00  ; offset of the address         (address es:bx is es*16 + bx)
+        int     0x13            ; call interrupt
+        jc      .loadBigBoot    ; cf is set on error
+
+    .enableA20Gate:
         ; Enabling A20-gate
         mov     ax,     0x2403      ; Ask if A20-gate is supported
         int     0x15
@@ -31,16 +33,13 @@ realMode:
         int     0x15
         jc      .a20StatusError
         cmp     al,     1           ; Check if A20-gate us already enabled
-        jmp     .a20Enabled
+        jmp     .switch32Bit
 
         mov     ax,     0x2401      ; Activate the A20-gate
         int     0x15
         jc      .a20NotToggleableByBIOS
 
-    .a20Enabled:
-        ; mov     si,     .a20EnabledMsg
-        ; call    .print
-
+    .switch32Bit:
         ; Switch to 32-bit "protected" mode
         cli                             ; disable interrupts
         lgdt    [gdt32.descriptor]      ; load gdt
@@ -56,67 +55,39 @@ realMode:
     .a20NotSupported:
     .a20StatusError:
     .a20NotToggleableByBIOS:
-        ; mov     si,     .a20ErrorMsg
-        ; call    .print
         hlt
-
-    ; .a20EnabledMsg db "A20 enabled", 0x0A, 0x0D, 0
-    ; .a20ErrorMsg db "Error when trying to enable A20", 0x0A , 0x0D, 0
-
-    ; .print:
-    ;     ; Print a string in 16 bit mode
-    ;     ; Args:
-    ;     ;   si: pointer to the string to print
-    ;     mov     ah,     0x0E
-    ;     .print.loop:
-    ;         mov     al,     byte [si]
-    ;         cmp     al,     0
-    ;         je      .print.end
-
-    ;         int     0x10
-
-    ;         inc     si
-    ;         jmp     .print.loop
-    ;     .print.end:
-    ;         ret
 
     %include "gdt32.inc"
 
 
 [bits    32]
 protectedMode:
-    jmp     .main
     .testCPUIDAvailable:
-        pushfd          ;   > Put EFLAGS in eax
-        pop     eax     ; /
+        pushfd                  ;   > Put EFLAGS in eax
+        pop     eax             ; /
         mov     ecx,    eax     ; save in ecx
         xor     eax,    1 << 21 ; flip CPUID bit
-        push    eax     ;   > put altered flags back
-        popfd           ; /
-        pushfd          ;   > retrieve it again
-        pop     eax     ; /
-        push    ecx     ;   > put back original flags 
-        popfd           ; /
+        push    eax             ;   > put altered flags back
+        popfd                   ; /
+        pushfd                  ;   > retrieve it again
+        pop     eax             ; /
+        push    ecx             ;   > put back original flags 
+        popfd                   ; /
         cmp     eax,    ecx     ; check if altered CPUID bit has been reset
         je      .noCPUID
-        jmp     .testLongModeAvailable
 
-    .noCPUID:
-    .noLongMode:
-        jmp     $
     .testLongModeAvailable:
         mov     eax,    0x80000000  ; get highest cpuid call available
         cpuid
         cmp     eax,    0x80000000  ; if lower or equal to that, no long mode available
         jbe     .noLongMode
+
         mov     eax,    0x80000001  ; Extended processor information
         cpuid
         test    edx,    1 << 29     ; check if long mode bit is set
         jz      .noLongMode         ; if not set, well then bruh
-        ; jmp     .setupLongMode      ; we can start setup now i guess
 
-
-    .main:
+    .switch64Bit:
         call    .clear
 
         mov     esi,    .testString
@@ -127,7 +98,11 @@ protectedMode:
         ; switch to long mode first
         jmp     0x8:longMode.main
 
-    .videoMemory equ 0xB8000
+    .noCPUID:
+    .noLongMode:
+        hlt
+
+    .videoMemory    equ 0xB8000
     .videoMemoryEnd equ 0xBFFFF
 
     .testString db 'This is a print in 32bit mode', 0
@@ -159,7 +134,7 @@ protectedMode:
 
         mov     edi,    .videoMemory        ; Set the buffer to clear to the video memory 
         mov     ecx,    .videoMemoryEnd
-        sub     ecx,    edx                 ; Set ecx to the size of the buffer
+        sub     ecx,    edi                 ; Set ecx to the size of the buffer
 
         rep stosb
         ret
@@ -171,11 +146,12 @@ longMode:
         jmp $
 
 
-bootDriveId     db  0
+bootloaderMBREnd:
+    bootDriveId     db  0
 
+    times   510 - ($-$$) db 0   ; Fill up rest of first sector 
+    dw      0xAA55              ; Boot signature to tell BIOS it can boot the disk
 
-times   510 - ($-$$) db 0   ; Fill up rest of first sector 
-dw      0xAA55              ; Boot signature to tell BIOS it can boot the disk
 
 mbrEnd:
 
