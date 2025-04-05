@@ -1,72 +1,90 @@
-[bits 32]
+[bits 64]
 
 section .bss
-    framebuffer resd 1       ; Framebuffer address
-    fb_width    resd 1       ; Framebuffer width
-    fb_height   resd 1       ; Framebuffer height
-    fb_pitch    resd 1       ; Framebuffer pitch (bytes per row)
-    fb_bpp      resd 1       ; Bits per pixel
+    align 8
+    framebuffer     resq 1
+    framebufPitch   resd 1  ; nb of bytes in each row
+    framebufWidth   resd 1
+    framebufHeight  resd 1
+    framebufBPP     resb 1  ; nb of bits per pixel
+    fbRedPos        resb 1
+    fbGreenPos      resb 1
+    fbBluePos       resb 1
 
 section .data:
 
 section .text
     global __START__
 __START__:
-    mov eax, [ebx + 12]     ; Framebuffer address
-    mov [framebuffer], eax
+    call    parseMultibootInfo      ; Get the information from GRUB
 
-    mov eax, [ebx + 16]     ; Framebuffer pitch (bytes per row)
-    mov [fb_pitch], eax
+    mov     rsi,    100
+    mov     rdi,    100
+    call    putPixel                ; Call the putPixel function
 
-    mov eax, [ebx + 20]     ; Framebuffer width
-    mov [fb_width], eax
+    jmp $                           ; Infinite loop to keep the program running
 
-    mov eax, [ebx + 24]     ; Framebuffer height
-    mov [fb_height], eax
 
-    mov eax, [ebx + 28]     ; Bits per pixel
-    mov [fb_bpp], eax
+parseMultibootInfo:
+    ; Multiboot2 information address is passed in ebx
+    ; ebx: pointer to the multiboot2 information structure
+    mov     esi,    ebx         ; Save the pointer
+    mov     eax,    [ebx]       ; Get the size
+    add     esi,    eax         ; Get the end of the structure
+    add     ebx,    4           ; Skip the reserved dword
+    .checkTag:
+        cmp     dword [ebx],  8 ; Check if the info is the framebuffer info
+        je      .framebufferSetup
 
-    mov eax, 50                ; X coordinate
-    mov ebx, 50                ; Y coordinate
-    mov ecx, 0xFFFF0000        ; Red color
-    call putPixel              ; Call putPixel to draw the pixel
+        mov     ecx,    dword [ebx]   ; Get the size of the current info
+        add     ebx,    ecx     ; Skip the current info
 
-    jmp $                   ; Infinite loop to keep the program running
+        cmp     ebx,    esi     ; Compare the current pointer to the end
+        jge     .framebufferNotFound    ; If the frame buffer is not found
 
+        jmp     .checkTag
+
+    .framebufferNotFound:
+        hlt
+
+    .framebufferSetup:
+        mov     r8,     qword [ebx + 8]
+        mov     [framebuffer],      r8
+        mov     r8d,     dword [ebx + 16]
+        mov     [framebufPitch],    r8d
+        mov     r8d,     dword [ebx + 20]
+        mov     [framebufWidth],    r8d
+        mov     r8d,     dword [ebx + 24]
+        mov     [framebufHeight],   r8d
+        mov     r8b,     byte [ebx + 28]
+        mov     [framebufBPP],      r8b
+        mov     r8b,     byte [ebx + 31]
+        mov     [fbRedPos],         r8b
+        mov     r8b,     byte [ebx + 33]
+        mov     [fbGreenPos],       r8b
+        mov     r8b,     byte [ebx + 35]
+        mov     [fbBluePos],        r8b
+        ret
 
 putPixel:
-    ; Put a pixel on the screen
+    ; Put a pixel
     ; Args:
-    ;   eax: X coordinate
-    ;   ebx: Y coordinate
-    ;   ecx: Color (ARGB)
-    push ebp
-    mov ebp, esp
+    ;   rsi: x position (col)
+    ;   rdi: y position (row)
+    xor     rax,    rax
+    mov     rax,    rsi
+    mov     cl,     byte [framebufBPP]
+    mul     cl
+    mov     rsi,    rax
 
-    push ebx                ; Save Y coordinate
-    push eax                ; Save X coordinate
+    mov     rax,    rdi
+    mov     cl,     byte [framebufPitch]
+    mul     cl
+    
+    lea     rax,    [rax + rsi]
+    add     rax,    qword [framebuffer]
 
-    mov edx, [framebuffer]  ; Load framebuffer address
-    mov esi, [fb_pitch]     ; Load pitch (bytes per row)
-    mov edi, [fb_bpp]       ; Load bits per pixel
+    mov     dword [rax], 0xFFFFFFFF
 
-    ; Calculate Y offset
-    mov eax, ebx            ; Copy Y coordinate to eax
-    mul esi                 ; eax = y * pitch
-    add edx, eax            ; Add Y offset to framebuffer address
-
-    ; Calculate X offset
-    pop eax                 ; Restore X coordinate to eax
-    shr edi, 3              ; Divide bpp by 8 (bytes per pixel)
-    mul edi                 ; eax = x * (bpp / 8)
-    add edx, eax            ; Add X offset to framebuffer address
-
-    ; Write the pixel
-    mov [edx], ecx          ; Write the color to the calculated address
-
-    pop ebx                 ; Restore Y coordinate
-
-    pop ebp
     ret
 

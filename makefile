@@ -11,9 +11,9 @@ run:
 kernel_all: kernel kernel_run
 
 kernel:
-	nasm -f elf32 -o kernel.o kernel.asm
-	nasm -f elf32 -o multiboot_header.o multiboot_header.asm
-	ld -m elf_i386 -T linker.ld -o kernel.bin kernel.o multiboot_header.o
+	nasm -f elf64 -o kernel.o kernel.asm
+	nasm -f elf64 -o multiboot_header.o multiboot_header.asm
+	ld -T linker.ld -o kernel.bin kernel.o multiboot_header.o
 	cp kernel.bin iso/boot/kernel.bin
 	grub-mkrescue -o sos.iso iso/
 
