@@ -8,12 +8,10 @@ section .bss
     fb_bpp      resd 1       ; Bits per pixel
 
 section .data:
-    .testString db 'HELLO', 0
 
 section .text
     global __START__
 __START__:
-    cli
     mov eax, [ebx + 12]     ; Framebuffer address
     mov [framebuffer], eax
 
@@ -29,22 +27,12 @@ __START__:
     mov eax, [ebx + 28]     ; Bits per pixel
     mov [fb_bpp], eax
 
-    mov eax, 1
-    mov ebx, 1
-    mov ecx, 0xFF0000       ; Red color
-    call putPixel           ; Put pixel at (1, 1) with red color
+    mov eax, 50                ; X coordinate
+    mov ebx, 50                ; Y coordinate
+    mov ecx, 0xFFFF0000        ; Red color
+    call putPixel              ; Call putPixel to draw the pixel
 
-    mov eax, 1
-    mov ebx, 2
-    mov ecx, 0x00FF00       ; Green color
-    call putPixel           ; Put pixel at (2, 2) with green color
-
-    mov eax, 1
-    mov ebx, 3
-    mov ecx, 0x0000FF       ; Blue color
-    call putPixel           ; Put pixel at (3, 3) with blue color
-
-    hlt
+    jmp $                   ; Infinite loop to keep the program running
 
 
 putPixel:
@@ -52,23 +40,33 @@ putPixel:
     ; Args:
     ;   eax: X coordinate
     ;   ebx: Y coordinate
-    ;   ecx: Color (RGB)
+    ;   ecx: Color (ARGB)
     push ebp
     mov ebp, esp
 
-    mov edx, [framebuffer] ; Load framebuffer address
-    mov esi, [fb_pitch]    ; Load pitch (bytes per row)
-    mov edi, [fb_bpp]      ; Load bits per pixel
+    push ebx                ; Save Y coordinate
+    push eax                ; Save X coordinate
 
-    ; Calculate pixel address
-    mul esi                ; ebx * pitch (y * pitch)
-    add edx, eax           ; Add framebuffer base + y * pitch
-    shr edi, 3             ; Divide bpp by 8 (bytes per pixel)
-    mul edi                ; eax = x * (bpp / 8)
-    add edx, eax           ; Add x offset to framebuffer address
+    mov edx, [framebuffer]  ; Load framebuffer address
+    mov esi, [fb_pitch]     ; Load pitch (bytes per row)
+    mov edi, [fb_bpp]       ; Load bits per pixel
+
+    ; Calculate Y offset
+    mov eax, ebx            ; Copy Y coordinate to eax
+    mul esi                 ; eax = y * pitch
+    add edx, eax            ; Add Y offset to framebuffer address
+
+    ; Calculate X offset
+    pop eax                 ; Restore X coordinate to eax
+    shr edi, 3              ; Divide bpp by 8 (bytes per pixel)
+    mul edi                 ; eax = x * (bpp / 8)
+    add edx, eax            ; Add X offset to framebuffer address
 
     ; Write the pixel
-    mov [edx], ecx         ; Write the color to the calculated address
+    mov [edx], ecx          ; Write the color to the calculated address
+
+    pop ebx                 ; Restore Y coordinate
 
     pop ebp
     ret
+

@@ -18,4 +18,4 @@ kernel:
 	grub-mkrescue -o sos.iso iso/
 
 kernel_run:
-	sudo qemu-system-x86_64 -cdrom sos.iso -bios /usr/share/ovmf/OVMF.fd -cpu qemu64
+	sudo qemu-system-x86_64 -enable-kvm -m 512M -cdrom sos.iso -bios /usr/share/ovmf/OVMF.fd -cpu host

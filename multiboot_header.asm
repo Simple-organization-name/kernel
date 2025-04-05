@@ -10,9 +10,9 @@ section .multiboot
     header_tag_framebuffer:
         dd 4                    ; Type (Framebuffer tag)
         dd 16                   ; Size of this tag
-        dw 0                    ; Width (0 = any)
-        dw 0                    ; Height (0 = any)
-        dw 24                   ; Bits per pixel (24 for RGB)
+        dw 640                  ; Width
+        dw 480                  ; Height
+        dw 32                   ; Bits per pixel
         dw 0                    ; Reserved
 
     align 8
