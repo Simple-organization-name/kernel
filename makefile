@@ -7,3 +7,15 @@ bootloader:
 
 run:
 	qemu-system-x86_64 --drive file=bootloader.bin,format=raw
+
+kernel_all: kernel kernel_run
+
+kernel:
+	nasm -f elf32 -o kernel.o kernel.asm
+	nasm -f elf32 -o multiboot_header.o multiboot_header.asm
+	ld -m elf_i386 -T linker.ld -o kernel.bin kernel.o multiboot_header.o
+	cp kernel.bin iso/boot/kernel.bin
+	grub-mkrescue -o sos.iso iso/
+
+kernel_run:
+	sudo qemu-system-x86_64 -cdrom sos.iso -bios /usr/share/ovmf/OVMF.fd -cpu qemu64
