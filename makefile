@@ -8,7 +8,7 @@ bootloader:
 run:
 	qemu-system-x86_64 --drive file=bin/bootloader.bin,format=raw
 
-kernel_all: kernel kernel_run
+kernelAll: kernel kernelRun
 
 kernel:
 	nasm -f elf32 -o build/kernel.o src/kernel.asm
@@ -17,5 +17,5 @@ kernel:
 	cp bin/kernel.elf iso/boot/kernel.elf
 	grub-mkrescue -o sos.iso iso/
 
-kernel_run:
+kernelRun:
 	sudo qemu-system-x86_64 -enable-kvm -m 512M -cdrom sos.iso -bios /usr/share/ovmf/OVMF.fd -cpu host
