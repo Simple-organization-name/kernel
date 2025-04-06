@@ -23,19 +23,19 @@ __START__:
     call    parseMultibootInfo      ; Get the information from GRUB
 
     ; Test framebuffer
-    call    fillScreen
+    mov     eax,    dword [framebuffer]
+    mov     dword [eax + 64],    0xFFFFFFFF
 
-    jmp $                           ; Infinite loop to keep the program running
+    hlt                             ; Infinite loop to keep the program running
 
 
 parseMultibootInfo:
     ; Multiboot2 information address is passed in ebx
     ; ebx: pointer to the multiboot2 information structure
-    mov     esi,    ebx                 ; Save the pointer
-    mov     eax,    [ebx]               ; Get the size
-    add     esi,    eax                 ; Get the end of the structure
-    add     ebx,    4                   ; Skip the reserved dword
+    add     ebx,    8                   ; Skip the reserved dword
     .checkTag:
+        cmp     dword [ebx],  0         ; Check if the info is the end of the structure
+        je      .framebufferNotFound
         cmp     dword [ebx],  8         ; Check if the info is the framebuffer info
         je      .framebufferSetup
 
@@ -43,9 +43,6 @@ parseMultibootInfo:
         add     ebx,    ecx             ; Skip the current info
         add     ebx,    7
         and     ebx,    -8
-
-        cmp     ebx,    esi             ; Compare the current pointer to the end
-        jge     .framebufferNotFound    ; If the frame buffer is not found
 
         jmp     .checkTag
 
@@ -70,46 +67,3 @@ parseMultibootInfo:
         mov     al,     byte [ebx + 35]
         mov     [fbBluePos],        al
         ret
-
-putPixel:
-    ; Put a pixel
-    ; Args:
-    ;   esi: x position (col)
-    ;   edi: y position (row)
-    xor     eax,    eax
-    mov     eax,    esi
-    mov     cl,     byte [framebufBPP]
-    shr     cl,     3
-    mul     cl
-    mov     esi,    eax
-
-    xor     eax,    eax
-    mov     eax,    dword [framebufPitch]
-    mul     edi
-
-    lea     eax,    [eax + esi]
-    add     eax,    dword [framebuffer]
-
-    mov     dword [eax], 0xFFFFFFFF
-
-    ret
-
-fillScreen:
-    mov     esi,    0               ; X position
-    mov     edi,    0               ; Y position
-    mov     eax,    [framebuffer]   ; Start of framebuffer
-    mov     ecx,    [framebufHeight]
-.fillRow:
-    push    ecx
-    mov     ecx,    [framebufWidth]
-.fillColumn:
-    mov     dword [eax], 0x00FFFF00 ; White pixel (ARGB format)
-    add     eax,    4               ; Move to the next pixel (4 bytes per pixel)
-    loop    .fillColumn
-    pop     ecx
-    add     eax,    [framebufPitch] ; Move to the next row
-    mov     ebx,    [framebufWidth] ; Load framebufWidth
-    shl     ebx,    2               ; Multiply framebufWidth by 4 (shift left by 2)
-    sub     eax,    ebx             ; Reset to the start of the next row
-    loop    .fillRow
-    ret
