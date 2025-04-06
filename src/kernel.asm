@@ -24,14 +24,21 @@ __START__:
 
     ; Test framebuffer
     mov     eax,    dword [framebuffer]
-    mov     dword [eax + 64],    0xFFFFFFFF
+    test    eax,    eax             ; Check if framebuffer address is non-zero
+    jz      .framebufferError       ; Halt if framebuffer is not initialized
 
-    hlt                             ; Infinite loop to keep the program running
+    mov     dword [eax],    0xFFFFFFFF
 
+.framebufferError:
+__END__:
+    hlt
 
 parseMultibootInfo:
     ; Multiboot2 information address is passed in ebx
     ; ebx: pointer to the multiboot2 information structure
+    mov     esi,    ebx                 ; Save the pointer
+    mov     eax,    [ebx]               ; Get the size
+    add     esi,    eax                 ; Get the end of the structure
     add     ebx,    8                   ; Skip the reserved dword
     .checkTag:
         cmp     dword [ebx],  0         ; Check if the info is the end of the structure
@@ -39,10 +46,14 @@ parseMultibootInfo:
         cmp     dword [ebx],  8         ; Check if the info is the framebuffer info
         je      .framebufferSetup
 
-        mov     ecx,    dword [ebx]     ; Get the size of the current info
+        mov     ecx,    dword [ebx + 4] ; Get the size of the current info
         add     ebx,    ecx             ; Skip the current info
+
         add     ebx,    7
         and     ebx,    -8
+
+        cmp     ebx,    esi             ; Compare the current pointer to the end
+        jge     .framebufferNotFound    ; If the frame buffer is not found
 
         jmp     .checkTag
 
@@ -50,7 +61,7 @@ parseMultibootInfo:
         hlt
 
     .framebufferSetup:
-        mov     eax,    dword [ebx + 8]
+        mov     eax,    dword [ebx + 12]
         mov     [framebuffer],      eax
         mov     eax,    dword [ebx + 16]
         mov     [framebufPitch],    eax
