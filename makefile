@@ -3,18 +3,18 @@
 all: bootloader run
 
 bootloader:
-	nasm -f bin -o bootloader.bin bootloader.asm
+	nasm -f bin -o bin/bootloader.bin src/bootloader.asm
 
 run:
-	qemu-system-x86_64 --drive file=bootloader.bin,format=raw
+	qemu-system-x86_64 --drive file=bin/bootloader.bin,format=raw
 
 kernel_all: kernel kernel_run
 
 kernel:
-	nasm -f elf64 -o kernel.o kernel.asm
-	nasm -f elf64 -o multiboot_header.o multiboot_header.asm
-	ld -T linker.ld -o kernel.bin kernel.o multiboot_header.o
-	cp kernel.bin iso/boot/kernel.bin
+	nasm -f elf32 -o build/kernel.o src/kernel.asm
+	nasm -f elf32 -o build/multiboot_header.o src/multiboot_header.asm
+	ld -m elf_i386 -T linker.ld -o bin/kernel.elf build/kernel.o build/multiboot_header.o
+	cp bin/kernel.elf iso/boot/kernel.elf
 	grub-mkrescue -o sos.iso iso/
 
 kernel_run:
