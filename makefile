@@ -1,3 +1,6 @@
+setup:
+	sudo apt install lld genisoimage qemu-system ovmf
+
 all:
 	nasm -f win64 src/main.asm -o build/main.o
 	lld-link -subsystem:efi_application -nodefaultlib -entry:EfiMain build/main.o -out:iso/EFI/BOOT/BOOTx64.EFI

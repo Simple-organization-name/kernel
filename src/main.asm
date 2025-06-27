@@ -10,10 +10,11 @@ section .data
 section .text
     global EfiMain
     EfiMain:
+        ; UEFI boots with the pointer to the efi system table in rdx
         mov     [ptr_efiSystemTable],   rdx
 
         ; Setup stack for the _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString()
-        sub     rsp,    4*8
+        sub     rsp,    4*8 ; Don't know why
         mov     rcx,    [rdx + EFI_SYSTEM_TABLE.ConOut]
         mov     rdx,    hello
         call    [rcx + _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL.OutputString]
