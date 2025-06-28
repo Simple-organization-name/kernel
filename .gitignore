@@ -1,2 +1,6 @@
 test.*
 .vscode/
+output.iso
+build/
+drive/
+iso/
