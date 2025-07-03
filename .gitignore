@@ -1,6 +1,8 @@
 test.*
 .vscode/
-output.iso
 build/
 drive/
 iso/
+
+output.iso
+SOS.ISO
