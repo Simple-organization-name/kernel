@@ -25,7 +25,7 @@
         .ConfigurationTable     resq 1
     endstruc
 
-    struc _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
+    struc EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
         .Reset                  resq 1
         ; Args:
         ;   rcx (qword): The EFI_SYSTEM_TABLE pointer
