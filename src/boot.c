@@ -1,5 +1,7 @@
 #include <efi/efi.h>
 
+#define EfiPrint(stream, msg) stream->OutputString(stream, msg)
+
 EFI_FILE_PROTOCOL *root = NULL;
 EFI_FILE_PROTOCOL *logFile = NULL;
 
@@ -8,14 +10,14 @@ EFI_STATUS EFIAPI createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *system
 EFI_STATUS EFIAPI intToString(UINTN number, CHAR16 *buffer, UINTN bufferSize);
 
 static inline void EFIAPI Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg) {
-    ConOut->OutputString(ConOut, u"Error: ");
-    ConOut->OutputString(ConOut, msg);
+    EfiPrint(ConOut, u"Error: ");
+    EfiPrint(ConOut, msg);
     CHAR16 buffer[20];
     if (intToString(status, buffer, 20) == EFI_SUCCESS) {
-        ConOut->OutputString(ConOut, u" (");
-        ConOut->OutputString(ConOut, buffer);
-        ConOut->OutputString(ConOut, u")\r\n");
-    } else ConOut->OutputString(ConOut, u"(N/A)\r\n");
+        EfiPrint(ConOut, u" (");
+        EfiPrint(ConOut, buffer);
+        EfiPrint(ConOut, u")\r\n");
+    } else EfiPrint(ConOut, u"(N/A)\r\n");
 }
 
 EFI_STATUS EFIAPI EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
@@ -24,7 +26,7 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
     ConOut->ClearScreen(systemTable->ConOut);
 
     ConOut->SetAttribute(ConOut, EFI_GREEN);
-    ConOut->OutputString(ConOut, u"Booting up SOS !...\r\n");
+    EfiPrint(ConOut, u"Booting up SOS !...\r\n");
     ConOut->SetAttribute(ConOut, EFI_WHITE);
 
     EFI_STATUS status;
@@ -35,11 +37,11 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
         while (1) {}
     }
     
-    ConOut->OutputString(ConOut, u"Creating log file...\r\n");
+    EfiPrint(ConOut, u"Creating log file...\r\n");
     status = createLogFile(imageHandle, systemTable);
     
-    if (status != 0) ConOut->OutputString(ConOut, u"Failed to create log file\r\n");
-    else ConOut->OutputString(ConOut, u"Log file successfully created !\r\n");
+    if (status != 0) EfiPrint(ConOut, u"Failed to create log file\r\n");
+    else EfiPrint(ConOut, u"Log file successfully created !\r\n");
 
     while (1)
     {
