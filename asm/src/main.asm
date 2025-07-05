@@ -94,7 +94,7 @@ section .text
         ; Open the root directory of the file system
         mov     rcx,    [efiSimpleFileSystemProtocol]
         lea     rdx,    [rel efiFileProtocol]
-        mov     rax,    [efiSystemTable]
+        mov     rax,    [efiSimpleFileSystemProtocol]
         call    [rax + EFI_SIMPLE_FILE_SYSTEM_PROTOCOL.OpenVolume]
 
         cmp     rax,    0 ; Check if the root directory was successfully opened
@@ -110,5 +110,6 @@ section .text
         call    print
 
         ; Create a new file named "log.txt"
+        
 
         jmp     $

@@ -1,23 +1,25 @@
-BOOT_NAME = BOOTX64.EFI
-ISO_ENTRY = EFI/BOOT/$(BOOT_NAME)
+CC 			= x86_64-w64-mingw32-gcc
+CFLAGS 		= -ffreestanding -fno-stack-protector -nostdlib -fno-stack-check -fpic -fshort-wchar \
+				-mno-red-zone -maccumulate-outgoing-args -Wall -I /usr/include/ -Wl,--subsystem,10 -e EfiMain 
+
+FILE		= boot
+BOOT_NAME	= BOOTX64.EFI
+ISO_ENTRY	= EFI/BOOT/$(BOOT_NAME)
 
 OVMF_PATH = /usr/share/ovmf/OVMF.fd
 
-all: iso emul
+all: build emul
 
-iso:
-	nasm -f win64 src/main.asm -I src/ -o build/main.o -Werror -Wall
-	lld-link /subsystem:efi_application /nodefaultlib /entry:efiMain build/main.o /out:iso/$(ISO_ENTRY)
-	cp -f iso/$(ISO_ENTRY) drive/$(BOOT_NAME)
+build:
+	mkdir -p iso/EFI/BOOT/ build
+	$(CC) $(CFLAGS) src/$(FILE).c -o iso/$(ISO_ENTRY)
 	xorriso -as mkisofs -iso-level 3 -o SOS.ISO -full-iso9660-filenames -volid "SOS" -eltorito-alt-boot -e $(ISO_ENTRY) -no-emul-boot -isohybrid-gpt-basdat iso/
 
 emul:
 	qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none
 
-shell:
-	qemu-system-x86_64 -drive format=raw,file=fat:rw:drive/ -bios $(OVMF_PATH) -net none
-
 setup:
-	sudo apt install lld genisoimage qemu-system ovmf
+	sudo apt update && sudo apt upgrade
+	sudo apt install xorriso qemu-system gcc-mingw-w64
 
-.PHONY: all iso emul setup
+.PHONY: all build emul setup
