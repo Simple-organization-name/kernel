@@ -11,8 +11,6 @@ section .bss
 section .data
     hello dw __utf16__("Hello world from SOS !"), 0xd, 0xa, 0
 
-    ok dw __utf16__("OK"), 0xd, 0xa, 0
-
     creatingLogFile dw __utf16__("Creating log file..."), 0xd, 0xa, 0
     getEfiLoadedImageProtocolError dw __utf16__("Error getting the EFI_LOADED_IMAGE_PROTOCOL"), 0xd, 0xa, 0
     getEfiLoadedImageProtocolSuccess dw __utf16__("EFI_LOADED_IMAGE_PROTOCOL successfully retrieved"), 0xd, 0xa, 0
@@ -31,10 +29,10 @@ section .text
         mov     [efiImageHandle],   rcx
         mov     [efiSystemTable],   rdx
 
-        mov     rdx,    hello
+        lea     rdx,    [rel hello]
         call    print
 
-        mov     rdx,    creatingLogFile
+        lea     rdx,    [rel creatingLogFile]
         call    print
         call    createLogFile
 
@@ -54,32 +52,29 @@ section .text
 
         ; Get the EFI_LOADED_IMAGE_PROTOCOL
         mov     rcx,    [efiImageHandle]
-        mov     rdx,    EFI_LOADED_IMAGE_PROTOCOL_GUID
-        mov     r8,     efiLoadedImageProtocol
+        lea     rdx,    [rel EFI_LOADED_IMAGE_PROTOCOL_GUID]
+        lea     r8,     [rel efiLoadedImageProtocol]
         mov     rax,    [efiSystemTable]
         mov     rax,    [rax + EFI_SYSTEM_TABLE.BootServices]
         call    [rax + EFI_BOOT_SERVICES.HandleProtocol]
-
-        mov     rdx,    ok
-        call    print
 
         cmp     rax,    0 ; Check if the protocol was successfully retrieved
         je      .gotEfiLoadedImageProtocol ; if it is zero, jmp to the next section
 
         ; Handle the error
-        mov     rdx,    getEfiLoadedImageProtocolError
+        lea     rdx,    [rel getEfiLoadedImageProtocolError]
         call    print
         jmp     $
 
         .gotEfiLoadedImageProtocol:
-        mov     rdx,    getEfiLoadedImageProtocolSuccess
+        lea     rdx,    [rel getEfiLoadedImageProtocolSuccess]
         call    print
 
         ; Get the SIMPLE_FILE_SYSTEM_PROTOCOL
         mov     rcx,    [efiLoadedImageProtocol]
         mov     rcx,    [rcx + EFI_LOADED_IMAGE_PROTOCOL.DeviceHandle] ; Get the device handle
-        mov     rdx,    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID
-        mov     r8,     efiSimpleFileSystemProtocol
+        lea     rdx,    [rel EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID]
+        lea     r8,     [rel efiSimpleFileSystemProtocol]
         mov     rax,    [efiSystemTable]
         mov     rax,    [rax + EFI_SYSTEM_TABLE.BootServices]
         call    [rax + EFI_BOOT_SERVICES.HandleProtocol]
@@ -88,17 +83,17 @@ section .text
         je      .gotEfiSimpleFileSystemProtocol ; if it is zero, jmp to the next section
 
         ; Handle the error
-        mov     rdx,    getEfiSimpleFileSystemProtocolError
+        lea     rdx,    [rel getEfiSimpleFileSystemProtocolError]
         call    print
         jmp     $
 
         .gotEfiSimpleFileSystemProtocol:
-        mov     rdx,    getEfiSimpleFileSystemProtocolSuccess
+        lea     rdx,    [rel getEfiSimpleFileSystemProtocolSuccess]
         call    print
 
         ; Open the root directory of the file system
         mov     rcx,    [efiSimpleFileSystemProtocol]
-        mov     rdx,    efiFileProtocol
+        lea     rdx,    [rel efiFileProtocol]
         mov     rax,    [efiSystemTable]
         call    [rax + EFI_SIMPLE_FILE_SYSTEM_PROTOCOL.OpenVolume]
 
@@ -106,12 +101,12 @@ section .text
         je      .gotEfiFileProtocol ; if it is zero, jmp to the next section
 
         ; Handle the error
-        mov     rdx,    getEfiFileProtocolError
+        lea     rdx,    [rel getEfiFileProtocolError]
         call    print
         jmp     $
 
         .gotEfiFileProtocol:
-        mov     rdx,    getEfiFileProtocolSuccess
+        lea     rdx,    [rel getEfiFileProtocolSuccess]
         call    print
 
         ; Create a new file named "log.txt"
