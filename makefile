@@ -1,6 +1,6 @@
 CC 			= x86_64-w64-mingw32-gcc
 CFLAGS 		= -ffreestanding -fno-stack-protector -nostdlib -fno-stack-check -fpic -fshort-wchar \
-				-mno-red-zone -maccumulate-outgoing-args -Wall -I /usr/include/ -Wl,--subsystem,10 -e EfiMain 
+				-mno-red-zone -maccumulate-outgoing-args -Wall -I /usr/include/ -I/usr/include/x86_64-linux-gnu/ -Wl,--subsystem,10 -e EfiMain 
 
 FILE		= boot
 BOOT_NAME	= BOOTX64.EFI
