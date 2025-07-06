@@ -1,3 +1,8 @@
+#ifdef __UINT64_C
+#   undef __UINT64_C
+#   undef __INT64_C
+#endif
+
 #include <efi/efi.h>
 
 #undef EFI_FILE_MODE_READ
