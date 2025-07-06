@@ -14,33 +14,15 @@
 
 #define EfiPrint(stream, msg) stream->OutputString(stream, msg)
 
-EFI_STATUS EFIAPI openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL **root);
-EFI_STATUS EFIAPI createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile);
-EFI_STATUS EFIAPI intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
-
-/**
- * \brief Prints an error message
- * \param ConOut The console output of UEFI
- * \param status The status to print (EFI_STATUS)
- * \param msg The message to print with the status code (must be a utf16 string)
- */
-static inline void EFIAPI Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg) {
-    ConOut->SetAttribute(ConOut, EFI_RED);
-    EfiPrint(ConOut, u"Error: ");
-    EfiPrint(ConOut, msg);
-    CHAR16 buffer[20];
-    if (intToString(status, buffer, 20) == EFI_SUCCESS) {
-        EfiPrint(ConOut, u" (");
-        EfiPrint(ConOut, buffer);
-        EfiPrint(ConOut, u")\r\n");
-    } else EfiPrint(ConOut, u"(N/A)\r\n");
-    ConOut->SetAttribute(ConOut, EFI_WHITE);
-}
+static inline void Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg);
+EFI_STATUS openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL **root);
+EFI_STATUS createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile);
+EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 
 /**
  * \brief UEFI entry point
  */
-EFI_STATUS EFIAPI EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
+EFI_STATUS EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
     (void)imageHandle;
     SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = systemTable->ConOut;
     ConOut->ClearScreen(systemTable->ConOut);
@@ -69,10 +51,29 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
 }
 
 /**
+ * \brief Prints an error message
+ * \param ConOut The console output of UEFI
+ * \param status The status to print (EFI_STATUS)
+ * \param msg The message to print with the status code (must be a utf16 string)
+ */
+static inline void Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg) {
+    ConOut->SetAttribute(ConOut, EFI_RED);
+    EfiPrint(ConOut, u"Error: ");
+    EfiPrint(ConOut, msg);
+    CHAR16 buffer[20];
+    if (intToString(status, buffer, 20) == EFI_SUCCESS) {
+        EfiPrint(ConOut, u" (");
+        EfiPrint(ConOut, buffer);
+        EfiPrint(ConOut, u")\r\n");
+    } else EfiPrint(ConOut, u"(N/A)\r\n");
+    ConOut->SetAttribute(ConOut, EFI_WHITE);
+}
+
+/**
  * \brief Opens the root directory
  * \param root Where to store the pointer of the EFI_FILE_PROTOCOL of the root directory
  */
-EFI_STATUS EFIAPI openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL **root) {
+EFI_STATUS openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL **root) {
     EFI_BOOT_SERVICES *bootServices = systemTable->BootServices;
 
     EFI_STATUS status;
@@ -106,29 +107,34 @@ EFI_STATUS EFIAPI openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTa
 }
 
 /**
- * \brief Creates a LOG directory at the root and a BOOT.LOG file
+ * \brief Creates a BOOT.LOG file
  * \param root The pointer to the EFI_FILE_PROTOCOL of the root directory
  * \param logFile Where to store the pointer of the EFI_FILE_PROTOCOL of the log file BOOT.LOG
  */
-EFI_STATUS EFIAPI createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
+EFI_STATUS createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
     EFI_STATUS status;
 
-    CHAR16 *logName = (CHAR16 *)L"\\BOOT.LOG";
+    EFI_FILE_PROTOCOL *logDir; 
+    status = root->Open(root, &logDir, u"LOGS\\", EFI_FILE_MODE_WRITE, EFI_FILE_DIRECTORY);
+    if (status != EFI_SUCCESS) {
+        Error(systemTable->ConOut, status, u"Could not open \"LOGS\" directory");
+        return status;
+    }
 
-    status = root->Open(root, logFile, logName, EFI_FILE_MODE_CREATE, 0);
+    status = logDir->Open(logDir, logFile, u"BOOT.LOG", EFI_FILE_MODE_CREATE, 0);
     if (status != EFI_SUCCESS) {
         Error(systemTable->ConOut, status, u"Could not create file \"BOOT.LOG\"");
         return status;
     }
 
-    CHAR16 msg[] = u"Hello from SOS !\r\n\r\n";
-    UINT64 bufferSize = sizeof msg - sizeof msg[0];
+    CHAR8 msg[] = u8"Hello from SOS !\r\n\r\n";
+    UINT64 bufferSize = sizeof msg - 1;
     status = (*logFile)->Write(*logFile, &bufferSize, msg);
     if (status != EFI_SUCCESS) {
         Error(systemTable->ConOut, status, u"Could not write in log file");
         return status;
     }
-    
+
     if (!*logFile) {
         Error(systemTable->ConOut, status, u"Failed to create log file\r\n");
         return status;
@@ -143,7 +149,7 @@ EFI_STATUS EFIAPI createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *system
  * \param buffer The buffer to store the string (must be a utf16 string)
  * \param bufferSize The size of the buffer
  */
-EFI_STATUS EFIAPI intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
+EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
     // Get the number of digits
     UINT8 digits = 0;
     UINT64 temp = number;
