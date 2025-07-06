@@ -10,6 +10,7 @@ EFI_STATUS EFIAPI createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *system
 EFI_STATUS EFIAPI intToString(UINTN number, CHAR16 *buffer, UINTN bufferSize);
 
 static inline void EFIAPI Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg) {
+    ConOut->SetAttribute(ConOut, EFI_RED);
     EfiPrint(ConOut, u"Error: ");
     EfiPrint(ConOut, msg);
     CHAR16 buffer[20];
@@ -18,6 +19,7 @@ static inline void EFIAPI Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS
         EfiPrint(ConOut, buffer);
         EfiPrint(ConOut, u")\r\n");
     } else EfiPrint(ConOut, u"(N/A)\r\n");
+    ConOut->SetAttribute(ConOut, EFI_WHITE);
 }
 
 EFI_STATUS EFIAPI EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
@@ -68,21 +70,9 @@ EFI_STATUS EFIAPI openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTa
         return status;
     }
 
-    EFI_FILE_PROTOCOL *vol;
-    status = fs->OpenVolume(fs, &vol);
-    if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not open volume");
-        return status;
-    }
-    
-    status = vol->Open(vol, &root, u"\\", (UINT64)EFI_FILE_MODE_READ, 0);
-    if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not open root directory");
-        return status;
-    }
-
-    if (root == NULL) {
-        Error(systemTable->ConOut, status, u"Could not open root directory");
+    status = fs->OpenVolume(fs, &root);
+    if (status != EFI_SUCCESS || root == NULL) {
+        Error(systemTable->ConOut, status, u"Could not open volume / root directory");
         return status;
     }
 
@@ -100,7 +90,7 @@ EFI_STATUS EFIAPI createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *system
     }
 
     CHAR8 msg[] = u8"Hello from SOS !";
-    UINTN bufferSize = sizeof(msg);
+    UINTN bufferSize = sizeof msg;
     status = logFile->Write(logFile, &bufferSize, msg);
     if (status != EFI_SUCCESS) {
         Error(systemTable->ConOut, status, u"Could not write in log file");
