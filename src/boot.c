@@ -12,68 +12,82 @@
 #define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
 #define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
-#define EfiPrint(stream, msg) stream->OutputString(stream, msg)
+#define EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 
-static inline void Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg);
-EFI_STATUS openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL **root);
-EFI_STATUS createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile);
+static EFI_HANDLE           imageHandle;
+static EFI_SYSTEM_TABLE     *systemTable;
+
+static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
+static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr);
+EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root);
+EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile);
 EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 
 /**
  * \brief UEFI entry point
  */
-EFI_STATUS EfiMain(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
-    (void)imageHandle;
-    SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = systemTable->ConOut;
-    ConOut->ClearScreen(systemTable->ConOut);
+EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
+    imageHandle = _imageHandle;
+    systemTable = _systemTable;
 
-    ConOut->SetAttribute(ConOut, EFI_GREEN);
-    EfiPrint(ConOut, u"Booting up SOS !...\r\n");
-    ConOut->SetAttribute(ConOut, EFI_WHITE);
+    SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = _systemTable->ConOut;
+    ConOut->ClearScreen(ConOut);
+
+    EfiPrintInfo(u"Booting up SOS !...\r\n", EFI_GREEN);
 
     EFI_STATUS status;
     EFI_FILE_PROTOCOL *root = NULL, *logFile = NULL;
-    
-    status = openRootDir(imageHandle, systemTable, &root);
+
+    EfiPrint(u"Getting root directory...\r\n");
+    status = openRootDir(&root);
     if (status != EFI_SUCCESS) {
-        Error(ConOut, status, u"Failed to open root dir");
+        EfiPrintInfo(u"Failed to open root dir\r\n", EFI_MAGENTA);
         while (1) {}
-    }
+    } else EfiPrintInfo(u"Successfully opened root directory !\r\n", EFI_CYAN);
 
-    EfiPrint(ConOut, u"Creating log file...\r\n");
-    status = createLogFile(imageHandle, systemTable, root, &logFile);
+    EfiPrint(u"Creating log file...\r\n");
+    status = createLogFile(root, &logFile);
 
-    if (status != 0) EfiPrint(ConOut, u"Failed to create log file\r\n");
-    else EfiPrint(ConOut, u"Log file successfully created !\r\n");
+    if (status != 0) EfiPrintInfo(u"Failed to create log file\r\n", EFI_MAGENTA);
+    else EfiPrintInfo(u"Log file successfully created !\r\n", EFI_CYAN);
 
     while (1) {}
     return EFI_SUCCESS;
 }
 
 /**
- * \brief Prints an error message
- * \param ConOut The console output of UEFI
+ * \brief Prints an error message in red
  * \param status The status to print (EFI_STATUS)
  * \param msg The message to print with the status code (must be a utf16 string)
  */
-static inline void Error(SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut, EFI_STATUS status, CHAR16 *msg) {
-    ConOut->SetAttribute(ConOut, EFI_RED);
-    EfiPrint(ConOut, u"Error: ");
-    EfiPrint(ConOut, msg);
+static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
+    systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_RED);
+    EfiPrint(u"Error: ");
+    EfiPrint(msg);
     CHAR16 buffer[20];
     if (intToString(status, buffer, 20) == EFI_SUCCESS) {
-        EfiPrint(ConOut, u" (");
-        EfiPrint(ConOut, buffer);
-        EfiPrint(ConOut, u")\r\n");
-    } else EfiPrint(ConOut, u"(N/A)\r\n");
-    ConOut->SetAttribute(ConOut, EFI_WHITE);
+        EfiPrint(u" (");
+        EfiPrint(buffer);
+        EfiPrint(u")\r\n");
+    } else EfiPrint(u"(N/A)\r\n");
+    systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_WHITE);
+}
+
+/**
+ * \brief Prints an info message in cyan
+ * \param msg The message to print
+ */
+static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr) {
+    systemTable->ConOut->SetAttribute(systemTable->ConOut, attr);
+    EfiPrint(msg);
+    systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_WHITE|EFI_BACKGROUND_BLACK);
 }
 
 /**
  * \brief Opens the root directory
  * \param root Where to store the pointer of the EFI_FILE_PROTOCOL of the root directory
  */
-EFI_STATUS openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL **root) {
+EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root) {
     EFI_BOOT_SERVICES *bootServices = systemTable->BootServices;
 
     EFI_STATUS status;
@@ -81,27 +95,33 @@ EFI_STATUS openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EF
     EFI_LOADED_IMAGE_PROTOCOL *loadedImage;
     status = bootServices->HandleProtocol(imageHandle, &(EFI_GUID)EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&loadedImage);
     if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not retrieve EFI_LOADED_IMAGE_PROTOCOL");
+        EfiPrintError(status, u"Could not retrieve EFI_LOADED_IMAGE_PROTOCOL");
         return status;
     }
 
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs;
     status = bootServices->HandleProtocol(loadedImage->DeviceHandle, &(EFI_GUID)EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID, (void**)&fs);
     if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not retrieve EFI_SIMPLE_FILE_SYSTEM_PROTOCOL");
+        EfiPrintError(status, u"Could not retrieve EFI_SIMPLE_FILE_SYSTEM_PROTOCOL");
         return status;
     }
 
     status = fs->OpenVolume(fs, root);
-    if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not open root");
+    if (status != EFI_SUCCESS || !*root) {
+        EfiPrintError(status, u"Could not open root");
         return status;
     }
 
-    if (!*root) {
-        Error(systemTable->ConOut, status, u"Could not open root");
+    EFI_FILE_SYSTEM_INFO fileInfo;
+    UINT64 bufferSize = sizeof fileInfo;
+    status = (*root)->GetInfo(*root, &(EFI_GUID)EFI_FILE_SYSTEM_INFO_ID, &bufferSize, (void *)&fileInfo);
+    if (status != EFI_SUCCESS) {
+        EfiPrintError(status, u"Could not get root info");
         return status;
     }
+
+    if (fileInfo.ReadOnly) EfiPrint(u"Read-only filesystem\r\n");
+    else EfiPrint(u"Read/Write filesystem\r\n");
 
     return EFI_SUCCESS;
 }
@@ -111,19 +131,19 @@ EFI_STATUS openRootDir(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EF
  * \param root The pointer to the EFI_FILE_PROTOCOL of the root directory
  * \param logFile Where to store the pointer of the EFI_FILE_PROTOCOL of the log file BOOT.LOG
  */
-EFI_STATUS createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
+EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
     EFI_STATUS status;
 
     EFI_FILE_PROTOCOL *logDir; 
-    status = root->Open(root, &logDir, u"LOGS\\", EFI_FILE_MODE_WRITE, EFI_FILE_DIRECTORY);
+    status = root->Open(root, &logDir, u"\\EFI\\LOGS\\", EFI_FILE_MODE_CREATE, EFI_FILE_DIRECTORY);
     if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not open \"LOGS\" directory");
+        EfiPrintError(status, u"Could not open \"LOGS\" directory");
         return status;
     }
 
-    status = logDir->Open(logDir, logFile, u"BOOT.LOG", EFI_FILE_MODE_CREATE, 0);
-    if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not create file \"BOOT.LOG\"");
+    status = logDir->Open(logDir, logFile, u"BOOT.LOG", EFI_FILE_MODE_WRITE, 0);
+    if (status != EFI_SUCCESS|| !*logFile) {
+        EfiPrintError(status, u"Could not create file \"BOOT.LOG\"");
         return status;
     }
 
@@ -131,14 +151,9 @@ EFI_STATUS createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, 
     UINT64 bufferSize = sizeof msg - 1;
     status = (*logFile)->Write(*logFile, &bufferSize, msg);
     if (status != EFI_SUCCESS) {
-        Error(systemTable->ConOut, status, u"Could not write in log file");
+        EfiPrintError(status, u"Could not write in log file");
         return status;
     }
-
-    if (!*logFile) {
-        Error(systemTable->ConOut, status, u"Failed to create log file\r\n");
-        return status;
-    } 
 
     return EFI_SUCCESS;
 }
@@ -150,6 +165,14 @@ EFI_STATUS createLogFile(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable, 
  * \param bufferSize The size of the buffer
  */
 EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
+    if (number == 0) {
+        if (bufferSize < 2)
+            return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
+        buffer[0] = u'0';
+        buffer[1] = u'\0';
+        return EFI_SUCCESS;
+    }
+
     // Get the number of digits
     UINT8 digits = 0;
     UINT64 temp = number;
@@ -159,9 +182,8 @@ EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
     }
 
     // Check if the buffer is large enough
-    if (digits + 1 > bufferSize) {
-        return (UINT64)EFI_BUFFER_TOO_SMALL;
-    }
+    if ((UINT64)(digits + 1) > bufferSize)
+        return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
 
     // Convert the number to string
     buffer[digits] = '\0'; // Null-terminate the string
