@@ -13,15 +13,18 @@
 #define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
 #define EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
+#define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
 static EFI_HANDLE           imageHandle;
 static EFI_SYSTEM_TABLE     *systemTable;
+static EFI_FILE_PROTOCOL    *root = NULL,
+                            *logFile = NULL;
 
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
 static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr);
-EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root);
-EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile);
-EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
+EFI_STATUS openRootDir();
+EFI_STATUS createLogFile();
+inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 EFI_STATUS graphicsMode();
 
 /**
@@ -37,12 +40,11 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EfiPrintInfo(u"Booting up SOS !...\r\n", EFI_GREEN);
 
     EFI_STATUS status;
-    EFI_FILE_PROTOCOL *root = NULL, *logFile = NULL;
 
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
     status = openRootDir(&root);
-    if (status != EFI_SUCCESS) {
+    if (EFI_ERROR(status)) {
         EfiPrintInfo(u"Failed to open root dir\r\n", EFI_MAGENTA);
         while (1) {}
     } else EfiPrintInfo(u"Successfully opened root directory !\r\n", EFI_CYAN);
@@ -50,14 +52,17 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     // Try to create log file
     EfiPrint(u"Creating log file...\r\n");
     status = createLogFile(root, &logFile);
-    if (status != EFI_SUCCESS) EfiPrintInfo(u"Failed to create log file\r\n", EFI_MAGENTA);
+    if (EFI_ERROR(status)) EfiPrintInfo(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintInfo(u"Log file successfully created !\r\n", EFI_CYAN);
 
     // Initialize graphics mode
     EfiPrint(u"Initializing graphics mode...\r\n");
     status = graphicsMode();
-    if (status != EFI_SUCCESS) EfiPrintInfo(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
+    if (EFI_ERROR(status)) EfiPrintInfo(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
     else EfiPrintInfo(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
+
+    // at boot services exit must close log file !!!!
+    logFile->Close(logFile);
 
     while (1) {}
     return EFI_SUCCESS;
@@ -73,7 +78,7 @@ static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
     EfiPrint(u"Error: ");
     EfiPrint(msg);
     CHAR16 buffer[21];
-    if (intToString(status, buffer, 21) == EFI_SUCCESS) {
+    if (statusToString(status, buffer, 21) == EFI_SUCCESS) {
         EfiPrint(u" (");
         EfiPrint(buffer);
         EfiPrint(u")\r\n");
@@ -95,35 +100,35 @@ static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr) {
  * \brief Opens the root directory
  * \param root Where to store the pointer of the EFI_FILE_PROTOCOL of the root directory
  */
-EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root) {
+EFI_STATUS openRootDir() {
     EFI_BOOT_SERVICES *bootServices = systemTable->BootServices;
 
     EFI_STATUS status;
 
     EFI_LOADED_IMAGE_PROTOCOL *loadedImage;
     status = bootServices->HandleProtocol(imageHandle, &(EFI_GUID)EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&loadedImage);
-    if (status != EFI_SUCCESS) {
+    if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Could not retrieve EFI_LOADED_IMAGE_PROTOCOL");
         return status;
     }
 
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs;
     status = bootServices->HandleProtocol(loadedImage->DeviceHandle, &(EFI_GUID)EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID, (void**)&fs);
-    if (status != EFI_SUCCESS) {
+    if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Could not retrieve EFI_SIMPLE_FILE_SYSTEM_PROTOCOL");
         return status;
     }
 
-    status = fs->OpenVolume(fs, root);
-    if (status != EFI_SUCCESS || !*root) {
+    status = fs->OpenVolume(fs, &root);
+    if (EFI_ERROR(status) || !root) {
         EfiPrintError(status, u"Could not open root");
         return status;
     }
 
-    EFI_FILE_SYSTEM_INFO fileInfo;
-    UINT64 bufferSize = sizeof(fileInfo);
-    status = (*root)->GetInfo(*root, &(EFI_GUID)EFI_FILE_SYSTEM_INFO_ID, &bufferSize, (void *)&fileInfo);
-    if (status != EFI_SUCCESS) {
+    EFI_FILE_SYSTEM_INFO fileInfo; 
+    UINT64 bufferSize = sizeof(fileInfo) + SIZE_OF_EFI_FILE_SYSTEM_INFO;
+    status = root->GetInfo(root, &(EFI_GUID)EFI_FILE_SYSTEM_INFO_ID, &bufferSize, (void *)&fileInfo);
+    if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Could not get root info");
         return status;
     }
@@ -136,29 +141,27 @@ EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root) {
 
 /**
  * \brief Creates a BOOT.LOG file
- * \param root The pointer to the EFI_FILE_PROTOCOL of the root directory
- * \param logFile Where to store the pointer of the EFI_FILE_PROTOCOL of the log file BOOT.LOG
  */
-EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
+EFI_STATUS createLogFile() {
     EFI_STATUS status;
 
     EFI_FILE_PROTOCOL *logDir; 
     status = root->Open(root, &logDir, u"\\EFI\\LOGS\\", EFI_FILE_MODE_CREATE, EFI_FILE_DIRECTORY);
-    if (status != EFI_SUCCESS) {
+    if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Could not open \"LOGS\" directory");
         return status;
     }
 
-    status = logDir->Open(logDir, logFile, u"BOOT.LOG", EFI_FILE_MODE_WRITE, 0);
-    if (status != EFI_SUCCESS|| !*logFile) {
+    status = logDir->Open(logDir, &logFile, u"BOOT.LOG", EFI_FILE_MODE_CREATE, 0);
+    if (EFI_ERROR(status)|| !logFile) {
         EfiPrintError(status, u"Could not create file \"BOOT.LOG\"");
         return status;
     }
 
-    CHAR8 msg[] = u8"Hello from SOS !\r\n\r\n";
+    CHAR8 msg[] = u8"Hello from SOS !\r\n";
     UINT64 bufferSize = sizeof(msg) - 1;
-    status = (*logFile)->Write(*logFile, &bufferSize, msg);
-    if (status != EFI_SUCCESS) {
+    status = logFile->Write(logFile, &bufferSize, msg);
+    if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Could not write in log file");
         return status;
     }
@@ -175,7 +178,7 @@ EFI_STATUS graphicsMode() {
 
     EFI_GRAPHICS_OUTPUT_PROTOCOL *graphicsProtocol;
     status = bs->LocateProtocol(&(EFI_GUID)EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, NULL, (void **)&graphicsProtocol);
-    if (status != EFI_SUCCESS) {
+    if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to retrieve EFI_GRAPHICS_OUTPUT_PROTOCOL");
         return status;
     }
@@ -190,7 +193,6 @@ EFI_STATUS graphicsMode() {
         EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info = NULL;
 
         _status = graphicsProtocol->QueryMode(graphicsProtocol, modeIndex, &infoSize, &info);
-        EfiPrint(u"a ");
 
         CHAR16 modeIndexStr[11];
         intToString((UINT64)(modeIndex + 1), modeIndexStr, sizeof(modeIndexStr));
@@ -223,7 +225,7 @@ EFI_STATUS graphicsMode() {
  * \param buffer The buffer to store the string (must be a utf16 string)
  * \param bufferSize The size of the buffer
  */
-EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
+inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
     if (number == 0) {
         if (bufferSize < 2)
             return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
