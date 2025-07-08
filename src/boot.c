@@ -29,11 +29,13 @@ static struct {
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
 static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
 static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
+static inline EFI_INPUT_KEY getKey();
 
 static EFI_STATUS changeTextModeRes();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
 static EFI_STATUS setupGraphicsMode();
+
 
 /**
  * \brief UEFI entry point
@@ -144,6 +146,20 @@ inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) 
     }
 
     return EFI_SUCCESS;
+}
+
+/**
+ * \brief Wait for a key press
+ * \return The pressed key
+ */
+EFI_INPUT_KEY getKey() {
+    EFI_EVENT ev[1] = {systemTable->ConIn->WaitForKey};
+    EFI_INPUT_KEY key = {0};
+    UINT64 index = 0;
+
+    systemTable->BootServices->WaitForEvent(1, ev, &index);
+    systemTable->ConIn->ReadKeyStroke(systemTable->ConIn, &key);
+    return key;
 }
 
 /**
@@ -259,36 +275,52 @@ EFI_STATUS setupGraphicsMode() {
         return status;
     }
 
-    EfiPrint(u"Graphics modes:\r\n");
-    UINT32 maxMode = graphicsProtocol->Mode->MaxMode;
-    CHAR16 maxModeStr[11];
-    intToString(maxMode, maxModeStr, sizeof(maxModeStr));
-    for (UINT32 modeIndex = 0; modeIndex < maxMode; modeIndex++) {
-        EFI_STATUS _status;
-        UINT64 infoSize = sizeof(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION);
-        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info = NULL;
+    EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *protInfo = graphicsProtocol->Mode;
+    UINT32 currentIndex = protInfo->Mode, maxMode = protInfo->MaxMode;
 
-        _status = graphicsProtocol->QueryMode(graphicsProtocol, modeIndex, &infoSize, &info);
+    UINT32 curSize;
+    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *cur;
+    status = graphicsProtocol->QueryMode(graphicsProtocol, currentIndex, &curSize, &cur);
+    if (EFI_ERROR(status)) {
+        EfiPrintError(status, u"Failed to retrieve current graphics mode information");
+        return status;
+    }
 
-        CHAR16 modeIndexStr[11];
-        intToString((UINT64)(modeIndex + 1), modeIndexStr, sizeof(modeIndexStr));
-        EfiPrint(u"Mode ");
-        EfiPrint(modeIndexStr);
-        EfiPrint(u"/");
-        EfiPrint(maxModeStr);
-        EfiPrint(u": ");
+    CHAR16 wStr[21], hStr[21];
+    intToString(cur->HorizontalResolution, wStr, sizeof(wStr));
+    intToString(cur->VerticalResolution, hStr, sizeof(hStr));
+    EfiPrint(u"Current graphics resolution: ");
+    EfiPrint(wStr); EfiPrint(u"x"); EfiPrint(hStr);
+    EfiPrint(u"\r\n");
+    EfiPrint(u"> Do you want to change the current resolution ? (y/n)\r\n");
 
-        if (_status == EFI_SUCCESS) {
-            CHAR16 width[11], height[11];   
-            intToString((UINT64)info->HorizontalResolution, width, sizeof(width));
-            intToString((UINT64)info->VerticalResolution, height, sizeof(height));
+    EFI_INPUT_KEY key = getKey();
+    while (key.UnicodeChar != u'y' && key.UnicodeChar != u'n') {
+        key = getKey();
+    }
 
-            EfiPrint(width);
-            EfiPrint(u"x");
-            EfiPrint(height);
-            EfiPrint(u"\r\n");
-        } else {
-            EfiPrint(u"Invalid !\r\n");
+    if (key.UnicodeChar == u'y') {
+        if (maxMode <= 1) {
+            EfiPrint(u"No other resolution available for graphics mode\r\n");
+            return EFI_SUCCESS;
+        }
+
+        UINT32  cursorIndex = 0,
+                viewStart = 0, viewEnd = TextModeInfo.rows;
+
+        BOOLEAN done = FALSE;
+
+        systemTable->ConOut->EnableCursor(systemTable->ConOut, TRUE);
+        systemTable->ConOut->SetCursorPosition(systemTable->ConOut, 0, 0);
+        while (!done) {
+            systemTable->ConOut->ClearScreen(systemTable->ConOut->ClearScreen);
+
+            // Show all the res between view
+            for (UINT32 i = viewStart; i < viewEnd && i < maxMode; i++) {
+                UINT64 infoSize;
+                EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
+                graphicsProtocol->QueryMode(graphicsProtocol, i, &infoSize, &info);
+            }
         }
     }
 
