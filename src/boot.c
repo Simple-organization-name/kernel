@@ -15,17 +15,25 @@
 #define EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
+
 static EFI_HANDLE           imageHandle;
 static EFI_SYSTEM_TABLE     *systemTable;
 static EFI_FILE_PROTOCOL    *root = NULL,
                             *logFile = NULL;
+static struct {
+    UINT64 curMode;
+    UINT64 cols, rows;
+} TextModeInfo;
+
 
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
-static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr);
-EFI_STATUS openRootDir();
-EFI_STATUS createLogFile();
-inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
-EFI_STATUS graphicsMode();
+static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
+static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
+
+static EFI_STATUS changeTextModeRes();
+static EFI_STATUS openRootDir();
+static EFI_STATUS createLogFile();
+static EFI_STATUS setupGraphicsMode();
 
 /**
  * \brief UEFI entry point
@@ -34,32 +42,37 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     imageHandle = _imageHandle;
     systemTable = _systemTable;
 
+    EFI_STATUS status;
+
     SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = _systemTable->ConOut;
     ConOut->ClearScreen(ConOut);
 
-    EfiPrintInfo(u"Booting up SOS !...\r\n", EFI_GREEN);
+    EfiPrintAttr(u"Booting up SOS !...\r\n", EFI_GREEN);
 
-    EFI_STATUS status;
+    EfiPrint(u"Changing text mode to maximum supported resolution...\r\n");
+    status = changeTextModeRes();
+    if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to set text mode to maximum resolution\r\n", EFI_YELLOW);
+    else EfiPrintAttr(u"Successfully changed text mode to maximum resolution !\r\n", EFI_CYAN);
 
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
     status = openRootDir(&root);
     if (EFI_ERROR(status)) {
-        EfiPrintInfo(u"Failed to open root dir\r\n", EFI_MAGENTA);
+        EfiPrintAttr(u"Failed to open root dir\r\n", EFI_MAGENTA);
         while (1) {}
-    } else EfiPrintInfo(u"Successfully opened root directory !\r\n", EFI_CYAN);
+    } else EfiPrintAttr(u"Successfully opened root directory !\r\n", EFI_CYAN);
 
     // Try to create log file
     EfiPrint(u"Creating log file...\r\n");
     status = createLogFile(root, &logFile);
-    if (EFI_ERROR(status)) EfiPrintInfo(u"Failed to create log file\r\n", EFI_MAGENTA);
-    else EfiPrintInfo(u"Log file successfully created !\r\n", EFI_CYAN);
+    if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
+    else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
     // Initialize graphics mode
     EfiPrint(u"Initializing graphics mode...\r\n");
-    status = graphicsMode();
-    if (EFI_ERROR(status)) EfiPrintInfo(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
-    else EfiPrintInfo(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
+    status = setupGraphicsMode();
+    if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
+    else EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
 
     // at boot services exit must close log file !!!!
     logFile->Close(logFile);
@@ -90,10 +103,73 @@ static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
  * \brief Prints an info message in cyan
  * \param msg The message to print
  */
-static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr) {
+static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr) {
     systemTable->ConOut->SetAttribute(systemTable->ConOut, attr);
     EfiPrint(msg);
     systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_WHITE|EFI_BACKGROUND_BLACK);
+}
+
+/**
+ * \brief Converts a UINT64 (UINT64 in x64) into it string version
+ * \param number The number to convert
+ * \param buffer The buffer to store the string (must be a utf16 string)
+ * \param bufferSize The size of the buffer
+ */
+inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
+    if (number == 0) {
+        if (bufferSize < 2)
+            return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
+        buffer[0] = u'0';
+        buffer[1] = u'\0';
+        return EFI_SUCCESS;
+    }
+
+    // Get the number of digits
+    UINT8 digits = 0;
+    UINT64 temp = number;
+    while (temp != 0) {
+        digits++;
+        temp /= 10;
+    }
+
+    // Check if the buffer is large enough
+    if ((UINT64)(digits + 1) > bufferSize)
+        return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
+
+    // Convert the number to string
+    buffer[digits] = '\0'; // Null-terminate the string
+    for (UINT8 i = digits; i > 0; i--) {
+        buffer[i - 1] = (CHAR16)((number % 10) + '0'); // Convert digit to character
+        number /= 10; // Remove the last digit
+    }
+
+    return EFI_SUCCESS;
+}
+
+/**
+ * \brief Set the text mode to the max res
+ * \return Returns the number of columns and rows for the current text mode in the global TextModeInfo struct, if success.
+ */
+EFI_STATUS changeTextModeRes() {
+    EFI_STATUS status;
+    EFI_SIMPLE_TEXT_OUT_PROTOCOL *prot = systemTable->ConOut;
+
+    UINT64 maxMode = (UINT64)(prot->Mode->MaxMode - 1);
+
+    status = prot->SetMode(prot, maxMode);
+    TextModeInfo.curMode = maxMode;
+    if (EFI_ERROR(status)) {
+        EfiPrintError(status, u"Failed to set text mode to max resolution");
+        return status;
+    }
+
+    status = prot->QueryMode(prot, maxMode, &TextModeInfo.cols, &TextModeInfo.rows);
+    if (EFI_ERROR(status)) {
+        EfiPrintError(status, u"Failed to retrieve text mode informations");
+        return status;
+    }
+
+    return EFI_SUCCESS;
 }
 
 /**
@@ -133,7 +209,7 @@ EFI_STATUS openRootDir() {
         return status;
     }
 
-    if (fileInfo.ReadOnly) EfiPrintInfo(u"Read-only filesystem\r\n", EFI_YELLOW);
+    if (fileInfo.ReadOnly) EfiPrintAttr(u"Read-only filesystem\r\n", EFI_YELLOW);
     else EfiPrint(u"Read/Write filesystem\r\n");
 
     return EFI_SUCCESS;
@@ -170,9 +246,9 @@ EFI_STATUS createLogFile() {
 }
 
 /**
- * Setup the graphics mode
+ * \brief Setup the graphics mode
  */
-EFI_STATUS graphicsMode() {
+EFI_STATUS setupGraphicsMode() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
     EFI_STATUS status;
 
@@ -214,43 +290,6 @@ EFI_STATUS graphicsMode() {
         } else {
             EfiPrint(u"Invalid !\r\n");
         }
-    }
-
-    return EFI_SUCCESS;
-}
-
-/**
- * \brief Converts a UINT64 (UINT64 in x64) into it string version
- * \param number The number to convert
- * \param buffer The buffer to store the string (must be a utf16 string)
- * \param bufferSize The size of the buffer
- */
-inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
-    if (number == 0) {
-        if (bufferSize < 2)
-            return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
-        buffer[0] = u'0';
-        buffer[1] = u'\0';
-        return EFI_SUCCESS;
-    }
-
-    // Get the number of digits
-    UINT8 digits = 0;
-    UINT64 temp = number;
-    while (temp != 0) {
-        digits++;
-        temp /= 10;
-    }
-
-    // Check if the buffer is large enough
-    if ((UINT64)(digits + 1) > bufferSize)
-        return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
-
-    // Convert the number to string
-    buffer[digits] = '\0'; // Null-terminate the string
-    for (UINT8 i = digits; i > 0; i--) {
-        buffer[i - 1] = (CHAR16)((number % 10) + '0'); // Convert digit to character
-        number /= 10; // Remove the last digit
     }
 
     return EFI_SUCCESS;
