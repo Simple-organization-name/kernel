@@ -121,7 +121,7 @@ EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root) {
     }
 
     EFI_FILE_SYSTEM_INFO fileInfo;
-    UINT64 bufferSize = sizeof fileInfo;
+    UINT64 bufferSize = sizeof(fileInfo);
     status = (*root)->GetInfo(*root, &(EFI_GUID)EFI_FILE_SYSTEM_INFO_ID, &bufferSize, (void *)&fileInfo);
     if (status != EFI_SUCCESS) {
         EfiPrintError(status, u"Could not get root info");
@@ -156,7 +156,7 @@ EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
     }
 
     CHAR8 msg[] = u8"Hello from SOS !\r\n\r\n";
-    UINT64 bufferSize = sizeof msg - 1;
+    UINT64 bufferSize = sizeof(msg) - 1;
     status = (*logFile)->Write(*logFile, &bufferSize, msg);
     if (status != EFI_SUCCESS) {
         EfiPrintError(status, u"Could not write in log file");
@@ -183,17 +183,17 @@ EFI_STATUS graphicsMode() {
     EfiPrint(u"Graphics modes:\r\n");
     UINT32 maxMode = graphicsProtocol->Mode->MaxMode;
     CHAR16 maxModeStr[11];
-    intToString(maxMode, maxModeStr, sizeof maxModeStr);
+    intToString(maxMode, maxModeStr, sizeof(maxModeStr));
     for (UINT32 modeIndex = 0; modeIndex < maxMode; modeIndex++) {
         EFI_STATUS _status;
-        UINT64 infoSize = 0;
+        UINT64 infoSize = sizeof(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION);
         EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info = NULL;
 
         _status = graphicsProtocol->QueryMode(graphicsProtocol, modeIndex, &infoSize, &info);
         EfiPrint(u"a ");
 
         CHAR16 modeIndexStr[11];
-        intToString((UINT64)(modeIndex + 1), modeIndexStr, sizeof modeIndexStr);
+        intToString((UINT64)(modeIndex + 1), modeIndexStr, sizeof(modeIndexStr));
         EfiPrint(u"Mode ");
         EfiPrint(modeIndexStr);
         EfiPrint(u"/");
@@ -202,8 +202,8 @@ EFI_STATUS graphicsMode() {
 
         if (_status == EFI_SUCCESS) {
             CHAR16 width[11], height[11];   
-            intToString((UINT64)info->HorizontalResolution, width, sizeof width);
-            intToString((UINT64)info->VerticalResolution, height, sizeof height);
+            intToString((UINT64)info->HorizontalResolution, width, sizeof(width));
+            intToString((UINT64)info->VerticalResolution, height, sizeof(height));
 
             EfiPrint(width);
             EfiPrint(u"x");
