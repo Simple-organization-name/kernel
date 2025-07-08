@@ -354,7 +354,7 @@ EFI_STATUS setupGraphicsMode() {
             } else if (key.ScanCode == 0x02) {
                 // need this for reasons
                 mode = (mode + 1 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode;
-            } else if (key.UnicodeChar == u'\n') {
+            } else if (key.UnicodeChar == u'\r') {
                 done = TRUE;
             }
             
