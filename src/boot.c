@@ -22,6 +22,7 @@ static inline void EfiPrintInfo(CHAR16 *msg, UINT16 attr);
 EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root);
 EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile);
 EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
+EFI_STATUS graphicsMode();
 
 /**
  * \brief UEFI entry point
@@ -38,6 +39,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EFI_STATUS status;
     EFI_FILE_PROTOCOL *root = NULL, *logFile = NULL;
 
+    // Open root
     EfiPrint(u"Getting root directory...\r\n");
     status = openRootDir(&root);
     if (status != EFI_SUCCESS) {
@@ -45,11 +47,17 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         while (1) {}
     } else EfiPrintInfo(u"Successfully opened root directory !\r\n", EFI_CYAN);
 
+    // Try to create log file
     EfiPrint(u"Creating log file...\r\n");
     status = createLogFile(root, &logFile);
-
-    if (status != 0) EfiPrintInfo(u"Failed to create log file\r\n", EFI_MAGENTA);
+    if (status != EFI_SUCCESS) EfiPrintInfo(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintInfo(u"Log file successfully created !\r\n", EFI_CYAN);
+
+    // Initialize graphics mode
+    EfiPrint(u"Initializing graphics mode...\r\n");
+    status = graphicsMode();
+    if (status != EFI_SUCCESS) EfiPrintInfo(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
+    else EfiPrintInfo(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
 
     while (1) {}
     return EFI_SUCCESS;
@@ -64,8 +72,8 @@ static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
     systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_RED);
     EfiPrint(u"Error: ");
     EfiPrint(msg);
-    CHAR16 buffer[20];
-    if (intToString(status, buffer, 20) == EFI_SUCCESS) {
+    CHAR16 buffer[21];
+    if (intToString(status, buffer, 21) == EFI_SUCCESS) {
         EfiPrint(u" (");
         EfiPrint(buffer);
         EfiPrint(u")\r\n");
@@ -120,7 +128,7 @@ EFI_STATUS openRootDir(EFI_FILE_PROTOCOL **root) {
         return status;
     }
 
-    if (fileInfo.ReadOnly) EfiPrint(u"Read-only filesystem\r\n");
+    if (fileInfo.ReadOnly) EfiPrintInfo(u"Read-only filesystem\r\n", EFI_YELLOW);
     else EfiPrint(u"Read/Write filesystem\r\n");
 
     return EFI_SUCCESS;
@@ -153,6 +161,57 @@ EFI_STATUS createLogFile(EFI_FILE_PROTOCOL *root, EFI_FILE_PROTOCOL **logFile) {
     if (status != EFI_SUCCESS) {
         EfiPrintError(status, u"Could not write in log file");
         return status;
+    }
+
+    return EFI_SUCCESS;
+}
+
+/**
+ * Setup the graphics mode
+ */
+EFI_STATUS graphicsMode() {
+    EFI_BOOT_SERVICES *bs = systemTable->BootServices;
+    EFI_STATUS status;
+
+    EFI_GRAPHICS_OUTPUT_PROTOCOL *graphicsProtocol;
+    status = bs->LocateProtocol(&(EFI_GUID)EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, NULL, (void **)&graphicsProtocol);
+    if (status != EFI_SUCCESS) {
+        EfiPrintError(status, u"Failed to retrieve EFI_GRAPHICS_OUTPUT_PROTOCOL");
+        return status;
+    }
+
+    EfiPrint(u"Graphics modes:\r\n");
+    UINT32 maxMode = graphicsProtocol->Mode->MaxMode;
+    CHAR16 maxModeStr[11];
+    intToString(maxMode, maxModeStr, sizeof maxModeStr);
+    for (UINT32 modeIndex = 0; modeIndex < maxMode; modeIndex++) {
+        EFI_STATUS _status;
+        UINT64 infoSize = 0;
+        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info = NULL;
+
+        _status = graphicsProtocol->QueryMode(graphicsProtocol, modeIndex, &infoSize, &info);
+        EfiPrint(u"a ");
+
+        CHAR16 modeIndexStr[11];
+        intToString((UINT64)(modeIndex + 1), modeIndexStr, sizeof modeIndexStr);
+        EfiPrint(u"Mode ");
+        EfiPrint(modeIndexStr);
+        EfiPrint(u"/");
+        EfiPrint(maxModeStr);
+        EfiPrint(u": ");
+
+        if (_status == EFI_SUCCESS) {
+            CHAR16 width[11], height[11];   
+            intToString((UINT64)info->HorizontalResolution, width, sizeof width);
+            intToString((UINT64)info->VerticalResolution, height, sizeof height);
+
+            EfiPrint(width);
+            EfiPrint(u"x");
+            EfiPrint(height);
+            EfiPrint(u"\r\n");
+        } else {
+            EfiPrint(u"Invalid !\r\n");
+        }
     }
 
     return EFI_SUCCESS;

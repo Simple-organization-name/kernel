@@ -12,6 +12,10 @@ EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID:
     dw 0x11d2
     db 0x8e, 0x39, 0x0, 0xa0, 0xc9, 0x69, 0x72, 0x3b
 
+EFI_FILE_MODE_READ      dq 0x0000000000000001
+EFI_FILE_MODE_WRITE     dq 0x0000000000000003
+EFI_FILE_MODE_CREATE    dq 0x8000000000000003
+
 struc EFI_TABLE_HEADER
     .Signature              resq 1
     .Revision               resd 1
