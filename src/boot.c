@@ -261,6 +261,24 @@ EFI_STATUS createLogFile() {
     return EFI_SUCCESS;
 }
 
+#define CHECK_ERROR(call) if ((INTN)(status = call) < 0) { EfiPrintError(status, u ## #call); return status; }
+#define CHECK_ERROR_MSG(call, msg) if ((INTN)(status = call) < 0) { EfiPrintError(status, msg); return status; }
+
+EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
+    UINTN sizeofInfo;
+    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
+    EFI_STATUS status = EFI_SUCCESS;
+    CHECK_ERROR(gfx->QueryMode(gfx, index, &sizeofInfo, &info));
+    CHAR16 buffer[21];
+    CHECK_ERROR(intToString(info->HorizontalResolution, buffer, 21));
+    CHECK_ERROR(EfiPrint(buffer));
+    CHECK_ERROR(EfiPrint(u" x "));
+    CHECK_ERROR(intToString(info->VerticalResolution, buffer, 21));
+    CHECK_ERROR(EfiPrint(buffer));
+
+    return status;
+}
+
 /**
  * \brief Setup the graphics mode
  */
@@ -278,7 +296,7 @@ EFI_STATUS setupGraphicsMode() {
     EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *protInfo = graphicsProtocol->Mode;
     UINT32 currentIndex = protInfo->Mode, maxMode = protInfo->MaxMode;
 
-    UINT32 curSize;
+    UINTN curSize;
     EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *cur;
     status = graphicsProtocol->QueryMode(graphicsProtocol, currentIndex, &curSize, &cur);
     if (EFI_ERROR(status)) {
@@ -305,22 +323,42 @@ EFI_STATUS setupGraphicsMode() {
             return EFI_SUCCESS;
         }
 
-        UINT32  cursorIndex = 0,
-                viewStart = 0, viewEnd = TextModeInfo.rows;
-
+        SIMPLE_TEXT_OUTPUT_INTERFACE *cout = systemTable->ConOut;
         BOOLEAN done = FALSE;
-
-        systemTable->ConOut->EnableCursor(systemTable->ConOut, TRUE);
-        systemTable->ConOut->SetCursorPosition(systemTable->ConOut, 0, 0);
+        UINT32 mode = 0;
         while (!done) {
-            systemTable->ConOut->ClearScreen(systemTable->ConOut->ClearScreen);
+            // first, show
+            cout->ClearScreen(cout);
+            cout->SetAttribute(cout, EFI_DARKGRAY);
+            EfiPrint(u"  ");
+            printGfxMode(graphicsProtocol, (mode - 2 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode);
+            cout->SetAttribute(cout, EFI_LIGHTGRAY);
+            EfiPrint(u"\n\r  ");
+            printGfxMode(graphicsProtocol, (mode - 1 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode);
+            cout->SetAttribute(cout, EFI_WHITE);
+            EfiPrint(u"\n\r> ");
+            printGfxMode(graphicsProtocol, (mode    ) % graphicsProtocol->Mode->MaxMode);
+            cout->SetAttribute(cout, EFI_LIGHTGRAY);
+            EfiPrint(u"\n\r  ");
+            printGfxMode(graphicsProtocol, (mode + 1) % graphicsProtocol->Mode->MaxMode);
+            cout->SetAttribute(cout, EFI_DARKGRAY);
+            EfiPrint(u"\n\r  ");
+            printGfxMode(graphicsProtocol, (mode + 2) % graphicsProtocol->Mode->MaxMode);
+            
 
-            // Show all the res between view
-            for (UINT32 i = viewStart; i < viewEnd && i < maxMode; i++) {
-                UINT64 infoSize;
-                EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
-                graphicsProtocol->QueryMode(graphicsProtocol, i, &infoSize, &info);
+
+            // then, update
+            key = getKey();
+            if (key.ScanCode == 0x01) {
+                mode = mode - 1 % graphicsProtocol->Mode->MaxMode;
+            } else if (key.ScanCode == 0x02) {
+                // need this for reasons
+                mode = (mode + 1 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode;
+            } else if (key.UnicodeChar == u'\n') {
+                done = TRUE;
             }
+            
+            graphicsProtocol->SetMode(graphicsProtocol, mode);
         }
     }
 
