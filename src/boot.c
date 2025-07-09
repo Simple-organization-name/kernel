@@ -15,6 +15,10 @@
 #define EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
+struct _Framebuffer {
+    uint64_t addr;
+    uint64_t size;
+} framebuffer;
 
 static EFI_HANDLE           imageHandle;
 static EFI_SYSTEM_TABLE     *systemTable;
@@ -31,7 +35,7 @@ static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
 static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 static inline EFI_INPUT_KEY getKey();
 
-static EFI_STATUS changeTextModeRes();
+__attribute__((__unused__)) static EFI_STATUS changeTextModeRes();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
 static EFI_STATUS setupGraphicsMode();
@@ -51,10 +55,14 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     EfiPrintAttr(u"Booting up SOS !...\r\n", EFI_GREEN);
 
-    EfiPrint(u"Changing text mode to maximum supported resolution...\r\n");
-    status = changeTextModeRes();
-    if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to set text mode to maximum resolution\r\n", EFI_YELLOW);
-    else EfiPrintAttr(u"Successfully changed text mode to maximum resolution !\r\n", EFI_CYAN);
+    // Initialize graphics mode
+    EfiPrint(u"Initializing graphics mode...\r\n");
+    status = setupGraphicsMode();
+    if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
+    else {
+        _systemTable->ConOut->SetCursorPosition(_systemTable->ConOut, 0, 0);
+        EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
+    }
 
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
@@ -69,13 +77,6 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = createLogFile(root, &logFile);
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
-
-    // Initialize graphics mode
-    EfiPrint(u"Initializing graphics mode...\r\n");
-    status = setupGraphicsMode();
-    if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
-    else EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
-
     // at boot services exit must close log file !!!!
     logFile->Close(logFile);
 
@@ -269,12 +270,13 @@ EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
     EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
     EFI_STATUS status = EFI_SUCCESS;
     CHECK_ERROR(gfx->QueryMode(gfx, index, &sizeofInfo, &info));
-    CHAR16 buffer[21];
-    CHECK_ERROR(intToString(info->HorizontalResolution, buffer, 21));
-    CHECK_ERROR(EfiPrint(buffer));
+    CHAR16 wStr[11] = {0}, hStr[11] = {0};
+    CHECK_ERROR(intToString(info->HorizontalResolution, wStr, sizeof(wStr)));
+    CHECK_ERROR(intToString(info->VerticalResolution, hStr, sizeof(hStr)));
+    CHECK_ERROR(EfiPrint(wStr));
     CHECK_ERROR(EfiPrint(u" x "));
-    CHECK_ERROR(intToString(info->VerticalResolution, buffer, 21));
-    CHECK_ERROR(EfiPrint(buffer));
+    CHECK_ERROR(EfiPrint(hStr));
+    CHECK_ERROR(EfiPrint(u"         "));
 
     return status;
 }
@@ -294,15 +296,9 @@ EFI_STATUS setupGraphicsMode() {
     }
 
     EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE *protInfo = graphicsProtocol->Mode;
-    UINT32 currentIndex = protInfo->Mode, maxMode = protInfo->MaxMode;
+    UINT32 maxMode = protInfo->MaxMode;
 
-    UINTN curSize;
-    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *cur;
-    status = graphicsProtocol->QueryMode(graphicsProtocol, currentIndex, &curSize, &cur);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Failed to retrieve current graphics mode information");
-        return status;
-    }
+    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *cur = protInfo->Info;
 
     CHAR16 wStr[21], hStr[21];
     intToString(cur->HorizontalResolution, wStr, sizeof(wStr));
@@ -316,51 +312,53 @@ EFI_STATUS setupGraphicsMode() {
     while (key.UnicodeChar != u'y' && key.UnicodeChar != u'n') {
         key = getKey();
     }
-
+    
     if (key.UnicodeChar == u'y') {
         if (maxMode <= 1) {
             EfiPrint(u"No other resolution available for graphics mode\r\n");
             return EFI_SUCCESS;
         }
 
+        EfiPrintAttr(u"\r\nSelect with \u2191 and \u2193 | Confirm with ENTER\r\n\n", EFI_WHITE);
         SIMPLE_TEXT_OUTPUT_INTERFACE *cout = systemTable->ConOut;
+        INT32 cursorInitial = cout->Mode->CursorRow;
+
         BOOLEAN done = FALSE;
         UINT32 mode = 0;
         while (!done) {
             // first, show
-            cout->ClearScreen(cout);
+            cout->SetCursorPosition(cout, 0, cursorInitial);
             cout->SetAttribute(cout, EFI_DARKGRAY);
             EfiPrint(u"  ");
-            printGfxMode(graphicsProtocol, (mode - 2 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode);
+            printGfxMode(graphicsProtocol, (mode - 2 + maxMode) % maxMode);
             cout->SetAttribute(cout, EFI_LIGHTGRAY);
-            EfiPrint(u"\n\r  ");
-            printGfxMode(graphicsProtocol, (mode - 1 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode);
+            EfiPrint(u"\r\n  ");
+            printGfxMode(graphicsProtocol, (mode - 1 + maxMode) % maxMode);
             cout->SetAttribute(cout, EFI_WHITE);
-            EfiPrint(u"\n\r> ");
-            printGfxMode(graphicsProtocol, (mode    ) % graphicsProtocol->Mode->MaxMode);
+            EfiPrint(u"\r\n> ");
+            printGfxMode(graphicsProtocol, (mode) % maxMode);
             cout->SetAttribute(cout, EFI_LIGHTGRAY);
-            EfiPrint(u"\n\r  ");
-            printGfxMode(graphicsProtocol, (mode + 1) % graphicsProtocol->Mode->MaxMode);
+            EfiPrint(u"\r\n  ");
+            printGfxMode(graphicsProtocol, (mode + 1) % maxMode);
             cout->SetAttribute(cout, EFI_DARKGRAY);
-            EfiPrint(u"\n\r  ");
-            printGfxMode(graphicsProtocol, (mode + 2) % graphicsProtocol->Mode->MaxMode);
-            
-
+            EfiPrint(u"\r\n  ");
+            printGfxMode(graphicsProtocol, (mode + 2) % maxMode);
 
             // then, update
             key = getKey();
             if (key.ScanCode == 0x01) {
-                mode = mode - 1 % graphicsProtocol->Mode->MaxMode;
+                mode = (mode - 1 + maxMode) % maxMode;
             } else if (key.ScanCode == 0x02) {
-                // need this for reasons
-                mode = (mode + 1 + graphicsProtocol->Mode->MaxMode) % graphicsProtocol->Mode->MaxMode;
+                mode = (mode + 1) % maxMode;
             } else if (key.UnicodeChar == u'\r') {
+                graphicsProtocol->SetMode(graphicsProtocol, mode);
                 done = TRUE;
             }
-            
-            graphicsProtocol->SetMode(graphicsProtocol, mode);
         }
     }
+
+    framebuffer.addr = graphicsProtocol->Mode->FrameBufferBase;
+    framebuffer.size = graphicsProtocol->Mode->FrameBufferSize;
 
     return EFI_SUCCESS;
 }
