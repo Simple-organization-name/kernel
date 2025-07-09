@@ -27,7 +27,7 @@ static EFI_FILE_PROTOCOL    *root = NULL,
 static struct {
     UINT64 curMode;
     UINT64 cols, rows;
-} TextModeInfo;
+} textModeInfo;
 
 
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
@@ -35,10 +35,10 @@ static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
 static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 static inline EFI_INPUT_KEY getKey();
 
-__attribute__((__unused__)) static EFI_STATUS changeTextModeRes();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
 static EFI_STATUS setupGraphicsMode();
+static EFI_STATUS getMemMap();
 
 
 /**
@@ -83,7 +83,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     logFile->Close(logFile);
 
     while (1) {}
-    return EFI_SUCCESS;
+    return EFI_ABORTED; // Should never be reached
 }
 
 /**
@@ -120,7 +120,7 @@ static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr) {
  * \param buffer The buffer to store the string (must be a utf16 string)
  * \param bufferSize The size of the buffer
  */
-inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
+static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
     if (number == 0) {
         if (bufferSize < 2)
             return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
@@ -155,7 +155,7 @@ inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) 
  * \brief Wait for a key press
  * \return The pressed key
  */
-EFI_INPUT_KEY getKey() {
+static EFI_INPUT_KEY getKey() {
     EFI_EVENT ev[1] = {systemTable->ConIn->WaitForKey};
     EFI_INPUT_KEY key = {0};
     UINT64 index = 0;
@@ -166,36 +166,10 @@ EFI_INPUT_KEY getKey() {
 }
 
 /**
- * \brief Set the text mode to the max res
- * \return Returns the number of columns and rows for the current text mode in the global TextModeInfo struct, if success.
- */
-EFI_STATUS changeTextModeRes() {
-    EFI_STATUS status;
-    EFI_SIMPLE_TEXT_OUT_PROTOCOL *prot = systemTable->ConOut;
-
-    UINT64 maxMode = (UINT64)(prot->Mode->MaxMode - 1);
-
-    status = prot->SetMode(prot, maxMode);
-    TextModeInfo.curMode = maxMode;
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Failed to set text mode to max resolution");
-        return status;
-    }
-
-    status = prot->QueryMode(prot, maxMode, &TextModeInfo.cols, &TextModeInfo.rows);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Failed to retrieve text mode informations");
-        return status;
-    }
-
-    return EFI_SUCCESS;
-}
-
-/**
  * \brief Opens the root directory
  * \param root Where to store the pointer of the EFI_FILE_PROTOCOL of the root directory
  */
-EFI_STATUS openRootDir() {
+static EFI_STATUS openRootDir() {
     EFI_BOOT_SERVICES *bootServices = systemTable->BootServices;
 
     EFI_STATUS status;
@@ -237,7 +211,7 @@ EFI_STATUS openRootDir() {
 /**
  * \brief Creates a BOOT.LOG file
  */
-EFI_STATUS createLogFile() {
+static EFI_STATUS createLogFile() {
     EFI_STATUS status;
 
     EFI_FILE_PROTOCOL *logDir; 
@@ -267,7 +241,7 @@ EFI_STATUS createLogFile() {
 #define CHECK_ERROR(call) if ((INTN)(status = call) < 0) { EfiPrintError(status, u ## #call); return status; }
 #define CHECK_ERROR_MSG(call, msg) if ((INTN)(status = call) < 0) { EfiPrintError(status, msg); return status; }
 
-EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
+static EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
     UINTN sizeofInfo;
     EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
     EFI_STATUS status = EFI_SUCCESS;
@@ -286,7 +260,7 @@ EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
 /**
  * \brief Setup the graphics mode
  */
-EFI_STATUS setupGraphicsMode() {
+static EFI_STATUS setupGraphicsMode() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
     EFI_STATUS status;
 
@@ -360,6 +334,31 @@ EFI_STATUS setupGraphicsMode() {
 
     framebuffer.addr = graphicsProtocol->Mode->FrameBufferBase;
     framebuffer.size = graphicsProtocol->Mode->FrameBufferSize;
+
+    return EFI_SUCCESS;
+}
+
+#undef CHECK_ERROR
+#undef CHECK_ERROR_MSG
+
+/**
+ * \brief Get the memory map
+ */
+__attribute__((__unused__))
+static EFI_STATUS getMemMap() {
+    EFI_BOOT_SERVICES *bs = systemTable->BootServices;
+
+    EFI_MEMORY_DESCRIPTOR efiMemMap;
+    UINT64  bufSize = sizeof(efiMemMap),
+            mapKey,
+            descriptorSize;
+    UINT32  descriptorVersion;
+
+    EFI_STATUS status = bs->GetMemoryMap(&bufSize, &efiMemMap, &mapKey, &descriptorSize, &descriptorVersion);
+    if (EFI_ERROR(status)) {
+        EfiPrintError(status, u"Failed to get memory map");
+        return status;
+    }
 
     return EFI_SUCCESS;
 }
