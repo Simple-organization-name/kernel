@@ -12,7 +12,6 @@
 #define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
 #define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
-#define EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
 struct _Framebuffer {
@@ -24,20 +23,19 @@ static EFI_HANDLE           imageHandle;
 static EFI_SYSTEM_TABLE     *systemTable;
 static EFI_FILE_PROTOCOL    *root = NULL,
                             *logFile = NULL;
-static struct {
-    UINT64 curMode;
-    UINT64 cols, rows;
-} textModeInfo;
 
+UINT64 utf16To8(CHAR16 *in, CHAR8 *out, UINT64 outSize);
 
+static inline EFI_STATUS EfiPrint(CHAR16 *msg);
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
 static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
 static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 static inline EFI_INPUT_KEY getKey();
 
+static inline void changeTextModeRes();
+static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS getMemMap();
 
 
@@ -52,6 +50,9 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = _systemTable->ConOut;
     ConOut->ClearScreen(ConOut);
+
+    // Change text mode to max resolution
+    changeTextModeRes();
 
     EfiPrintAttr(u"Booting up SOS !...\r\n", EFI_GREEN);
 
@@ -73,7 +74,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         while (1) {}
     } else EfiPrintAttr(u"Successfully opened root directory !\r\n", EFI_CYAN);
 
-    // Try to create log file
+    // Create log file
     EfiPrint(u"Creating log file...\r\n");
     status = createLogFile(root, &logFile);
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
@@ -84,6 +85,58 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     while (1) {}
     return EFI_ABORTED; // Should never be reached
+}
+
+/**
+ * \brief Converts a utf16 string in a utf8 string
+ * \param in The utf16 string to convert
+ * \param out The buffer to store the utf8 output string
+ * \param outSize The size of the out buffer
+ * \return The number of bytes written
+ */
+UINT64 utf16To8(CHAR16 *in, CHAR8 *out, UINT64 outSize) {
+    UINT64 i = 0, j = 0;
+    while ((CHAR16)in[i] != 0 && j + 4 < outSize) {
+        CHAR16 c = in[i++];
+
+        if (0xD800 <= c && c <= 0xDFFF) continue;
+
+        if (c <= 0x007F) {
+            out[j++] = (CHAR8)c;
+        } else if (c <= 0x07FF) {
+            out[j++] = (CHAR8)(0xC0 | (c >> 6));
+            out[j++] = (CHAR8)(0x80 | (c & 0x3F));
+        } else {
+            out[j++] = (CHAR8)(0xE0 | (c >> 12));
+            out[j++] = (CHAR8)(0x80 | ((c >> 6) & 0x3F));
+            out[j++] = (CHAR8)(0x80 | (c & 0x3F));
+        }
+    }
+
+    out[j] = 0;
+    return j;
+}
+
+/**
+ * \brief Prints a message in the console and log file (if initialized)
+ * \param msg The message to print
+ */
+static inline EFI_STATUS EfiPrint(CHAR16 *msg) {
+    EFI_STATUS status;
+    
+    status = systemTable->ConOut->OutputString(systemTable->ConOut, msg);
+    if (EFI_ERROR(status))
+        return status;
+
+    if (logFile) {
+        CHAR8 buf[1024] = {0};
+        UINT64 size = utf16To8(msg, buf, sizeof(buf));
+
+        status = logFile->Write(logFile, &size, msg);
+        if (EFI_ERROR(status)) return status;
+    }
+
+    return EFI_SUCCESS;
 }
 
 /**
@@ -238,6 +291,17 @@ static EFI_STATUS createLogFile() {
     return EFI_SUCCESS;
 }
 
+/**
+ * \brief Set the text mode to the max res
+ */
+static inline void changeTextModeRes() {
+    EFI_SIMPLE_TEXT_OUT_PROTOCOL *cout = systemTable->ConOut;
+
+    UINT64 maxMode = (UINT64)(cout->Mode->MaxMode - 1);
+
+    cout->SetMode(cout, maxMode);
+}
+
 #define CHECK_ERROR(call) if ((INTN)(status = call) < 0) { EfiPrintError(status, u ## #call); return status; }
 #define CHECK_ERROR_MSG(call, msg) if ((INTN)(status = call) < 0) { EfiPrintError(status, msg); return status; }
 
@@ -348,7 +412,7 @@ __attribute__((__unused__))
 static EFI_STATUS getMemMap() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
-    EFI_MEMORY_DESCRIPTOR efiMemMap;
+    EFI_MEMORY_DESCRIPTOR efiMemMap = {0};
     UINT64  bufSize = sizeof(efiMemMap),
             mapKey,
             descriptorSize;

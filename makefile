@@ -11,10 +11,13 @@ OVMF_PATH = OVMF.fd
 
 all: build emul
 
-build:
+build: clean
 	mkdir -p iso/EFI/BOOT/ build
 	$(CC) $(CFLAGS) src/$(FILE).c -o iso/$(ISO_ENTRY)
 	xorriso -as mkisofs -iso-level 3 -o SOS.ISO -full-iso9660-filenames -volid "SOS" -eltorito-alt-boot -e $(ISO_ENTRY) -no-emul-boot -isohybrid-gpt-basdat iso/
+
+clean:
+	rm -rf iso/ build/ SOS.ISO
 
 emul:
 	qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none
