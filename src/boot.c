@@ -60,7 +60,8 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = setupGraphicsMode();
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
     else {
-        _systemTable->ConOut->SetCursorPosition(_systemTable->ConOut, 0, 0);
+        ConOut->ClearScreen(ConOut);
+        ConOut->SetCursorPosition(ConOut, 0, 0);
         EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
     }
 
@@ -77,6 +78,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = createLogFile(root, &logFile);
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
+
     // at boot services exit must close log file !!!!
     logFile->Close(logFile);
 
@@ -309,9 +311,8 @@ EFI_STATUS setupGraphicsMode() {
     EfiPrint(u"> Do you want to change the current resolution ? (y/n)\r\n");
 
     EFI_INPUT_KEY key = getKey();
-    while (key.UnicodeChar != u'y' && key.UnicodeChar != u'n') {
+    while (key.UnicodeChar != u'y' && key.UnicodeChar != u'n') 
         key = getKey();
-    }
     
     if (key.UnicodeChar == u'y') {
         if (maxMode <= 1) {
