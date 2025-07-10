@@ -12,6 +12,7 @@
 #define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
 #define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
+#define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
 struct _Framebuffer {
@@ -24,7 +25,7 @@ static EFI_SYSTEM_TABLE     *systemTable;
 static EFI_FILE_PROTOCOL    *root = NULL,
                             *logFile = NULL;
 
-UINT64 utf16To8(CHAR16 *in, CHAR8 *out, UINT64 outSize);
+inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
 
 static inline EFI_STATUS EfiPrint(CHAR16 *msg);
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
@@ -81,39 +82,41 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
     // at boot services exit must close log file !!!!
-    logFile->Close(logFile);
+    status = logFile->Close(logFile);
+    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
+    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
     while (1) {}
     return EFI_ABORTED; // Should never be reached
 }
 
 /**
- * \brief Converts a utf16 string in a utf8 string
- * \param in The utf16 string to convert
- * \param out The buffer to store the utf8 output string
+ * \brief Converts a UCS-2 string to UTF-8
+ * \param in The UCS-2 string to convert
+ * \param out The buffer to store the UTF-8 output string
  * \param outSize The size of the out buffer
  * \return The number of bytes written
  */
-UINT64 utf16To8(CHAR16 *in, CHAR8 *out, UINT64 outSize) {
-    UINT64 i = 0, j = 0;
-    while ((CHAR16)in[i] != 0 && j + 4 < outSize) {
-        CHAR16 c = in[i++];
-
-        if (0xD800 <= c && c <= 0xDFFF) continue;
-
-        if (c <= 0x007F) {
-            out[j++] = (CHAR8)c;
-        } else if (c <= 0x07FF) {
-            out[j++] = (CHAR8)(0xC0 | (c >> 6));
-            out[j++] = (CHAR8)(0x80 | (c & 0x3F));
+inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) {
+    uint64_t i = 0, j = 0;
+    while (in[i]) {
+        uint16_t wc = in[i++];
+        if (wc <= 0x007F) {
+            if (j + 2 >= outSize) break;
+            out[j++] = (uint8_t)(wc & 0x7F);
+        } else if (wc <= 0x07FF) {
+            if (j + 3 >= outSize) break;
+            out[j++] = (uint8_t)(0xC0 | ((wc >> 6) & 0x1F));
+            out[j++] = (uint8_t)(0x80 | (wc & 0x3F));
         } else {
-            out[j++] = (CHAR8)(0xE0 | (c >> 12));
-            out[j++] = (CHAR8)(0x80 | ((c >> 6) & 0x3F));
-            out[j++] = (CHAR8)(0x80 | (c & 0x3F));
+            if (j + 4 >= outSize) break;
+            out[j++] = (uint8_t)(0xE0 | ((wc >> 12) & 0x0F));
+            out[j++] = (uint8_t)(0x80 | ((wc >> 6) & 0x3F));
+            out[j++] = (uint8_t)(0x80 | (wc & 0x3F));
         }
     }
 
-    out[j] = 0;
+    out[j] = '\0';
     return j;
 }
 
@@ -125,14 +128,13 @@ static inline EFI_STATUS EfiPrint(CHAR16 *msg) {
     EFI_STATUS status;
     
     status = systemTable->ConOut->OutputString(systemTable->ConOut, msg);
-    if (EFI_ERROR(status))
-        return status;
+    if (EFI_ERROR(status)) return status;
 
     if (logFile) {
-        CHAR8 buf[1024] = {0};
-        UINT64 size = utf16To8(msg, buf, sizeof(buf));
+        CHAR8 buf[256] = {0};
+        UINT64 size = ucs2ToUtf8(msg, buf, sizeof(buf));
 
-        status = logFile->Write(logFile, &size, msg);
+        status = logFile->Write(logFile, &size, buf);
         if (EFI_ERROR(status)) return status;
     }
 
@@ -158,8 +160,9 @@ static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
 }
 
 /**
- * \brief Prints an info message in cyan
+ * \brief Prints an info message with text attribute
  * \param msg The message to print
+ * \param attr The EFI attributes
  */
 static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr) {
     systemTable->ConOut->SetAttribute(systemTable->ConOut, attr);
