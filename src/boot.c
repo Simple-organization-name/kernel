@@ -6,6 +6,7 @@
 #include "boot.h"
 #include "efi/efi.h"
 
+// Macros
 #undef EFI_FILE_MODE_READ
 #undef EFI_FILE_MODE_WRITE
 #undef EFI_FILE_MODE_CREATE
@@ -16,17 +17,18 @@
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
-struct _Framebuffer {
-    uint64_t addr;
-    uint64_t size;
-} framebuffer;
+// Global variables passed to kernel
+Framebuffer framebuffer = {0};
+MemMap memmap = {0};
 
+// UEFI preboot functions and global variables
+// declared as static to be specific to this file
 static EFI_HANDLE           imageHandle;
 static EFI_SYSTEM_TABLE     *systemTable;
 static EFI_FILE_PROTOCOL    *root = NULL,
                             *logFile = NULL;
 
-inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
+static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
 
 static inline EFI_STATUS EfiPrint(CHAR16 *msg);
 static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
@@ -38,7 +40,7 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS getMemMap();
+static EFI_STATUS exitBootServices();
 
 
 /**
@@ -82,10 +84,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
-    // at boot services exit must close log file !!!!
-    status = logFile->Close(logFile);
-    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
-    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
+    exitBootServices();
 
     while (1) {}
     return EFI_ABORTED; // Should never be reached
@@ -98,7 +97,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
  * \param outSize The size of the out buffer
  * \return The number of bytes written
  */
-inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) {
+static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) {
     uint64_t i = 0, j = 0;
     while (in[i]) {
         uint16_t wc = in[i++];
@@ -410,23 +409,46 @@ static EFI_STATUS setupGraphicsMode() {
 #undef CHECK_ERROR_MSG
 
 /**
- * \brief Get the memory map
+ * \brief Get the memory map and call BootServices->ExitBootServices
  */
-__attribute__((__unused__))
-static EFI_STATUS getMemMap() {
+static EFI_STATUS exitBootServices() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
-    EFI_MEMORY_DESCRIPTOR efiMemMap = {0};
-    UINT64  bufSize = sizeof(efiMemMap),
-            mapKey,
-            descriptorSize;
-    UINT32  descriptorVersion;
+    UINT64 dummy = 0;
+    UINT32 descriptorVersion;
 
-    EFI_STATUS status = bs->GetMemoryMap(&bufSize, &efiMemMap, &mapKey, &descriptorSize, &descriptorVersion);
+    EFI_STATUS status = bs->GetMemoryMap(&dummy, (void *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
+    if (EFI_ERROR(status) && status != EFI_BUFFER_TOO_SMALL) {
+        EfiPrintError(status, u"Failed to get memory map");
+        return status;
+    }
+
+    if (memmap.descSize != sizeof(EFI_MEMORY_DESCRIPTOR)) {
+        EfiPrintError(EFI_ABORTED, u"why tho (boot.c line 430 something)");
+        return EFI_ABORTED;
+    }
+
+    status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
+    if (EFI_ERROR(status)) {
+        EfiPrintError(status, u"Failed to allocate memory for memmap");
+        return status;
+    }
+
+    status = bs->GetMemoryMap(&memmap.mapSize, (void *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to get memory map");
         return status;
     }
+
+    if (memmap.descSize != sizeof(EFI_MEMORY_DESCRIPTOR)) {
+        EfiPrintError(EFI_ABORTED, u"why tho (boot.c line 440 something)");
+        return EFI_ABORTED;
+    }
+
+    // at boot services exit must close log file !!!!
+    status = logFile->Close(logFile);
+    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
+    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
     return EFI_SUCCESS;
 }
