@@ -96,6 +96,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     // at boot services exit must close log file !!!!
     status = logFile->Close(logFile);
+    logFile = NULL;
     if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
     else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
