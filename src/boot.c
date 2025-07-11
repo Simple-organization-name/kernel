@@ -40,7 +40,7 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS exitBootServices();
+static EFI_STATUS getMemoryMap();
 
 
 /**
@@ -84,7 +84,20 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
-    exitBootServices();
+    // Get memory map
+    // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
+    EfiPrint(u"Getting memory map...\r\n");
+    status = getMemoryMap();
+    if (EFI_ERROR(status)) {
+        EfiPrintAttr(u"Could not retrieve memory map\r\n", EFI_MAGENTA);
+        while (1) {}
+    } else EfiPrintAttr(u"Memory map successfully retrieved\r\n", EFI_CYAN);
+
+
+    // at boot services exit must close log file !!!!
+    status = logFile->Close(logFile);
+    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
+    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
     while (1) {}
     return EFI_ABORTED; // Should never be reached
@@ -409,23 +422,58 @@ static EFI_STATUS setupGraphicsMode() {
 #undef CHECK_ERROR_MSG
 
 /**
- * \brief Get the memory map and call BootServices->ExitBootServices
+ * Prints the memory map
  */
-static EFI_STATUS exitBootServices() {
+static inline void printMemoryMap() {
+    CHAR16 buffer[21]; 
+    intToString(memmap.mapSize, buffer, sizeof(buffer));
+    EfiPrint(u"Size of memmap: ");
+    EfiPrint(buffer);
+
+    intToString(memmap.descSize, buffer, sizeof(buffer));
+    EfiPrint(u"\r\nSize of descriptor: ");
+    EfiPrint(buffer);
+
+    intToString(memmap.count, buffer, sizeof(buffer));
+    EfiPrint(u"\r\nDescriptor count: ");
+    EfiPrint(buffer);
+
+    for (UINT16 i = 0; i < memmap.count; i++) {
+        EFI_MEMORY_DESCRIPTOR *desc = (EFI_MEMORY_DESCRIPTOR *)(memmap.map + i * memmap.descSize);
+
+        intToString(i, buffer, sizeof(buffer));
+        EfiPrint(u"\r\n\r\nDescriptor ");
+        EfiPrint(buffer);
+
+        intToString(desc->Type, buffer, sizeof(buffer));
+        EfiPrint(u"\r\n    Type: ");
+        EfiPrint(buffer);
+
+        intToString(desc->PhysicalStart, buffer, sizeof(buffer));
+        EfiPrint(u"\r\n    Address: ");
+        EfiPrint(buffer);
+
+        intToString(desc->NumberOfPages, buffer, sizeof(buffer));
+        EfiPrint(u"\r\n    Number of pages: ");
+        EfiPrint(buffer);
+    }
+
+    EfiPrint(u"\r\n");
+}
+
+/**
+ * \brief Get the memory map
+ */
+static EFI_STATUS getMemoryMap() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
     UINT64 dummy = 0;
     UINT32 descriptorVersion;
 
-    EFI_STATUS status = bs->GetMemoryMap(&dummy, (void *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
+    EFI_STATUS status = bs->GetMemoryMap(&dummy, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status) && status != EFI_BUFFER_TOO_SMALL) {
-        EfiPrintError(status, u"Failed to get memory map");
+        EfiPrintError(status, u"Failed to get memory map !");
         return status;
-    }
-
-    if (memmap.descSize != sizeof(EFI_MEMORY_DESCRIPTOR)) {
-        EfiPrintError(EFI_ABORTED, u"why tho (boot.c line 430 something)");
-        return EFI_ABORTED;
     }
 
     status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
@@ -434,21 +482,18 @@ static EFI_STATUS exitBootServices() {
         return status;
     }
 
-    status = bs->GetMemoryMap(&memmap.mapSize, (void *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
+    status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Failed to get memory map");
+        EfiPrintError(status, u"Failed to get memory map !");
         return status;
     }
 
-    if (memmap.descSize != sizeof(EFI_MEMORY_DESCRIPTOR)) {
-        EfiPrintError(EFI_ABORTED, u"why tho (boot.c line 440 something)");
-        return EFI_ABORTED;
+    memmap.count = memmap.mapSize / memmap.descSize;
+    if (memmap.count * memmap.descSize != memmap.mapSize) {
+        EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
     }
 
-    // at boot services exit must close log file !!!!
-    status = logFile->Close(logFile);
-    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
-    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
+    printMemoryMap();
 
     return EFI_SUCCESS;
 }
