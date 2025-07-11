@@ -3,7 +3,8 @@
 #   undef __INT64_C
 #endif
 
-#include <efi/efi.h>
+#include "boot.h"
+#include "efi/efi.h"
 
 #undef EFI_FILE_MODE_READ
 #undef EFI_FILE_MODE_WRITE
