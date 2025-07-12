@@ -6,6 +6,9 @@
 typedef struct _Framebuffer {
     uint64_t    addr,
                 size;
+    uint32_t    width,
+                height;
+    
 } Framebuffer;
 
 typedef struct _MemoryDescriptor {
@@ -24,6 +27,13 @@ typedef struct _MemMap {
     MemoryDescriptor                *map;
     uint64_t                        key;
 } MemMap;
+
+typedef struct _Pixel {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t reserved;
+} Pixel;
 
 extern struct _Framebuffer framebuffer;
 extern struct _MemMap memmap;

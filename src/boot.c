@@ -40,7 +40,7 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS getMemoryMap();
+static void exitBootServices();
 
 
 /**
@@ -65,8 +65,6 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = setupGraphicsMode();
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
     else {
-        ConOut->ClearScreen(ConOut);
-        ConOut->SetCursorPosition(ConOut, 0, 0);
         EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
     }
 
@@ -86,19 +84,14 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     // Get memory map
     // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
-    EfiPrint(u"Getting memory map...\r\n");
-    status = getMemoryMap();
-    if (EFI_ERROR(status)) {
-        EfiPrintAttr(u"Could not retrieve memory map\r\n", EFI_MAGENTA);
-        while (1) {}
-    } else EfiPrintAttr(u"Memory map successfully retrieved\r\n", EFI_CYAN);
+    EfiPrint(u"Exiting boot services...\r\n");
+    exitBootServices();
 
+    uint64_t i = 0;
+    while (i < framebuffer.size) {
+        *(char*)(framebuffer.addr + i) = 0;
+    }
 
-    // at boot services exit must close log file !!!!
-    status = logFile->Close(logFile);
-    logFile = NULL;
-    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
-    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
     while (1) {}
     return EFI_ABORTED; // Should never be reached
@@ -372,49 +365,53 @@ static EFI_STATUS setupGraphicsMode() {
     if (key.UnicodeChar == u'y') {
         if (maxMode <= 1) {
             EfiPrint(u"No other resolution available for graphics mode\r\n");
-            return EFI_SUCCESS;
-        }
+        } else {
+            EfiPrintAttr(u"\r\nSelect with \u2191 and \u2193 | Confirm with ENTER\r\n\n", EFI_WHITE);
+            SIMPLE_TEXT_OUTPUT_INTERFACE *cout = systemTable->ConOut;
+            INT32 cursorInitial = cout->Mode->CursorRow;
 
-        EfiPrintAttr(u"\r\nSelect with \u2191 and \u2193 | Confirm with ENTER\r\n\n", EFI_WHITE);
-        SIMPLE_TEXT_OUTPUT_INTERFACE *cout = systemTable->ConOut;
-        INT32 cursorInitial = cout->Mode->CursorRow;
+            BOOLEAN done = FALSE;
+            UINT32 mode = 0;
+            while (!done) {
+                // first, show
+                cout->SetCursorPosition(cout, 0, cursorInitial);
+                cout->SetAttribute(cout, EFI_DARKGRAY);
+                EfiPrint(u"  ");
+                printGfxMode(graphicsProtocol, (mode - 2 + maxMode) % maxMode);
+                cout->SetAttribute(cout, EFI_LIGHTGRAY);
+                EfiPrint(u"\r\n  ");
+                printGfxMode(graphicsProtocol, (mode - 1 + maxMode) % maxMode);
+                cout->SetAttribute(cout, EFI_WHITE);
+                EfiPrint(u"\r\n> ");
+                printGfxMode(graphicsProtocol, (mode) % maxMode);
+                cout->SetAttribute(cout, EFI_LIGHTGRAY);
+                EfiPrint(u"\r\n  ");
+                printGfxMode(graphicsProtocol, (mode + 1) % maxMode);
+                cout->SetAttribute(cout, EFI_DARKGRAY);
+                EfiPrint(u"\r\n  ");
+                printGfxMode(graphicsProtocol, (mode + 2) % maxMode);
 
-        BOOLEAN done = FALSE;
-        UINT32 mode = 0;
-        while (!done) {
-            // first, show
-            cout->SetCursorPosition(cout, 0, cursorInitial);
-            cout->SetAttribute(cout, EFI_DARKGRAY);
-            EfiPrint(u"  ");
-            printGfxMode(graphicsProtocol, (mode - 2 + maxMode) % maxMode);
-            cout->SetAttribute(cout, EFI_LIGHTGRAY);
-            EfiPrint(u"\r\n  ");
-            printGfxMode(graphicsProtocol, (mode - 1 + maxMode) % maxMode);
-            cout->SetAttribute(cout, EFI_WHITE);
-            EfiPrint(u"\r\n> ");
-            printGfxMode(graphicsProtocol, (mode) % maxMode);
-            cout->SetAttribute(cout, EFI_LIGHTGRAY);
-            EfiPrint(u"\r\n  ");
-            printGfxMode(graphicsProtocol, (mode + 1) % maxMode);
-            cout->SetAttribute(cout, EFI_DARKGRAY);
-            EfiPrint(u"\r\n  ");
-            printGfxMode(graphicsProtocol, (mode + 2) % maxMode);
-
-            // then, update
-            key = getKey();
-            if (key.ScanCode == 0x01) {
-                mode = (mode - 1 + maxMode) % maxMode;
-            } else if (key.ScanCode == 0x02) {
-                mode = (mode + 1) % maxMode;
-            } else if (key.UnicodeChar == u'\r') {
-                graphicsProtocol->SetMode(graphicsProtocol, mode);
-                done = TRUE;
+                // then, update
+                key = getKey();
+                if (key.ScanCode == 0x01) {
+                    mode = (mode - 1 + maxMode) % maxMode;
+                } else if (key.ScanCode == 0x02) {
+                    mode = (mode + 1) % maxMode;
+                } else if (key.UnicodeChar == u'\r') {
+                    graphicsProtocol->SetMode(graphicsProtocol, mode);
+                    done = TRUE;
+                }
             }
         }
     }
 
+    systemTable->ConOut->ClearScreen(systemTable->ConOut);
+    systemTable->ConOut->SetCursorPosition(systemTable->ConOut, 0, 0);
+
     framebuffer.addr = graphicsProtocol->Mode->FrameBufferBase;
     framebuffer.size = graphicsProtocol->Mode->FrameBufferSize;
+    framebuffer.width = graphicsProtocol->Mode->Info->HorizontalResolution;
+    framebuffer.height = graphicsProtocol->Mode->Info->VerticalResolution;
 
     return EFI_SUCCESS;
 }
@@ -440,7 +437,7 @@ static inline void printMemoryMap() {
     EfiPrint(buffer);
 
     for (UINT16 i = 0; i < memmap.count; i++) {
-        EFI_MEMORY_DESCRIPTOR *desc = (EFI_MEMORY_DESCRIPTOR *)(memmap.map + i * memmap.descSize);
+        EFI_MEMORY_DESCRIPTOR *desc = (EFI_MEMORY_DESCRIPTOR *)((char *)memmap.map + i * memmap.descSize);
 
         intToString(i, buffer, sizeof(buffer));
         EfiPrint(u"\r\n\r\nDescriptor ");
@@ -463,38 +460,54 @@ static inline void printMemoryMap() {
 }
 
 /**
- * \brief Get the memory map
+ * \brief Exit boot services
+ * \return Returns the memory map in the memmap global variable
+ * \note Log file is closed and no efi function should be called after it (except for runtime services)
  */
-static EFI_STATUS getMemoryMap() {
+static void exitBootServices() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
     UINT64 dummy = 0;
+    EFI_MEMORY_DESCRIPTOR dummy2;
+
     UINT32 descriptorVersion;
 
-    EFI_STATUS status = bs->GetMemoryMap(&dummy, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
+    EFI_STATUS status = bs->GetMemoryMap(&dummy, &dummy2, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status) && status != EFI_BUFFER_TOO_SMALL) {
-        EfiPrintError(status, u"Failed to get memory map !");
-        return status;
+        EfiPrintError(status, u"Failed to get memory map information !");
+        while (1) {}
     }
-
+    
     status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to allocate memory for memmap");
-        return status;
+        while (1) {}
     }
 
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to get memory map !");
-        return status;
+        while (1) {}
     }
-
+    
     memmap.count = memmap.mapSize / memmap.descSize;
     if (memmap.count * memmap.descSize != memmap.mapSize) {
         EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
     }
+    
+    // printMemoryMap();
+    
+    // at boot services exit must close log file !!!!
+    status = logFile->Close(logFile);
+    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
+    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
-    printMemoryMap();
+    EfiPrint(u"Exiting boot services ...\r\n");
+    status = systemTable->BootServices->ExitBootServices(imageHandle, memmap.key);
+    if (EFI_ERROR(status)) {
+        EfiPrintError(status, u"Failed to exit boot services !");
+        while (1) {};
+    }
 
-    return EFI_SUCCESS;
+    logFile = NULL;
 }
