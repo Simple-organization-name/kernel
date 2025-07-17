@@ -64,16 +64,14 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EfiPrint(u"Initializing graphics mode...\r\n");
     status = setupGraphicsMode();
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
-    else {
-        EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
-    }
+    else EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
 
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
     status = openRootDir(&root);
     if (EFI_ERROR(status)) {
         EfiPrintAttr(u"Failed to open root dir\r\n", EFI_MAGENTA);
-        while (1) {}
+        while (1);
     } else EfiPrintAttr(u"Successfully opened root directory !\r\n", EFI_CYAN);
 
     // Create log file
@@ -87,13 +85,12 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
 
-    uint64_t i = 0;
-    while (i < framebuffer.size) {
-        *(char*)(framebuffer.addr + i) = 0;
+    uint32_t *fb = (uint32_t *)framebuffer.addr;
+    for (uint64_t i = 0; i < framebuffer.size / sizeof(uint32_t); i++) {
+        fb[i] = 0xFFFFFFFF;
     }
 
-
-    while (1) {}
+    while (1);
     return EFI_ABORTED; // Should never be reached
 }
 
@@ -462,7 +459,7 @@ static inline void printMemoryMap() {
 /**
  * \brief Exit boot services
  * \return Returns the memory map in the memmap global variable
- * \note Log file is closed and no efi function should be called after it (except for runtime services)
+ * \note Log file is closed
  */
 static void exitBootServices() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
@@ -475,21 +472,21 @@ static void exitBootServices() {
     EFI_STATUS status = bs->GetMemoryMap(&dummy, &dummy2, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status) && status != EFI_BUFFER_TOO_SMALL) {
         EfiPrintError(status, u"Failed to get memory map information !");
-        while (1) {}
+        while (1);
     }
     
     status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to allocate memory for memmap");
-        while (1) {}
+        while (1);
     }
 
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to get memory map !");
-        while (1) {}
+        while (1);
     }
-    
+
     memmap.count = memmap.mapSize / memmap.descSize;
     if (memmap.count * memmap.descSize != memmap.mapSize) {
         EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
@@ -506,7 +503,7 @@ static void exitBootServices() {
     status = systemTable->BootServices->ExitBootServices(imageHandle, memmap.key);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to exit boot services !");
-        while (1) {};
+        while (1);;
     }
 
     logFile = NULL;
