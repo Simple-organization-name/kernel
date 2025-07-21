@@ -26,6 +26,10 @@ setup-ubuntu:
 	sudo apt update && sudo apt upgrade
 	sudo apt install xorriso qemu-system gcc-mingw-w64
 
+setup-arch:
+	sudo pacman -Syu
+	sudo pacman -S xorriso qemu-desktop mingw-w64-gcc
+
 setup-msys:
 	pacman -Syu
 	pacman -S xorriso mingw-w64-x86_64-qemu mingw-w64-x86_64-gcc
