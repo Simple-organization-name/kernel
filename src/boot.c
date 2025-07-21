@@ -462,6 +462,17 @@ static inline void printMemoryMap() {
  * \note Log file is closed
  */
 static void exitBootServices() {
+    // close log now to not modify memmap later on
+    {
+        // at boot services exit must close log file !!!!
+        EFI_STATUS status = logFile->Close(logFile);
+        if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
+        else {
+            logFile = NULL;
+            EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
+        }
+    }
+
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
     UINT64 dummy = 0;
@@ -487,24 +498,20 @@ static void exitBootServices() {
         while (1);
     }
 
+    // must not print before ExitBootServices, else it might modify the memory map and we won't have the latest one.
+
     memmap.count = memmap.mapSize / memmap.descSize;
     if (memmap.count * memmap.descSize != memmap.mapSize) {
-        EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
+        // EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
     }
     
     // printMemoryMap();
-    
-    // at boot services exit must close log file !!!!
-    status = logFile->Close(logFile);
-    if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
-    else EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
 
-    EfiPrint(u"Exiting boot services ...\r\n");
+    // EfiPrint(u"Exiting boot services ...\r\n");
     status = systemTable->BootServices->ExitBootServices(imageHandle, memmap.key);
     if (EFI_ERROR(status)) {
         EfiPrintError(status, u"Failed to exit boot services !");
         while (1);;
     }
 
-    logFile = NULL;
 }
