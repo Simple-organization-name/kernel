@@ -45,6 +45,7 @@ static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
 static EFI_STATUS loadKernelImage(CHAR16* where);
+static inline void printMemoryMap();
 static EFI_STATUS getMemoryMap();
 static void exitBootServices();
 
@@ -348,6 +349,8 @@ EFI_STATUS loadKernelImage(CHAR16 *where)
     status = getMemoryMap();
     EFI_CALL_FATAL_ERROR(u"Failed to get memory map to know where the kernel can be put");
 
+    printMemoryMap();
+
     // [TODO] finish this mess
 
     EfiPrintAttr(u"\n\rNo error so far while loading the kernel; gonna stall", EFI_BACKGROUND_GREEN | EFI_WHITE);
@@ -537,6 +540,11 @@ static EFI_STATUS getMemoryMap() {
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
     EFI_CALL_FATAL_ERROR(u"Failed to get memory map !");
 
+    memmap.count = memmap.mapSize / memmap.descSize;
+    if (memmap.count * memmap.descSize != memmap.mapSize) {
+        // EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
+    }
+
     return EFI_SUCCESS;
 }
 
@@ -562,11 +570,6 @@ static void exitBootServices() {
     EFI_CALL_ERROR while(1);
 
     // must not print before ExitBootServices, else it might modify the memory map and we won't have the latest one.
-
-    memmap.count = memmap.mapSize / memmap.descSize;
-    if (memmap.count * memmap.descSize != memmap.mapSize) {
-        // EfiPrintAttr(u"Descriptor count * Descriptor Size != Map Size", EFI_YELLOW);
-    }
     
     // printMemoryMap();
 
