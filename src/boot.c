@@ -5,6 +5,7 @@
 
 #include "boot.h"
 #include "efi/efi.h"
+#include "elf.h"
 
 // Macros
 #undef EFI_FILE_MODE_READ
@@ -13,6 +14,9 @@
 #define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001ULL
 #define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
 #define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
+
+#define EFI_CALL_ERROR if (EFI_ERROR(status))
+#define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); return status; }
 
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
@@ -40,6 +44,8 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
+static EFI_STATUS loadKernelImage(CHAR16* where);
+static EFI_STATUS getMemoryMap();
 static void exitBootServices();
 
 
@@ -79,6 +85,11 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = createLogFile(root, &logFile);
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
+
+    status = loadKernelImage(u"\\kernel.elf");
+    EFI_CALL_ERROR {
+        while (1);
+    }
 
     // Get memory map
     // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
@@ -236,17 +247,11 @@ static EFI_STATUS openRootDir() {
 
     EFI_LOADED_IMAGE_PROTOCOL *loadedImage;
     status = bootServices->HandleProtocol(imageHandle, &(EFI_GUID)EFI_LOADED_IMAGE_PROTOCOL_GUID, (void**)&loadedImage);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Could not retrieve EFI_LOADED_IMAGE_PROTOCOL");
-        return status;
-    }
+    EFI_CALL_FATAL_ERROR(u"Could not retrieve EFI_LOADED_IMAGE_PROTOCOL");
 
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs;
     status = bootServices->HandleProtocol(loadedImage->DeviceHandle, &(EFI_GUID)EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID, (void**)&fs);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Could not retrieve EFI_SIMPLE_FILE_SYSTEM_PROTOCOL");
-        return status;
-    }
+    EFI_CALL_FATAL_ERROR(u"Could not retrieve EFI_SIMPLE_FILE_SYSTEM_PROTOCOL");
 
     status = fs->OpenVolume(fs, &root);
     if (EFI_ERROR(status) || !root) {
@@ -257,10 +262,7 @@ static EFI_STATUS openRootDir() {
     EFI_FILE_SYSTEM_INFO fileInfo; 
     UINT64 bufferSize = sizeof(fileInfo) + SIZE_OF_EFI_FILE_SYSTEM_INFO;
     status = root->GetInfo(root, &(EFI_GUID)EFI_FILE_SYSTEM_INFO_ID, &bufferSize, (void *)&fileInfo);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Could not get root info");
-        return status;
-    }
+    EFI_CALL_FATAL_ERROR(u"Could not get root info");
 
     if (fileInfo.ReadOnly) EfiPrintAttr(u"Read-only filesystem\r\n", EFI_YELLOW);
     else EfiPrint(u"Read/Write filesystem\r\n");
@@ -276,10 +278,7 @@ static EFI_STATUS createLogFile() {
 
     EFI_FILE_PROTOCOL *logDir; 
     status = root->Open(root, &logDir, u"\\EFI\\LOGS\\", EFI_FILE_MODE_CREATE, EFI_FILE_DIRECTORY);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Could not open \"LOGS\" directory");
-        return status;
-    }
+    EFI_CALL_FATAL_ERROR(u"Could not open \"LOGS\" directory");
 
     status = logDir->Open(logDir, &logFile, u"BOOT.LOG", EFI_FILE_MODE_CREATE, 0);
     if (EFI_ERROR(status)|| !logFile) {
@@ -290,10 +289,73 @@ static EFI_STATUS createLogFile() {
     CHAR8 msg[] = u8"Hello from SOS !\r\n";
     UINT64 bufferSize = sizeof(msg) - 1;
     status = logFile->Write(logFile, &bufferSize, msg);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Could not write in log file");
+    EFI_CALL_FATAL_ERROR(u"Could not write in log file");
+
+    return EFI_SUCCESS;
+}
+
+EFI_STATUS loadKernelImage(CHAR16 *where)
+{
+    EFI_STATUS status = EFI_SUCCESS;
+
+    EFI_FILE_PROTOCOL *kernelFile;
+    status = root->Open(root, &kernelFile, where, EFI_FILE_MODE_READ, 0);
+    EFI_CALL_FATAL_ERROR(u"Could not open kernel image");
+
+    EFI_FILE_INFO *fileInfo = NULL;
+    UINTN sizeofInfo = 0;
+    EFI_GUID EfiFileInfoId = EFI_FILE_INFO_ID;
+    status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, NULL);
+    if(status != EFI_BUFFER_TOO_SMALL)
+        EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
+
+    status = systemTable->BootServices->AllocatePool(EfiLoaderData, sizeofInfo, (void**)&fileInfo);
+    EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
+
+    status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, fileInfo);
+    EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info");
+
+    void* kernelData;
+    status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(fileInfo->FileSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
+    EFI_CALL_FATAL_ERROR(u"Error while allocating memory to load kernel");
+
+    status = kernelFile->Read(kernelFile, &fileInfo->FileSize, kernelData);
+    EFI_CALL_FATAL_ERROR(u"Failed to read kernel file");
+
+    Elf64_Ehdr* ehdr = kernelData;
+    if (ehdr->e_ident[EI_MAG0] != 0x7F || ehdr->e_ident[EI_MAG1] != 'E' || ehdr->e_ident[EI_MAG2] != 'L' || ehdr->e_ident[EI_MAG3] != 'F') {
+        status = -1;
+        EfiPrintError(status, u"Kernel file isn't an elf file");
         return status;
     }
+    if (ehdr->e_ident[EI_CLASS] != 2) {
+        status = -1;
+        EfiPrintError(status, u"Kernel is ELF32 when it should be ELF64");
+        return status;
+    }
+    if (ehdr->e_ident[EI_DATA] != 1) {
+        status = -1;
+        EfiPrintError(status, u"Kernel is big endian when it should be little endian");
+        return status;
+    }
+    // don't check e_ident[EI_OSABI] or e_ident[EI_ABIVERSION] cuz like it doesnt make sense to
+    if (ehdr->e_type != ET_EXEC && ehdr->e_type != ET_DYN) {
+        status = -1;
+        EfiPrintError(status, u"Kernel is a non-executable elf file");
+        return status;
+    }
+
+    status = getMemoryMap();
+    EFI_CALL_FATAL_ERROR(u"Failed to get memory map to know where the kernel can be put");
+
+    // [TODO] finish this mess
+
+    EfiPrintAttr(u"\n\rNo error so far while loading the kernel; gonna stall", EFI_BACKGROUND_GREEN | EFI_WHITE);
+    while (1);
+
+    systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)kernelData, EFI_SIZE_TO_PAGES(fileInfo->FileSize));
+    systemTable->BootServices->FreePool(fileInfo);
+    status = kernelFile->Close(kernelFile);
 
     return EFI_SUCCESS;
 }
@@ -456,23 +518,8 @@ static inline void printMemoryMap() {
     EfiPrint(u"\r\n");
 }
 
-/**
- * \brief Exit boot services
- * \return Returns the memory map in the memmap global variable
- * \note Log file is closed
- */
-static void exitBootServices() {
-    // close log now to not modify memmap later on
-    {
-        // at boot services exit must close log file !!!!
-        EFI_STATUS status = logFile->Close(logFile);
-        if (EFI_ERROR(status)) EfiPrintError(status, u"Failed to close log file !");
-        else {
-            logFile = NULL;
-            EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
-        }
-    }
-
+static EFI_STATUS getMemoryMap() {
+    EFI_STATUS status;
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
     UINT64 dummy = 0;
@@ -480,23 +527,39 @@ static void exitBootServices() {
 
     UINT32 descriptorVersion;
 
-    EFI_STATUS status = bs->GetMemoryMap(&dummy, &dummy2, &memmap.key, &memmap.descSize, &descriptorVersion);
-    if (EFI_ERROR(status) && status != EFI_BUFFER_TOO_SMALL) {
-        EfiPrintError(status, u"Failed to get memory map information !");
-        while (1);
-    }
+    status = bs->GetMemoryMap(&dummy, &dummy2, &memmap.key, &memmap.descSize, &descriptorVersion);
+    if(status != EFI_BUFFER_TOO_SMALL)
+        EFI_CALL_FATAL_ERROR(u"Failed to get memory map information !");
     
     status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Failed to allocate memory for memmap");
-        while (1);
-    }
+    EFI_CALL_FATAL_ERROR(u"Failed to allocate memory for memmap");
 
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
-    if (EFI_ERROR(status)) {
-        EfiPrintError(status, u"Failed to get memory map !");
-        while (1);
+    EFI_CALL_FATAL_ERROR(u"Failed to get memory map !");
+
+    return EFI_SUCCESS;
+}
+
+/**
+ * \brief Exit boot services
+ * \return Returns the memory map in the memmap global variable
+ * \note Log file is closed
+ */
+static void exitBootServices() {
+    EFI_STATUS status;
+    // close log now to not modify memmap later on
+    {
+        // at boot services exit must close log file !!!!
+        status = logFile->Close(logFile);
+        EFI_CALL_ERROR EfiPrintError(status, u"Failed to close log file !");
+        else {
+            logFile = NULL;
+            EfiPrintAttr(u"Log file closed\r\n", EFI_CYAN);
+        }
     }
+
+    status = getMemoryMap();
+    EFI_CALL_ERROR while(1);
 
     // must not print before ExitBootServices, else it might modify the memory map and we won't have the latest one.
 
@@ -509,7 +572,7 @@ static void exitBootServices() {
 
     // EfiPrint(u"Exiting boot services ...\r\n");
     status = systemTable->BootServices->ExitBootServices(imageHandle, memmap.key);
-    if (EFI_ERROR(status)) {
+    EFI_CALL_ERROR {
         EfiPrintError(status, u"Failed to exit boot services !");
         while (1);;
     }
