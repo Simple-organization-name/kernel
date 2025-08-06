@@ -35,7 +35,5 @@ typedef struct _Pixel {
     uint8_t reserved;
 } Pixel;
 
-extern struct _Framebuffer framebuffer;
-extern struct _MemMap memmap;
 
 #endif //__BOOT_H__
