@@ -18,7 +18,7 @@ all: build emul
 
 build: clean
 	@echo Making clean build directories...
-	@mkdir -p iso/EFI/BOOT/ build
+	@mkdir -p iso/EFI/BOOT/ iso/EFI/LOGS build
 
 	@echo Building bootloader...
 	@$(BOOT_CC) $(BOOT_CFLAGS) src/$(BOOT).c -o iso/$(ISO_ENTRY)

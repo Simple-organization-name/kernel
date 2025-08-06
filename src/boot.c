@@ -99,7 +99,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     uint32_t *fb = (uint32_t *)framebuffer.addr;
     for (uint64_t i = 0; i < framebuffer.size / sizeof(uint32_t); i++) {
-        fb[i] = 0xFFFFFFFF;
+        fb[i] = ~fb[i];
     }
 
     while (1);
@@ -316,14 +316,18 @@ EFI_STATUS loadKernelImage(CHAR16 *where)
     status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, fileInfo);
     EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info");
 
-    void* kernelData;
-    status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(fileInfo->FileSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
-    EFI_CALL_FATAL_ERROR(u"Error while allocating memory to load kernel");
+    UINT64 kernelDataSize = fileInfo->FileSize;
+    systemTable->BootServices->FreePool(fileInfo);
 
-    status = kernelFile->Read(kernelFile, &fileInfo->FileSize, kernelData);
+    UINT8* kernelData;
+    status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(kernelDataSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
+    EFI_CALL_FATAL_ERROR(u"Failed to allocate memory to load kernel file");
+
+    status = kernelFile->Read(kernelFile, &kernelDataSize, kernelData);
     EFI_CALL_FATAL_ERROR(u"Failed to read kernel file");
 
-    Elf64_Ehdr* ehdr = kernelData;
+    // first, validate elf header
+    Elf64_Ehdr* ehdr = (Elf64_Ehdr*)kernelData;
     if (ehdr->e_ident[EI_MAG0] != 0x7F || ehdr->e_ident[EI_MAG1] != 'E' || ehdr->e_ident[EI_MAG2] != 'L' || ehdr->e_ident[EI_MAG3] != 'F') {
         status = -1;
         EfiPrintError(status, u"Kernel file isn't an elf file");
@@ -345,19 +349,88 @@ EFI_STATUS loadKernelImage(CHAR16 *where)
         EfiPrintError(status, u"Kernel is a non-executable elf file");
         return status;
     }
+    if (ehdr->e_type == ET_EXEC) {
+        status = -1;
+        EfiPrintError(status, u"I implemented ET_DYN so don't fucking give me a ET_EXEC");
+        return status;
+    }
+    if (ehdr->e_machine != EM_X86_64) {
+        status = -1;
+        EfiPrintError(status, u"Kernel is does not target the x86_64 architecture");
+        return status;
+    }
+    if (ehdr->e_phentsize != sizeof(Elf64_Phdr)) {
+        status = -1;
+        EfiPrintError(status, u"Kernel's program header size is wrong");
+        return status;
+    }
 
+    // calculate image size
+    UINT64 ps_base_min = UINT64_MAX, ps_top_max = 0; // program segment min/max offsets, top-base = size
+    for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
+    {
+        Elf64_Phdr* phdr = (Elf64_Phdr* )(kernelData + ehdr->e_phoff) + phdr_i;
+        if (phdr->p_type != PT_LOAD) continue;  // only look at segments to be loaded
+        if (ps_base_min > phdr->p_vaddr) ps_base_min = phdr->p_vaddr;
+        if (ps_top_max < phdr->p_vaddr + phdr->p_memsz) ps_top_max = phdr->p_vaddr + phdr->p_memsz;
+    }
+    // you never know
+    if (ps_top_max == 0) {
+        status = -1;
+        EfiPrintError(status, u"Kernel elf has no segments to load");
+        return status;
+    }   
+    CHAR16 buf[42];
+    status = intToString(ps_top_max - ps_base_min, buf, 42);
+    EFI_CALL_FATAL_ERROR(u"WELP");
+    EfiPrint(u"Kernel needs ");
+    EfiPrint(buf);
+    EfiPrint(u" bytes of free space to be loaded.\r\n");
+    
+    // look at where it could fit
+    EFI_PHYSICAL_ADDRESS load_base = 0;
     status = getMemoryMap();
     EFI_CALL_FATAL_ERROR(u"Failed to get memory map to know where the kernel can be put");
 
-    printMemoryMap();
+    for (UINT64 memSegment_i = 0; memSegment_i < memmap.count; memSegment_i++)
+    {
+        MemoryDescriptor* memSegment = (MemoryDescriptor*)((UINT8*)(memmap.map) + memSegment_i*memmap.descSize);
+        if (memSegment->Type != EfiConventionalMemory) continue;
+        if (memSegment->PhysicalStart <= 0x1000000) continue; // do not touch the abyss
+        if (memSegment->NumberOfPages < EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min)) continue;
+        load_base = memSegment->PhysicalStart; break;
+    }
+
+    status = intToString(load_base, buf, 42);
+    EFI_CALL_FATAL_ERROR(u"WELP");
+    EfiPrint(u"Kernel will be put at address ");
+    EfiPrint(buf);
+    EfiPrint(u"\r\n");
+    
+    systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+
+    for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
+    {
+        Elf64_Phdr* phdr = (Elf64_Phdr* )(kernelData + ehdr->e_phoff) + phdr_i;
+        if (phdr->p_type != PT_LOAD) continue;  // only look at segments to be loaded
+        UINT8* dest = (void*)(load_base + phdr->p_vaddr);
+        UINT8* src = kernelData + phdr->p_offset;
+        for (UINTN byte = 0; byte < phdr->p_filesz; byte++)
+        {
+            dest[byte] = src[byte];
+        }
+        for (UINTN byte = phdr->p_filesz; byte < phdr->p_memsz; byte++)
+        {
+            dest[byte] = 0;
+        }
+    }
+
 
     // [TODO] finish this mess
 
-    EfiPrintAttr(u"\n\rNo error so far while loading the kernel; gonna stall", EFI_BACKGROUND_GREEN | EFI_WHITE);
-    while (1);
+    EfiPrintAttr(u"\n\rNo error so far while loading the kernel", EFI_BACKGROUND_GREEN | EFI_WHITE);
 
-    systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)kernelData, EFI_SIZE_TO_PAGES(fileInfo->FileSize));
-    systemTable->BootServices->FreePool(fileInfo);
+    systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)kernelData, EFI_SIZE_TO_PAGES(kernelDataSize));
     status = kernelFile->Close(kernelFile);
 
     return EFI_SUCCESS;
