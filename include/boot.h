@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#define MSABI __attribute__((ms_abi))
-
 typedef struct _Framebuffer {
     uint64_t    addr,
                 size;
