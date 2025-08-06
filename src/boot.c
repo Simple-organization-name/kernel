@@ -44,7 +44,7 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS loadKernelImage(CHAR16* where);
+static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize);
 static inline void printMemoryMap();
 static EFI_STATUS getMemoryMap();
 static void exitBootServices();
@@ -87,7 +87,10 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
-    status = loadKernelImage(u"\\kernel.elf");
+    void (*kernelEntry)(Framebuffer*) = NULL;
+    EFI_PHYSICAL_ADDRESS loadBase;
+    UINTN imageSize;
+    status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &loadBase, &imageSize);
     EFI_CALL_ERROR {
         while (1);
     }
@@ -97,10 +100,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
 
-    uint32_t *fb = (uint32_t *)framebuffer.addr;
-    for (uint64_t i = 0; i < framebuffer.size / sizeof(uint32_t); i++) {
-        fb[i] = ~fb[i];
-    }
+    kernelEntry(&framebuffer);
 
     while (1);
     return EFI_ABORTED; // Should never be reached
@@ -295,9 +295,15 @@ static EFI_STATUS createLogFile() {
     return EFI_SUCCESS;
 }
 
-EFI_STATUS loadKernelImage(CHAR16 *where)
+static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize)
 {
     EFI_STATUS status = EFI_SUCCESS;
+
+    if (!entry || !loadBase || !imageSize) {
+        status = EFI_INVALID_PARAMETER;
+        EfiPrintError(status, u"loadKernelImage caller must provide return pointer parameters");
+        return status;
+    }
 
     EFI_FILE_PROTOCOL *kernelFile;
     status = root->Open(root, &kernelFile, where, EFI_FILE_MODE_READ, 0);
@@ -318,6 +324,12 @@ EFI_STATUS loadKernelImage(CHAR16 *where)
 
     UINT64 kernelDataSize = fileInfo->FileSize;
     systemTable->BootServices->FreePool(fileInfo);
+
+    if (kernelDataSize == 0) {
+        status = -1;
+        EfiPrintError(status, u"Kernel file is empty");
+        return status;
+    }
 
     UINT8* kernelData;
     status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(kernelDataSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
@@ -401,19 +413,27 @@ EFI_STATUS loadKernelImage(CHAR16 *where)
         load_base = memSegment->PhysicalStart; break;
     }
 
+    if (load_base == 0) {
+        status = -1;
+        EfiPrintError(status, u"Found nowhere to put kernel");
+        return status;
+    }
+
     status = intToString(load_base, buf, 42);
     EFI_CALL_FATAL_ERROR(u"WELP");
-    EfiPrint(u"Kernel will be put at address ");
+    EfiPrint(u"Kernel will be put at physical address ");
     EfiPrint(buf);
     EfiPrint(u"\r\n");
     
-    systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    // alocate that memory
+    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
 
     for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
     {
-        Elf64_Phdr* phdr = (Elf64_Phdr* )(kernelData + ehdr->e_phoff) + phdr_i;
+        Elf64_Phdr* phdr = (Elf64_Phdr *)(kernelData + ehdr->e_phoff) + phdr_i;
         if (phdr->p_type != PT_LOAD) continue;  // only look at segments to be loaded
-        UINT8* dest = (void*)(load_base + phdr->p_vaddr);
+        UINT8* dest = (void *)(load_base + phdr->p_vaddr - ps_base_min);
         UINT8* src = kernelData + phdr->p_offset;
         for (UINTN byte = 0; byte < phdr->p_filesz; byte++)
         {
@@ -425,8 +445,52 @@ EFI_STATUS loadKernelImage(CHAR16 *where)
         }
     }
 
+    {
+        Elf64_Rela const * rela = NULL;
+        UINT64 rela_sz = 0, rela_ent = 0;
 
-    // [TODO] finish this mess
+        for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
+        {
+            Elf64_Phdr const * const phdr = (Elf64_Phdr *)(kernelData + ehdr->e_phoff) + phdr_i;
+            if (phdr->p_type != PT_DYNAMIC) continue;  // only look at segments with relocation info
+            Elf64_Dyn* dyn = (Elf64_Dyn *)(kernelData + phdr->p_offset);
+            for (; dyn->d_tag != DT_NULL; dyn++)
+            {
+                switch (dyn->d_tag)
+                {
+                    case DT_RELA:
+                        rela = (Elf64_Rela*)(kernelData + dyn->d_un.d_ptr);
+                        break;
+                    case DT_RELASZ:
+                        rela_sz = dyn->d_un.d_val;
+                        break;
+                    case DT_RELAENT:
+                        rela_ent = dyn->d_un.d_val;
+                        break;
+                }
+            }
+
+            // [TODO] check if this can safely be assumed to be "nothing to do here" or is "whoops"
+            if (!rela || !rela_sz || !rela_ent) break;
+
+            UINT64 const slide = load_base - ps_base_min;
+            
+            UINTN const reloc_count = rela_sz / rela_ent;
+            for (UINTN i = 0; i < reloc_count; i++)
+            {
+                if (ELF64_R_TYPE(rela[i].r_info) == R_X86_64_RELATIVE)
+                {
+                    register UINT64* const target = (UINT64*)(load_base + rela[i].r_offset);
+                    *target = rela[i].r_addend + slide;
+                }
+            }
+        }
+    }
+
+    // returning info about loaded image; pointer were checked at top of function
+    *entry = ehdr->e_entry + load_base - ps_base_min;
+    *loadBase = load_base;
+    *imageSize = ps_top_max - ps_base_min;
 
     EfiPrintAttr(u"\n\rNo error so far while loading the kernel", EFI_BACKGROUND_GREEN | EFI_WHITE);
 
