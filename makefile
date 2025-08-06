@@ -1,14 +1,15 @@
-BOOT_CC 		= x86_64-w64-mingw32-gcc
-BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib -fno-stack-check -fpic -fshort-wchar \
-				-mno-red-zone -maccumulate-outgoing-args -Wall -Wextra -Werror -I include -Wl,--subsystem,10 -e EfiMain \
-				-O2 -nostartfiles
-
 BOOT 		= boot
 BOOT_NAME	= BOOTX64.EFI
 ISO_ENTRY	= EFI/BOOT/$(BOOT_NAME)
 
-KERNEL_CC		= gcc -ffreestanding
-KERNEL_CFLAGS	= -std=c17 -ffreestanding -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -I include -nostartfiles
+BOOT_CC 		= x86_64-w64-mingw32-gcc
+BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
+				-fno-stack-check -maccumulate-outgoing-args -fpic -fshort-wchar -mno-red-zone \
+				-Wall -Wextra -Werror -I include -Wl,--subsystem,10 -e EfiMain -O2 -nostartfiles
+
+KERNEL_CC		= gcc
+KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
+				-I include -nostartfiles -e kernelMain -O2
 
 KERNEL		= kernel
 

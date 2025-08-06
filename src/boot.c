@@ -32,28 +32,28 @@ static EFI_SYSTEM_TABLE     *systemTable;
 static EFI_FILE_PROTOCOL    *root = NULL,
                             *logFile = NULL;
 
-static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
+static inline MSABI uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
 
-static inline EFI_STATUS EfiPrint(CHAR16 *msg);
-static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
-static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
-static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
-static inline EFI_INPUT_KEY getKey();
+static inline MSABI EFI_STATUS EfiPrint(CHAR16 *msg);
+static inline MSABI void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
+static inline MSABI void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
+static inline MSABI EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
+static inline MSABI EFI_INPUT_KEY getKey();
 
-static inline void changeTextModeRes();
-static EFI_STATUS setupGraphicsMode();
-static EFI_STATUS openRootDir();
-static EFI_STATUS createLogFile();
-static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize);
-static inline void printMemoryMap();
-static EFI_STATUS getMemoryMap();
-static void exitBootServices();
+static inline MSABI void changeTextModeRes();
+static MSABI EFI_STATUS setupGraphicsMode();
+static MSABI EFI_STATUS openRootDir();
+static MSABI EFI_STATUS createLogFile();
+static MSABI EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize);
+static inline MSABI void printMemoryMap();
+static MSABI EFI_STATUS getMemoryMap();
+static MSABI void exitBootServices();
 
 
 /**
  * \brief UEFI entry point
  */
-EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
+MSABI EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     imageHandle = _imageHandle;
     systemTable = _systemTable;
 
@@ -87,20 +87,19 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
-    void (*kernelEntry)(void*, Framebuffer*) = NULL;
+    void (*kernelEntry)(Framebuffer*) = NULL;
     EFI_PHYSICAL_ADDRESS loadBase;
     UINTN imageSize;
     status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &loadBase, &imageSize);
-    EFI_CALL_ERROR {
+    EFI_CALL_ERROR
         while (1);
-    }
 
     // Get memory map
     // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
 
-    kernelEntry(NULL, &framebuffer);
+    kernelEntry(&framebuffer);
 
     while (1);
     return EFI_ABORTED; // Should never be reached
@@ -113,7 +112,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
  * \param outSize The size of the out buffer
  * \return The number of bytes written
  */
-static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) {
+static inline MSABI uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) {
     uint64_t i = 0, j = 0;
     while (in[i]) {
         uint16_t wc = in[i++];
@@ -140,7 +139,7 @@ static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) 
  * \brief Prints a message in the console and log file (if initialized)
  * \param msg The message to print
  */
-static inline EFI_STATUS EfiPrint(CHAR16 *msg) {
+static inline MSABI EFI_STATUS EfiPrint(CHAR16 *msg) {
     EFI_STATUS status;
     
     status = systemTable->ConOut->OutputString(systemTable->ConOut, msg);
@@ -162,7 +161,7 @@ static inline EFI_STATUS EfiPrint(CHAR16 *msg) {
  * \param status The status to print (EFI_STATUS)
  * \param msg The message to print with the status code (must be a utf16 string)
  */
-static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
+static inline MSABI void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
     systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_RED);
     EfiPrint(u"Error: ");
     EfiPrint(msg);
@@ -180,7 +179,7 @@ static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
  * \param msg The message to print
  * \param attr The EFI attributes
  */
-static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr) {
+static inline MSABI void EfiPrintAttr(CHAR16 *msg, UINT16 attr) {
     systemTable->ConOut->SetAttribute(systemTable->ConOut, attr);
     EfiPrint(msg);
     systemTable->ConOut->SetAttribute(systemTable->ConOut, EFI_WHITE|EFI_BACKGROUND_BLACK);
@@ -192,7 +191,7 @@ static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr) {
  * \param buffer The buffer to store the string (must be a utf16 string)
  * \param bufferSize The size of the buffer
  */
-static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
+static inline MSABI EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize) {
     if (number == 0) {
         if (bufferSize < 2)
             return (EFI_STATUS)EFI_BUFFER_TOO_SMALL;
@@ -227,7 +226,7 @@ static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 buffe
  * \brief Wait for a key press
  * \return The pressed key
  */
-static EFI_INPUT_KEY getKey() {
+static MSABI EFI_INPUT_KEY getKey() {
     EFI_EVENT ev[1] = {systemTable->ConIn->WaitForKey};
     EFI_INPUT_KEY key = {0};
     UINT64 index = 0;
@@ -241,7 +240,7 @@ static EFI_INPUT_KEY getKey() {
  * \brief Opens the root directory
  * \param root Where to store the pointer of the EFI_FILE_PROTOCOL of the root directory
  */
-static EFI_STATUS openRootDir() {
+static MSABI EFI_STATUS openRootDir() {
     EFI_BOOT_SERVICES *bootServices = systemTable->BootServices;
 
     EFI_STATUS status;
@@ -274,7 +273,7 @@ static EFI_STATUS openRootDir() {
 /**
  * \brief Creates a BOOT.LOG file
  */
-static EFI_STATUS createLogFile() {
+static MSABI EFI_STATUS createLogFile() {
     EFI_STATUS status;
 
     EFI_FILE_PROTOCOL *logDir; 
@@ -295,7 +294,7 @@ static EFI_STATUS createLogFile() {
     return EFI_SUCCESS;
 }
 
-static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize)
+static MSABI EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize)
 {
     EFI_STATUS status = EFI_SUCCESS;
 
@@ -419,11 +418,11 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
         return status;
     }
 
-    status = intToString(load_base, buf, 42);
-    EFI_CALL_FATAL_ERROR(u"WELP");
-    EfiPrint(u"Kernel will be put at physical address ");
-    EfiPrint(buf);
-    EfiPrint(u"\r\n");
+    // status = intToString(load_base, buf, 21);
+    // EFI_CALL_FATAL_ERROR(u"WELP");
+    // EfiPrint(u"Kernel will be put at physical address ");
+    // EfiPrint(buf);
+    // EfiPrint(u"\r\n");
     
     // alocate that memory
     status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
@@ -492,7 +491,7 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     *loadBase = load_base;
     *imageSize = ps_top_max - ps_base_min;
 
-    EfiPrintAttr(u"\n\rNo error so far while loading the kernel", EFI_BACKGROUND_GREEN | EFI_WHITE);
+    // EfiPrintAttr(u"\n\rNo error so far while loading the kernel", EFI_BACKGROUND_GREEN | EFI_WHITE);
 
     systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)kernelData, EFI_SIZE_TO_PAGES(kernelDataSize));
     status = kernelFile->Close(kernelFile);
@@ -503,7 +502,7 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
 /**
  * \brief Set the text mode to the max res
  */
-static inline void changeTextModeRes() {
+static inline MSABI void changeTextModeRes() {
     EFI_SIMPLE_TEXT_OUT_PROTOCOL *cout = systemTable->ConOut;
 
     UINT64 maxMode = (UINT64)(cout->Mode->MaxMode - 1);
@@ -514,7 +513,7 @@ static inline void changeTextModeRes() {
 #define CHECK_ERROR(call) if ((INTN)(status = call) < 0) { EfiPrintError(status, u ## #call); return status; }
 #define CHECK_ERROR_MSG(call, msg) if ((INTN)(status = call) < 0) { EfiPrintError(status, msg); return status; }
 
-static EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
+static MSABI EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) {
     UINTN sizeofInfo;
     EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *info;
     EFI_STATUS status = EFI_SUCCESS;
@@ -533,7 +532,7 @@ static EFI_STATUS printGfxMode(EFI_GRAPHICS_OUTPUT_PROTOCOL *gfx, UINT32 index) 
 /**
  * \brief Setup the graphics mode
  */
-static EFI_STATUS setupGraphicsMode() {
+static MSABI EFI_STATUS setupGraphicsMode() {
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
     EFI_STATUS status;
 
@@ -621,7 +620,7 @@ static EFI_STATUS setupGraphicsMode() {
 /**
  * Prints the memory map
  */
-static inline void printMemoryMap() {
+static inline MSABI void printMemoryMap() {
     CHAR16 buffer[21]; 
     intToString(memmap.mapSize, buffer, sizeof(buffer));
     EfiPrint(u"Size of memmap: ");
@@ -658,7 +657,7 @@ static inline void printMemoryMap() {
     EfiPrint(u"\r\n");
 }
 
-static EFI_STATUS getMemoryMap() {
+static MSABI EFI_STATUS getMemoryMap() {
     EFI_STATUS status;
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
 
@@ -690,7 +689,7 @@ static EFI_STATUS getMemoryMap() {
  * \return Returns the memory map in the memmap global variable
  * \note Log file is closed
  */
-static void exitBootServices() {
+static MSABI void exitBootServices() {
     EFI_STATUS status;
     // close log now to not modify memmap later on
     {
