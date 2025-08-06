@@ -87,7 +87,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
-    void (*kernelEntry)(Framebuffer*) = NULL;
+    uint32_t (*kernelEntry)(Framebuffer*) = NULL;
     EFI_PHYSICAL_ADDRESS loadBase;
     UINTN imageSize;
     status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &loadBase, &imageSize);
@@ -100,7 +100,13 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
 
-    kernelEntry(&framebuffer);
+    register uint32_t color = 0xFFFFFFFF;
+    color = kernelEntry(&framebuffer);
+
+    uint32_t *fb = (uint32_t *)framebuffer.addr;
+    for (uint64_t i = 0; i < framebuffer.size / sizeof(uint32_t); i++) {
+        fb[i] = color;
+    }
 
     while (1);
     return EFI_ABORTED; // Should never be reached
@@ -426,7 +432,7 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     EfiPrint(u"\r\n");
     
     // alocate that memory
-    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
 
     for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)

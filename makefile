@@ -8,7 +8,7 @@ BOOT_NAME	= BOOTX64.EFI
 ISO_ENTRY	= EFI/BOOT/$(BOOT_NAME)
 
 KERNEL_CC		= gcc -ffreestanding
-KERNEL_CFLAGS	= -std=c17 -ffreestanding -fno-pic -m64 -mno-red-zone -Wall -Wextra -Werror -I include -nostartfiles
+KERNEL_CFLAGS	= -std=c17 -ffreestanding -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -I include -nostartfiles
 
 KERNEL		= kernel
 
