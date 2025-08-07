@@ -87,7 +87,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
-    void (*kernelEntry)(Framebuffer*) = NULL;
+    void (*kernelEntry)(BootInfo*) = NULL;
     EFI_PHYSICAL_ADDRESS loadBase;
     UINTN imageSize;
     status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &loadBase, &imageSize);
@@ -99,7 +99,12 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
 
-    kernelEntry(&framebuffer);
+    BootInfo bootinfo = {
+        &framebuffer,
+        &memmap
+    };
+
+    kernelEntry(&bootinfo);
 
     while (1);
     return EFI_ABORTED; // Should never be reached

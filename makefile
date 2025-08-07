@@ -9,7 +9,7 @@ BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
 
 KERNEL_CC		= gcc
 KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
-				-I include -nostartfiles -e kernelMain -O2
+				-I include -nostartfiles -O2
 
 KERNEL		= kernel
 
@@ -25,7 +25,8 @@ build: clean
 	@$(BOOT_CC) $(BOOT_CFLAGS) src/$(BOOT).c -o iso/$(ISO_ENTRY)
 
 	@echo Building kernel...
-	@$(KERNEL_CC) src/$(KERNEL).c -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
+	@nasm src/trampoline.asm -o build/trampoline.o -f elf64
+	@$(KERNEL_CC) src/$(KERNEL).c build/trampoline.o -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
 
 	@echo Building disk image...
 	@xorriso -report_about WARNING -as mkisofs -iso-level 3 -o SOS.ISO -full-iso9660-filenames -volid "SOS" -eltorito-alt-boot -e $(ISO_ENTRY) -no-emul-boot -isohybrid-gpt-basdat iso/

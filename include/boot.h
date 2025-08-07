@@ -29,11 +29,16 @@ typedef struct _MemMap {
 } MemMap;
 
 typedef struct _Pixel {
+    uint8_t a;
     uint8_t r;
     uint8_t g;
     uint8_t b;
-    uint8_t reserved;
 } Pixel;
+
+typedef struct _BootInfo {
+    Framebuffer* frameBuffer;
+    MemMap* memMap;
+} BootInfo;
 
 
 #endif //__BOOT_H__
