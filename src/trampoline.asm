@@ -1,9 +1,8 @@
 
 [bits 64]
 
-extern kernelMain
-
-section .data
+section .rodata
+    align 8
 gdt:
     ; only the access byte changes:
     ;   Dpl = kernel ? 0 : 3
@@ -41,6 +40,9 @@ gdt:
         db 0b10100000
         db 0x00
 gdt_end:
+
+section .data
+    align 8
 gdtr:
     dw 0
     dq 0
@@ -49,15 +51,23 @@ section .bss
     global kstack_base
     global kstack_top
 
+    align 8
     kstack_base resb 0x10000
     kstack_top:
 
 section .text
+    extern kernelMain
+
     global _start
 
+    align 8
 _start:
-    push    rcx
+; set stack start
+    lea     rbp,    [rel kstack_top]
+    mov     rsp,    rbp
+; set stack end
 
+    push    rcx ; push the pointer of kernel info
     cli
 
 ; set gdt start
@@ -66,7 +76,6 @@ _start:
     mov     qword [rel gdtr + 2], rbx
     sub     rax,    rbx
     sub     rax,    1
-    lea     rax,    [rel gdt] 
     mov     word [rel gdtr], ax
 
     lgdt    [rel gdtr] ; Set the gdt
@@ -85,11 +94,6 @@ _start:
     mov     ss,     ax
 ; set gdt end
 
-; set stack start
-    lea     rbp,    [rel kstack_top]
-    mov     rsp,    rbp
-; set stack end
-
 ; paging start
 
 
@@ -101,4 +105,4 @@ _start:
     call    kernelMain
 
 ; Mark stack as non-executable
-section .note.GNU-stack noalloc noexec nowrite progbits
+section .note.GNU-stack noexec
