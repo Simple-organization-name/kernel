@@ -79,7 +79,14 @@ _start:
     mov     word [rel gdtr], ax
 
     lgdt    [rel gdtr] ; Set the gdt
+; set gdt end
+
+; paging start
+    align 8
     
+; paging end
+
+; reload segment registers
     push    0x08
     lea     rax,    [rel .reload_cs]
     push    rax
@@ -92,14 +99,9 @@ _start:
     mov     fs,     ax
     mov     gs,     ax
     mov     ss,     ax
-; set gdt end
+; end reload
 
-; paging start
-
-
-; paging end
-
-
+    align 8
     sti
     pop     rdi
     call    kernelMain
