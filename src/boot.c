@@ -146,7 +146,7 @@ static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize) 
  */
 static inline EFI_STATUS EfiPrint(CHAR16 *msg) {
     EFI_STATUS status;
-    
+
     status = systemTable->ConOut->OutputString(systemTable->ConOut, msg);
     if (EFI_ERROR(status)) return status;
 
@@ -264,7 +264,7 @@ static EFI_STATUS openRootDir() {
         return status;
     }
 
-    EFI_FILE_SYSTEM_INFO fileInfo; 
+    EFI_FILE_SYSTEM_INFO fileInfo;
     UINT64 bufferSize = sizeof(fileInfo) + SIZE_OF_EFI_FILE_SYSTEM_INFO;
     status = root->GetInfo(root, &(EFI_GUID)EFI_FILE_SYSTEM_INFO_ID, &bufferSize, (void *)&fileInfo);
     EFI_CALL_FATAL_ERROR(u"Could not get root info");
@@ -281,7 +281,7 @@ static EFI_STATUS openRootDir() {
 static EFI_STATUS createLogFile() {
     EFI_STATUS status;
 
-    EFI_FILE_PROTOCOL *logDir; 
+    EFI_FILE_PROTOCOL *logDir;
     status = root->Open(root, &logDir, u"\\EFI\\LOGS\\", EFI_FILE_MODE_CREATE, EFI_FILE_DIRECTORY);
     EFI_CALL_FATAL_ERROR(u"Could not open \"LOGS\" directory");
 
@@ -395,14 +395,14 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
         status = -1;
         EfiPrintError(status, u"Kernel elf has no segments to load");
         return status;
-    }   
+    }
     CHAR16 buf[42];
     status = intToString(ps_top_max - ps_base_min, buf, 42);
     EFI_CALL_FATAL_ERROR(u"WELP");
     EfiPrint(u"Kernel needs ");
     EfiPrint(buf);
     EfiPrint(u" bytes of free space to be loaded.\r\n");
-    
+
     // look at where it could fit
     EFI_PHYSICAL_ADDRESS load_base = 0;
     status = getMemoryMap();
@@ -428,7 +428,7 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     // EfiPrint(u"Kernel will be put at physical address ");
     // EfiPrint(buf);
     // EfiPrint(u"\r\n");
-    
+
     // alocate that memory
     status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
@@ -478,7 +478,7 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
             if (!rela || !rela_sz || !rela_ent) break;
 
             UINT64 const slide = load_base - ps_base_min;
-            
+
             UINTN const reloc_count = rela_sz / rela_ent;
             for (UINTN i = 0; i < reloc_count; i++)
             {
@@ -562,9 +562,9 @@ static EFI_STATUS setupGraphicsMode() {
     EfiPrint(u"> Do you want to change the current resolution ? (y/n)\r\n");
 
     EFI_INPUT_KEY key = getKey();
-    while (key.UnicodeChar != u'y' && key.UnicodeChar != u'n') 
+    while (key.UnicodeChar != u'y' && key.UnicodeChar != u'n')
         key = getKey();
-    
+
     if (key.UnicodeChar == u'y') {
         if (maxMode <= 1) {
             EfiPrint(u"No other resolution available for graphics mode\r\n");
@@ -626,7 +626,7 @@ static EFI_STATUS setupGraphicsMode() {
  * Prints the memory map
  */
 static inline void printMemoryMap() {
-    CHAR16 buffer[21]; 
+    CHAR16 buffer[21];
     intToString(memmap.mapSize, buffer, sizeof(buffer));
     EfiPrint(u"Size of memmap: ");
     EfiPrint(buffer);
@@ -674,7 +674,7 @@ static EFI_STATUS getMemoryMap() {
     status = bs->GetMemoryMap(&dummy, &dummy2, &memmap.key, &memmap.descSize, &descriptorVersion);
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Failed to get memory map information !");
-    
+
     status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
     EFI_CALL_FATAL_ERROR(u"Failed to allocate memory for memmap");
 
@@ -711,7 +711,7 @@ static void exitBootServices() {
     EFI_CALL_ERROR while(1);
 
     // must not print before ExitBootServices, else it might modify the memory map and we won't have the latest one.
-    
+
     // printMemoryMap();
 
     // EfiPrint(u"Exiting boot services ...\r\n");
