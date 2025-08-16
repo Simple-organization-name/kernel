@@ -6,6 +6,7 @@
 #include "boot.h"
 #include "efi/efi.h"
 #include "elf.h"
+#include "memTables.h"
 
 // Macros
 #undef EFI_FILE_MODE_READ
@@ -721,4 +722,33 @@ static void exitBootServices() {
         while (1);;
     }
 
+}
+
+static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_va, uint64_t kernel_size) {
+    EFI_PHYSICAL_ADDRESS pageAddress;
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 3, &pageAddress);
+    EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
+
+    // top level page table that encompasses all
+    pte_t* pml4     = (pte_t*)(pageAddress + 0*4096);
+    // each pdp can contain 512GiB so for now we can keep it at one for lower space and one for higher space
+    pte_t* pdp_low  = (pte_t*)(pageAddress + 1*4096);
+    pte_t* pdp_high = (pte_t*)(pageAddress + 2*4096);   // use this for kernel, not done yet
+
+    // delegate low 512GiB VA mapping to the pdp_low table
+    pml4[0].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW;
+    pml4[511].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
+    // invalitate all other entries
+    for (uint32_t i = 1; i < 511; i++)
+        pml4[i].whole = 0;
+
+
+    // this maps all of lower 1GiB by identity
+    pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
+    // invalidate rest of lower 512Gib
+    for (uint32_t i = 1; i < 512; i++)
+        pdp_low[i].whole = 0;
+
+
+    return EFI_ABORTED;
 }
