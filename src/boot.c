@@ -724,31 +724,111 @@ static void exitBootServices() {
 
 }
 
-static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_va, uint64_t kernel_size) {
-    EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 3, &pageAddress);
-    EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
+#define clear_pt(pt) for (uint32_t i = 0; i < 512; i++) pt[i].whole = 0
 
+[[maybe_unused]] static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t* OUT kernel_va, uint64_t kernel_size) {
+    
+    EFI_PHYSICAL_ADDRESS pageAddress;
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 7, &pageAddress);
+    EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
+    
     // top level page table that encompasses all
     pte_t* pml4     = (pte_t*)(pageAddress + 0*4096);
     // each pdp can contain 512GiB so for now we can keep it at one for lower space and one for higher space
     pte_t* pdp_low  = (pte_t*)(pageAddress + 1*4096);
     pte_t* pdp_high = (pte_t*)(pageAddress + 2*4096);   // use this for kernel, not done yet
-
+    pte_t* pt_dir_top = (pte_t*)(pageAddress + 3*4096);
+    pte_t* pt_dir_mid0 = (pte_t*)(pageAddress + 4*4096);
+    pte_t* pt_dir_low0 = (pte_t*)(pageAddress + 5*4096);
+    pte_t* pt_kernel = (pte_t*)(pageAddress + 6*4096);
+    
+    clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
     pml4[0].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW;
     pml4[511].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
-    // invalitate all other entries
-    for (uint32_t i = 1; i < 511; i++)
-        pml4[i].whole = 0;
-
-
+    
+    
+    clear_pt(pdp_low);
     // this maps all of lower 1GiB by identity
     pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
-    // invalidate rest of lower 512Gib
-    for (uint32_t i = 1; i < 512; i++)
-        pdp_low[i].whole = 0;
+    
+    
+    clear_pt(pdp_high);
+    
+    pdp_high[0].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW;
+    
+    clear_pt(pt_dir_top); clear_pt(pt_dir_mid0); clear_pt(pt_dir_low0);
+    
+    // map page tables to page tables
+    pt_dir_top[0].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW;
+    pt_dir_mid0[0].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW;
+    pt_dir_low0[0].whole = (uint64_t)(uintptr_t)pml4 | PTE_P | PTE_RW | PTE_PS;
+    pt_dir_low0[1].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW | PTE_PS;
+    pt_dir_low0[2].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW | PTE_PS;
+    pt_dir_low0[3].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW | PTE_PS;
+    pt_dir_low0[4].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW | PTE_PS;
+    pt_dir_low0[5].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW | PTE_PS;
+    pt_dir_low0[6].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_PS;
+    
+    
+    pdp_high[511].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_G;
+    clear_pt(pt_kernel);
 
+    // page align these just in case of bad caller
+    kernel_pa &= ~0xFFFULL;
 
+    for (uint16_t i = 0; i < kernel_size/(2*1024*1024); i++) {
+        pt_kernel[i].whole = (uint64_t) (kernel_pa + i*4096) | PTE_P | PTE_RW | PTE_PS;
+    }
+    
+    *kernel_va = 0xFFFFFFFF80000000; // uhh check this maybe
+
+    // je prèfère map limité pour pouvoir catch les page faults au cas ou
+ 
+    // tu fais quoi ??
+    // bah genre g clear donc juste tu loop sur ceil(kernel_size/2Mo) et tu map
+
+    // après loop avec kernel_size pour map 2Mo par 2Mo
+    // ouais ok
+    // ou on basse d'un niveau pour map 4KIB par 4KIB
+    // 
+    // /shrug
+    // et si on map avec 2Mo faut alloc un multiple de ça dans load_kernel
+    // à voir
+    // ouais en fait 4kiB c peut etre mieux en fait j'en sais rien
+    // y'a bcp de gens qui font avec 2Mo de ce que je vois ouais yep
+    // surement
+    // att leaf node c 2MiB a ce niveau ou 1GiB ouais ok
+    // 2Mo
+    // pt_kernel gère 1GiB donc ses entries gèrent 2Mo
+    // lmao
+    // bah genre tu sais que tu auras jamais besoin de plus que 1GiB donc une pte suffit
+    // alors que si tu fais avec 4KiB tu dois gérer dynamiquement plusieurs niveaux de pt
+    // donc en vrai go 2Mo whatever
+    // ...
+    // aka finished addressing, go to phys mem there
+    // nan sauf si tu veux une page de 1GiB
+    // :)
+    // bah genre si tu fais ça ça veut dire que at all times le kernel prend 1BIG de ram
+    // BRUH LA COMPARAISON
+    // on peut s'en tenir à des pages de 2Mo pour faciliter deja
+
+    // https://wiki.osdev.org/Higher_Half_Kernel oui
+    // je suppose que si on le met a la fin c plus simple apres pour le reste
+    // Ouais
+    // maybe
+    // or just convention
+
+    // je sais
+    // mais on s'en fiche mdr
+    // oui vu qu'il n'y a même pas de vieilles apps 32bit qui vont run chez nous
+    // à cause du truc des addresses canoniques, pour garder compat avec 32bit va
+    
     return EFI_ABORTED;
+
+    (void)kernel_pa;
+    (void)kernel_va;
+    (void)kernel_size;
 }
+
+#undef clear_pt

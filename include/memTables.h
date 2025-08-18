@@ -16,7 +16,7 @@ typedef union _pageTableEntry {
             accessed : 1,   // has it been used in the mapping of a va
             dirty : 1,      // has it been written to
             pageSize : 1,   // is leaf / ps / whatever
-            global : 1,     // if set, not uncached when switching cr3 (for exxample kernel mapping that is the same in all processes)
+            global : 1,     // if set, not uncached when switching cr3 (for example kernel mapping that is the same in all processes)
             avl_1 : 3,
             dest : 40,      // if leaf, where page starts. else, where next pageTable is
             avl_2 : 11,
@@ -26,15 +26,15 @@ typedef union _pageTableEntry {
 
 // to OR things together
 
-#define PTE_P   (1ULL<<0)
-#define PTE_RW  (1ULL<<1)
-#define PTE_US  (1ULL<<2)
-#define PTE_PWT (1ULL<<3)
-#define PTE_PCD (1ULL<<4)
-#define PTE_A   (1ULL<<5)
-#define PTE_D   (1ULL<<6)
-#define PTE_PS  (1ULL<<7)
-#define PTE_G   (1ULL<<8)
-#define PTE_NX  (1ULL<<63)
+#define PTE_P   (1ULL<<0)   // used
+#define PTE_RW  (1ULL<<1)   // read/write
+#define PTE_US  (1ULL<<2)   // user mode
+#define PTE_PWT (1ULL<<3)   // cache write through or whatever that means
+#define PTE_PCD (1ULL<<4)   // cache disable
+#define PTE_A   (1ULL<<5)   // accessed
+#define PTE_D   (1ULL<<6)   // dirty
+#define PTE_PS  (1ULL<<7)   // leaf node
+#define PTE_G   (1ULL<<8)   // global
+#define PTE_NX  (1ULL<<63)  // not exec
 
 #endif

@@ -81,11 +81,6 @@ _start:
     lgdt    [rel gdtr] ; Set the gdt
 ; set gdt end
 
-; paging start
-    align 8
-    
-; paging end
-
 ; reload segment registers
     push    0x08
     lea     rax,    [rel .reload_cs]
