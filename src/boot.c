@@ -22,6 +22,8 @@
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
+#define kernel_va 0xFFFFFFFF80000000
+
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
 MemMap memmap = {0};
@@ -45,10 +47,11 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize);
+static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize);
 static inline void printMemoryMap();
 static EFI_STATUS getMemoryMap();
 static void exitBootServices();
+static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
 
 
 /**
@@ -89,16 +92,30 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
     void (*kernelEntry)(BootInfo*) = NULL;
-    EFI_PHYSICAL_ADDRESS loadBase;
+    EFI_PHYSICAL_ADDRESS kernel_pa;
     UINTN imageSize;
-    status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &loadBase, &imageSize);
+    status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &kernel_pa, &imageSize);
     EFI_CALL_ERROR
         while (1);
+
+    pte_t* pml4 = NULL;
+    status = makePageTables(kernel_pa, imageSize, &pml4);
+    EFI_CALL_ERROR {
+        EfiPrintError(status, u"Failed to map memory");
+        while (1) __asm__("hlt");
+    }
 
     // Get memory map
     // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
+
+    __asm__ volatile (
+        "mov %0, %%cr3"
+        :
+        : "r"((uint64_t)pml4)
+        : "memory"
+    );
 
     BootInfo bootinfo = {
         &framebuffer,
@@ -300,11 +317,10 @@ static EFI_STATUS createLogFile() {
     return EFI_SUCCESS;
 }
 
-static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* loadBase, OUT UINTN* imageSize)
-{
+static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize) {
     EFI_STATUS status = EFI_SUCCESS;
 
-    if (!entry || !loadBase || !imageSize) {
+    if (!entry || !kernel_pa || !imageSize) {
         status = EFI_INVALID_PARAMETER;
         EfiPrintError(status, u"loadKernelImage caller must provide return pointer parameters");
         return status;
@@ -478,7 +494,7 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
             // [TODO] check if this can safely be assumed to be "nothing to do here" or is "whoops"
             if (!rela || !rela_sz || !rela_ent) break;
 
-            UINT64 const slide = load_base - ps_base_min;
+            UINT64 const slide = kernel_va - ps_base_min;
 
             UINTN const reloc_count = rela_sz / rela_ent;
             for (UINTN i = 0; i < reloc_count; i++)
@@ -493,8 +509,8 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     }
 
     // returning info about loaded image; pointer were checked at top of function
-    *entry = ehdr->e_entry + load_base - ps_base_min;
-    *loadBase = load_base;
+    *entry = ehdr->e_entry + kernel_va - ps_base_min;
+    *kernel_pa = load_base;
     *imageSize = ps_top_max - ps_base_min;
 
     // EfiPrintAttr(u"\n\rNo error so far while loading the kernel", EFI_BACKGROUND_GREEN | EFI_WHITE);
@@ -726,12 +742,12 @@ static void exitBootServices() {
 
 #define clear_pt(pt) for (uint32_t i = 0; i < 512; i++) pt[i].whole = 0
 
-[[maybe_unused]] static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t* OUT kernel_va, uint64_t kernel_size) {
-    
+static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
+
     EFI_PHYSICAL_ADDRESS pageAddress;
     EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 7, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
-    
+
     // top level page table that encompasses all
     pte_t* pml4     = (pte_t*)(pageAddress + 0*4096);
     // each pdp can contain 512GiB so for now we can keep it at one for lower space and one for higher space
@@ -741,24 +757,26 @@ static void exitBootServices() {
     pte_t* pt_dir_mid0 = (pte_t*)(pageAddress + 4*4096);
     pte_t* pt_dir_low0 = (pte_t*)(pageAddress + 5*4096);
     pte_t* pt_kernel = (pte_t*)(pageAddress + 6*4096);
-    
+
     clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
     pml4[0].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW;
     pml4[511].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
-    
-    
+
     clear_pt(pdp_low);
     // this maps all of lower 1GiB by identity
-    pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
-    
-    
+    for (uint32_t i = 0; i < 512; i++)
+    {
+        pdp_low[i].whole =  (i*(1<<30)) | PTE_P | PTE_RW | PTE_PS;
+    }
+
+
     clear_pt(pdp_high);
-    
+
     pdp_high[0].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW;
-    
+
     clear_pt(pt_dir_top); clear_pt(pt_dir_mid0); clear_pt(pt_dir_low0);
-    
+
     // map page tables to page tables
     pt_dir_top[0].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW;
     pt_dir_mid0[0].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW;
@@ -769,66 +787,20 @@ static void exitBootServices() {
     pt_dir_low0[4].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW | PTE_PS;
     pt_dir_low0[5].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW | PTE_PS;
     pt_dir_low0[6].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_PS;
-    
-    
-    pdp_high[511].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_G;
+
+
+    pdp_high[510].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_G;
     clear_pt(pt_kernel);
 
     // page align these just in case of bad caller
-    kernel_pa &= ~0xFFFULL;
+    kernel_pa &= ~((1<<21)-1);
 
-    for (uint16_t i = 0; i < kernel_size/(2*1024*1024); i++) {
-        pt_kernel[i].whole = (uint64_t) (kernel_pa + i*4096) | PTE_P | PTE_RW | PTE_PS;
-    }
-    
-    *kernel_va = 0xFFFFFFFF80000000; // uhh check this maybe
+    for (uint16_t i = 0; i <= kernel_size >> (21); i++)
+        pt_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
 
-    // je prèfère map limité pour pouvoir catch les page faults au cas ou
- 
-    // tu fais quoi ??
-    // bah genre g clear donc juste tu loop sur ceil(kernel_size/2Mo) et tu map
+    *pml4_ = pml4;
 
-    // après loop avec kernel_size pour map 2Mo par 2Mo
-    // ouais ok
-    // ou on basse d'un niveau pour map 4KIB par 4KIB
-    // 
-    // /shrug
-    // et si on map avec 2Mo faut alloc un multiple de ça dans load_kernel
-    // à voir
-    // ouais en fait 4kiB c peut etre mieux en fait j'en sais rien
-    // y'a bcp de gens qui font avec 2Mo de ce que je vois ouais yep
-    // surement
-    // att leaf node c 2MiB a ce niveau ou 1GiB ouais ok
-    // 2Mo
-    // pt_kernel gère 1GiB donc ses entries gèrent 2Mo
-    // lmao
-    // bah genre tu sais que tu auras jamais besoin de plus que 1GiB donc une pte suffit
-    // alors que si tu fais avec 4KiB tu dois gérer dynamiquement plusieurs niveaux de pt
-    // donc en vrai go 2Mo whatever
-    // ...
-    // aka finished addressing, go to phys mem there
-    // nan sauf si tu veux une page de 1GiB
-    // :)
-    // bah genre si tu fais ça ça veut dire que at all times le kernel prend 1BIG de ram
-    // BRUH LA COMPARAISON
-    // on peut s'en tenir à des pages de 2Mo pour faciliter deja
-
-    // https://wiki.osdev.org/Higher_Half_Kernel oui
-    // je suppose que si on le met a la fin c plus simple apres pour le reste
-    // Ouais
-    // maybe
-    // or just convention
-
-    // je sais
-    // mais on s'en fiche mdr
-    // oui vu qu'il n'y a même pas de vieilles apps 32bit qui vont run chez nous
-    // à cause du truc des addresses canoniques, pour garder compat avec 32bit va
-    
-    return EFI_ABORTED;
-
-    (void)kernel_pa;
-    (void)kernel_va;
-    (void)kernel_size;
+    return EFI_SUCCESS;
 }
 
 #undef clear_pt
