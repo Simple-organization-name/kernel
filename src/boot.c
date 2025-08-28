@@ -79,14 +79,6 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
 
-    CHAR16 buffer[50];
-    intToString((UINT64)(EFI_STATUS(*)(EFI_HANDLE, EFI_SYSTEM_TABLE*))EfiMain, buffer, sizeof buffer);
-    EfiPrint(u"EfiMain is at address ");
-    EfiPrint(buffer);
-    intToString((UINT64)&status, buffer, sizeof buffer);
-    EfiPrint(u"\n\rStack is around address ");
-    EfiPrint(buffer);
-
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
     status = openRootDir(&root);
@@ -116,7 +108,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
     if (cr4 & (1<<12)) {
         EfiPrintAttr(u"LEVEL 5 PAGING ENABLED. ABORTING.\r\n", EFI_WHITE | EFI_BACKGROUND_RED);
-        while (1);
+        while (1) __asm__("hlt");
     }
 
     pte_t* pml4 = NULL;
@@ -125,49 +117,6 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         EfiPrintError(status, u"Failed to map memory");
         while (1) __asm__("hlt");
     }
-
-    UINT64 addr_va = kernel_va;
-    pte_t* table = pml4;
-    UINT64 addr_pa = 0;
-
-    for (int level = 3; level >= 0; level--)
-    {
-        EfiPrint(u"uwauwauwa with entry ");
-        uint16_t entry = addr_va >> (12 + 9*level) & 0x1FF;
-        intToString(entry, buffer, sizeof buffer);
-        EfiPrint(buffer);
-        EfiPrint(u".\r\n");
-        if (!table[entry].present) {
-            EfiPrint(u"not p\r\n");
-            addr_pa = 0;
-            break;
-        }
-        if (table[entry].pageSize) {
-            EfiPrint(u"ps\r\n");
-            addr_pa = table[entry].whole & PTE_ADDR;
-            break;
-        } else {
-            EfiPrint(u"not ps\r\n");
-            table = (pte_t*)(table[entry].whole & PTE_ADDR);
-            continue;
-        }
-    }
-
-    if (addr_pa == 0) {
-        EfiPrint(u"Couldn't walk page tables to kernel...\r\n");
-    } else if (addr_pa != kernel_pa) {
-        EfiPrint(u"Kernel VA does not map to kernel PA\r\n");
-    }
-
-    EfiPrint(u"Kernel pa : ");
-    intToString(kernel_pa, buffer, sizeof buffer);
-    EfiPrint(buffer);
-    EfiPrint(u"\r\nMapped kernel pa : ");
-    intToString(addr_pa, buffer, sizeof buffer);
-    EfiPrint(buffer);
-    EfiPrint(u".\r\n");
-
-    // while (1);
 
     // Get memory map
     // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
@@ -477,12 +426,6 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
         EfiPrintError(status, u"Kernel elf has no segments to load");
         return status;
     }
-    CHAR16 buf[42];
-    status = intToString(ps_top_max - ps_base_min, buf, 42);
-    EFI_CALL_FATAL_ERROR(u"WELP");
-    EfiPrint(u"Kernel needs ");
-    EfiPrint(buf);
-    EfiPrint(u" bytes of free space to be loaded.\r\n");
 
     // look at where it could fit
     EFI_PHYSICAL_ADDRESS load_base = 0;
@@ -494,9 +437,12 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     for (UINT64 memSegment_i = 0; memSegment_i < memmap.count; memSegment_i++)
     {
         MemoryDescriptor* memSegment = (MemoryDescriptor*)((UINT8*)(memmap.map) + memSegment_i*memmap.descSize);
+        // only look for mem we can use
         if (memSegment->Type != EfiConventionalMemory) continue;
+        // above the no-touch zone
         if (memSegment->PhysicalStart <= 0x1000000) continue; // do not touch the abyss
-        if (memSegment->NumberOfPages < EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min)) continue;
+        // if (memSegment->NumberOfPages < EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min)) continue;
+        // with enough room
         if (alignup_2mo(memSegment->PhysicalStart) + ps_top_max - ps_base_min >= memSegment->PhysicalStart + memSegment->NumberOfPages * EFI_PAGE_SIZE) continue;
         load_base = alignup_2mo(memSegment->PhysicalStart);
     }
@@ -508,12 +454,6 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
         EfiPrintError(status, u"Found nowhere to put kernel");
         return status;
     }
-
-    // status = intToString(load_base, buf, 21);
-    // EFI_CALL_FATAL_ERROR(u"WELP");
-    // EfiPrint(u"Kernel will be put at physical address ");
-    // EfiPrint(buf);
-    // EfiPrint(u"\r\n");
 
     // alocate that memory
     status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
@@ -577,12 +517,10 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
         }
     }
 
-    // returning info about loaded image; pointer were checked at top of function
+    // returning info about loaded image; pointers were checked at top of function
     *entry = ehdr->e_entry + kernel_va - ps_base_min;
     *kernel_pa = load_base;
     *imageSize = ps_top_max - ps_base_min;
-
-    // EfiPrintAttr(u"\n\rNo error so far while loading the kernel", EFI_BACKGROUND_GREEN | EFI_WHITE);
 
     systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)kernelData, EFI_SIZE_TO_PAGES(kernelDataSize));
     status = kernelFile->Close(kernelFile);

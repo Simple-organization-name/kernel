@@ -2,9 +2,6 @@
 %define fillSize 5
 
 ;; called from Win32PE x64 ABI : rcx, rdx, r8, r9, stack
-
-; here assumed without BootInfo* cuz ughh so _start(pml4)
-
 _start:
     mov     r10,    rcx ; save pml4
     mov     r11,    rdx ; save bootinfo
@@ -21,9 +18,9 @@ _start:
 
     mov     rax,    cr4
     or      rax,    ((1<<5) | (1<<9) | (1<<10)) ; CR4.PAE (needed for long mode paging) and simd/XMM stuff (pretty neat if you ask me)
-    mov rbx, (1<<17)  | (1 << 23)
-    not rbx
-    and rax, rbx
+    mov     rbx,    (1<<17)  | (1 << 23)    ; disable process-context identifiers and control-flow enforcment tech
+    not     rbx
+    and     rax,    rbx
     mov     cr4,    rax
 
     mov     rax,    cr0
@@ -45,12 +42,13 @@ _start:
     lgdt    [rel gdtr]
 
     ; reload segment descriptors
-    lea     rsp,    [rel kstack_temp]
+    lea     rsp,    [rel kstack_temp_top]
     push    0x08
     lea     rax,    [rel .reload_cs]
     push    rax
     retfq
 .reload_cs:
+    ; apparently not needed for modern non-segmented memory
     ; mov     ax,     0x10
     ; mov     ds,     ax
     ; mov     es,     ax
@@ -58,37 +56,7 @@ _start:
     ; mov     gs,     ax
     ; mov     ss,     ax
 
-    mov rbx, 0xFFF
-    not rbx
-    and r10, rbx
     mov     cr3,    r10
-
-    ; mov rdi, 0xFFFFFFFF
-    ; mov r8, 0
-    ; mov r9, 0
-    ; call fill
-
-    mov rax, 0xFFFFFFFF
-    mov rbx, 0xFFFF0000
-    cmp byte [r12], 0x49
-    cmovne rbx, rax
-    cmp byte [r12 + 1], 0x89
-    cmovne rbx, rax
-    cmp byte [r12 + 2], 0xFB
-    cmovne rbx, rax
-
-    mov     rax,    qword [r11] ; rax = &framebuffer
-    mov     rdx,    qword [rax] ; rdx = fb.addr
-    mov     rcx,    qword [rax + 8] ; rcx = fb.size
-    add     rcx,    rdx ; rcx = fb.end
-    .fill:
-        cmp     rdx, rcx
-        jge     .endfill
-        mov     dword [rdx], ebx
-        add     rdx, 4
-        jmp     .fill
-    .endfill:
-
 
 ; call kernel(bootinfo)
     mov     rdi,    r11
