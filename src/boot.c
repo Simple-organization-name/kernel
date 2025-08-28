@@ -52,6 +52,8 @@ static inline void printMemoryMap();
 static EFI_STATUS getMemoryMap();
 static void exitBootServices();
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
+static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation);
+static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
 
 
 /**
@@ -77,6 +79,14 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to initialize graphics mode\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Graphics mode successfully initialized !\r\n", EFI_CYAN);
 
+    CHAR16 buffer[50];
+    intToString((UINT64)(EFI_STATUS(*)(EFI_HANDLE, EFI_SYSTEM_TABLE*))EfiMain, buffer, sizeof buffer);
+    EfiPrint(u"EfiMain is at address ");
+    EfiPrint(buffer);
+    intToString((UINT64)&status, buffer, sizeof buffer);
+    EfiPrint(u"\n\rStack is around address ");
+    EfiPrint(buffer);
+
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
     status = openRootDir(&root);
@@ -98,6 +108,17 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     EFI_CALL_ERROR
         while (1);
 
+    void (*trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)) = NULL;
+    BootInfo* bootInfoPasteLocation = NULL;
+    status = loadTrampoline(&trampoline, &bootInfoPasteLocation);
+    
+    UINTN cr4;
+    __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
+    if (cr4 & (1<<12)) {
+        EfiPrintAttr(u"LEVEL 5 PAGING ENABLED. ABORTING.\r\n", EFI_WHITE | EFI_BACKGROUND_RED);
+        while (1);
+    }
+
     pte_t* pml4 = NULL;
     status = makePageTables(kernel_pa, imageSize, &pml4);
     EFI_CALL_ERROR {
@@ -105,24 +126,67 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         while (1) __asm__("hlt");
     }
 
+    UINT64 addr_va = kernel_va;
+    pte_t* table = pml4;
+    UINT64 addr_pa = 0;
+
+    for (int level = 3; level >= 0; level--)
+    {
+        EfiPrint(u"uwauwauwa with entry ");
+        uint16_t entry = addr_va >> (12 + 9*level) & 0x1FF;
+        intToString(entry, buffer, sizeof buffer);
+        EfiPrint(buffer);
+        EfiPrint(u".\r\n");
+        if (!table[entry].present) {
+            EfiPrint(u"not p\r\n");
+            addr_pa = 0;
+            break;
+        }
+        if (table[entry].pageSize) {
+            EfiPrint(u"ps\r\n");
+            addr_pa = table[entry].whole & PTE_ADDR;
+            break;
+        } else {
+            EfiPrint(u"not ps\r\n");
+            table = (pte_t*)(table[entry].whole & PTE_ADDR);
+            continue;
+        }
+    }
+
+    if (addr_pa == 0) {
+        EfiPrint(u"Couldn't walk page tables to kernel...\r\n");
+    } else if (addr_pa != kernel_pa) {
+        EfiPrint(u"Kernel VA does not map to kernel PA\r\n");
+    }
+
+    EfiPrint(u"Kernel pa : ");
+    intToString(kernel_pa, buffer, sizeof buffer);
+    EfiPrint(buffer);
+    EfiPrint(u"\r\nMapped kernel pa : ");
+    intToString(addr_pa, buffer, sizeof buffer);
+    EfiPrint(buffer);
+    EfiPrint(u".\r\n");
+
+    // while (1);
+
     // Get memory map
     // Once the memory map is retrieved, BootServices->ExitBootServices should be called right after it
     EfiPrint(u"Exiting boot services...\r\n");
     exitBootServices();
 
-    __asm__ volatile (
-        "mov %0, %%cr3"
-        :
-        : "r"((uint64_t)pml4)
-        : "memory"
-    );
+    for (uint64_t px = 0; px < framebuffer.size/4; px++)
+    {
+        ((uint32_t*)framebuffer.addr)[px] = 0xFF00FF00;
+    }
 
     BootInfo bootinfo = {
         &framebuffer,
         &memmap
     };
 
-    kernelEntry(&bootinfo);
+    pasteBootInfo(bootInfoPasteLocation, &bootinfo);
+
+    trampoline(pml4, bootInfoPasteLocation, kernelEntry);
 
     while (1);
     return EFI_ABORTED; // Should never be reached
@@ -425,14 +489,19 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     status = getMemoryMap();
     EFI_CALL_FATAL_ERROR(u"Failed to get memory map to know where the kernel can be put");
 
+#define alignup_2mo(addr) (((UINT64)(addr) + 0x1FFFFF) & ~0x1FFFFF)
+
     for (UINT64 memSegment_i = 0; memSegment_i < memmap.count; memSegment_i++)
     {
         MemoryDescriptor* memSegment = (MemoryDescriptor*)((UINT8*)(memmap.map) + memSegment_i*memmap.descSize);
         if (memSegment->Type != EfiConventionalMemory) continue;
         if (memSegment->PhysicalStart <= 0x1000000) continue; // do not touch the abyss
         if (memSegment->NumberOfPages < EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min)) continue;
-        load_base = memSegment->PhysicalStart; break;
+        if (alignup_2mo(memSegment->PhysicalStart) + ps_top_max - ps_base_min >= memSegment->PhysicalStart + memSegment->NumberOfPages * EFI_PAGE_SIZE) continue;
+        load_base = alignup_2mo(memSegment->PhysicalStart);
     }
+
+#undef alignup_2mo
 
     if (load_base == 0) {
         status = -1;
@@ -632,6 +701,7 @@ static EFI_STATUS setupGraphicsMode() {
     framebuffer.size = graphicsProtocol->Mode->FrameBufferSize;
     framebuffer.width = graphicsProtocol->Mode->Info->HorizontalResolution;
     framebuffer.height = graphicsProtocol->Mode->Info->VerticalResolution;
+    framebuffer.pitch = graphicsProtocol->Mode->Info->PixelsPerScanLine;
 
     return EFI_SUCCESS;
 }
@@ -745,7 +815,7 @@ static void exitBootServices() {
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
 
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 7, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 8, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
@@ -757,6 +827,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pte_t* pt_dir_mid0 = (pte_t*)(pageAddress + 4*4096);
     pte_t* pt_dir_low0 = (pte_t*)(pageAddress + 5*4096);
     pte_t* pt_kernel = (pte_t*)(pageAddress + 6*4096);
+    pte_t* pt_framebuffer = (pte_t*)(pageAddress + 7*4096);
 
     clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
@@ -765,18 +836,15 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
 
     clear_pt(pdp_low);
     // this maps all of lower 1GiB by identity
-    for (uint32_t i = 0; i < 512; i++)
-    {
-        pdp_low[i].whole =  (i*(1<<30)) | PTE_P | PTE_RW | PTE_PS;
-    }
+    pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
 
 
     clear_pt(pdp_high);
 
     pdp_high[0].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW;
-
+    
     clear_pt(pt_dir_top); clear_pt(pt_dir_mid0); clear_pt(pt_dir_low0);
-
+    
     // map page tables to page tables
     pt_dir_top[0].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW;
     pt_dir_mid0[0].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW;
@@ -787,13 +855,20 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pt_dir_low0[4].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW | PTE_PS;
     pt_dir_low0[5].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW | PTE_PS;
     pt_dir_low0[6].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_PS;
-
+    
+    pdp_high[1].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW;
+    clear_pt(pt_framebuffer);
+    for (UINT16 i = 0; i <= framebuffer.size / (1<<21); i++)
+        pt_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
 
     pdp_high[510].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_G;
     clear_pt(pt_kernel);
 
     // page align these just in case of bad caller
-    kernel_pa &= ~((1<<21)-1);
+    if (kernel_pa & ((1<<21)-1)) {
+        EfiPrintError(-1, u"Bad kernel alignment (dev fault lmao)");
+        return -1;
+    }
 
     for (uint16_t i = 0; i <= kernel_size >> (21); i++)
         pt_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
@@ -804,3 +879,56 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
 }
 
 #undef clear_pt
+
+static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation)
+{
+    extern uint8_t _binary_build_trampoline_bin_start[];
+    extern uint8_t _binary_build_trampoline_bin_end[];
+
+    const UINT64 trampoline_size = _binary_build_trampoline_bin_end - _binary_build_trampoline_bin_start;
+
+    EFI_STATUS status = getMemoryMap();
+    EFI_CALL_FATAL_ERROR(u"Need to know approx memory map size to alloc trampoline")
+
+    UINTN noPages = EFI_SIZE_TO_PAGES(trampoline_size);
+    noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize) / EFI_PAGE_SIZE + 1;
+
+    EFI_PHYSICAL_ADDRESS addr = 1 << 21;
+    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
+    EFI_CALL_ERROR {
+        addr = 1 << 30;
+        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
+        EFI_CALL_FATAL_ERROR(u"WTF couldn't get a few pages under the 1GiB bar...");
+    }
+
+    for (UINTN i = 0; i < trampoline_size; i++)
+    {
+        ((UINT8*)addr)[i] = _binary_build_trampoline_bin_start[i];
+    }
+
+    *trampoline = (void (*)(pte_t*, BootInfo*, void (*)(BootInfo*)))addr;
+    *bootInfoPasteLocation = (BootInfo*)(addr + EFI_SIZE_TO_PAGES(trampoline_size)*EFI_PAGE_SIZE);
+
+
+    return EFI_SUCCESS;
+}
+
+static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
+{
+    *bootInfoPasteLocation = (BootInfo){
+        .frameBuffer = (Framebuffer*)((UINT8*)bootInfoPasteLocation + sizeof(BootInfo)),
+        .memMap = (MemMap*)((UINT8*)bootInfoPasteLocation + sizeof(BootInfo))
+    };
+    *(UINT8*)&bootInfoPasteLocation += sizeof(BootInfo);
+    *(Framebuffer*)bootInfoPasteLocation = *bootInfo->frameBuffer;
+    ((Framebuffer*)bootInfoPasteLocation)->addr = 0xFFFFFF8040000000;
+    *(UINT8*)&bootInfoPasteLocation += sizeof(Framebuffer);
+    *(MemMap*)bootInfoPasteLocation = *bootInfo->memMap;
+    ((MemMap*)bootInfoPasteLocation)->map = (MemoryDescriptor*)((UINT8*)bootInfoPasteLocation + sizeof(MemMap));
+    *(UINT8*)&bootInfoPasteLocation += sizeof(MemMap);
+    for (UINT32 i = 0; i < bootInfo->memMap->mapSize; i++)
+    {
+        ((UINT8*)bootInfoPasteLocation)[i] = ((UINT8*)bootInfo->memMap->map)[i];
+    }
+}
+

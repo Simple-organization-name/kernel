@@ -22,11 +22,13 @@ build: clean
 	@mkdir -p iso/EFI/BOOT/ iso/EFI/LOGS build
 
 	@echo Building bootloader...
-	@$(BOOT_CC) $(BOOT_CFLAGS) src/$(BOOT).c -o iso/$(ISO_ENTRY)
+	@nasm src/trampoline.asm -o build/trampoline.bin -f bin
+	@objcopy build/trampoline.bin build/trampoline.o -I binary -O elf64-x86-64 -B i386:x86-64
+	@$(BOOT_CC) $(BOOT_CFLAGS) src/$(BOOT).c build/trampoline.o -o iso/$(ISO_ENTRY)
+
 
 	@echo Building kernel...
-	@nasm src/trampoline.asm -o build/trampoline.o -f elf64
-	@$(KERNEL_CC) src/$(KERNEL).c build/trampoline.o -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
+	@$(KERNEL_CC) src/$(KERNEL).c -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
 
 	@echo Building disk image...
 	@xorriso -report_about WARNING -as mkisofs -iso-level 3 -o SOS.ISO -full-iso9660-filenames -volid "SOS" -eltorito-alt-boot -e $(ISO_ENTRY) -no-emul-boot -isohybrid-gpt-basdat iso/

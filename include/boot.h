@@ -7,7 +7,8 @@ typedef struct _Framebuffer {
     uint64_t    addr,
                 size;
     uint32_t    width,
-                height;
+                height,
+                pitch;
     
 } Framebuffer;
 
