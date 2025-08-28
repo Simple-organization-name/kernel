@@ -820,10 +820,10 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
 
 static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation)
 {
-    extern uint8_t _binary_build_trampoline_bin_start[];
-    extern uint8_t _binary_build_trampoline_bin_end[];
+    extern uint8_t _binary_build_boot_trampoline_bin_start[];
+    extern uint8_t _binary_build_boot_trampoline_bin_end[];
 
-    const UINT64 trampoline_size = _binary_build_trampoline_bin_end - _binary_build_trampoline_bin_start;
+    const UINT64 trampoline_size = _binary_build_boot_trampoline_bin_end - _binary_build_boot_trampoline_bin_start;
 
     EFI_STATUS status = getMemoryMap();
     EFI_CALL_FATAL_ERROR(u"Need to know approx memory map size to alloc trampoline")
@@ -841,7 +841,7 @@ static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, voi
 
     for (UINTN i = 0; i < trampoline_size; i++)
     {
-        ((UINT8*)addr)[i] = _binary_build_trampoline_bin_start[i];
+        ((UINT8*)addr)[i] = _binary_build_boot_trampoline_bin_start[i];
     }
 
     *trampoline = (void (*)(pte_t*, BootInfo*, void (*)(BootInfo*)))addr;
