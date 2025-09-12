@@ -28,7 +28,8 @@ build: clean
 
 
 	@echo Building kernel...
-	@$(KERNEL_CC) src/kernel/main.c -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
+	@nasm -f elf64 src/kernel/isr.asm -o build/kernel/isr.o
+	@$(KERNEL_CC) src/kernel/main.c build/kernel/isr.o -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
 
 	@echo Building disk image...
 	@xorriso -report_about WARNING -as mkisofs -iso-level 3 -o SOS.ISO -full-iso9660-filenames -volid "SOS" -eltorito-alt-boot -e $(ISO_ENTRY) -no-emul-boot -isohybrid-gpt-basdat iso/
@@ -39,7 +40,7 @@ clean:
 
 emul:
 	@echo Starting emulation...
-	@qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none
+	@qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none -d int
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade

@@ -12,9 +12,11 @@ struct cursor {
         s_width;
 };
 
-void init_cursor(register Framebuffer* restrict fb, register struct cursor* restrict cur, register uint16_t size)
+static struct cursor where;
+
+void init_visu(register Framebuffer* fb, register uint16_t size)
 {
-    *cur = (struct cursor){
+    where = (struct cursor){
         .screen = (uint32_t*)fb->addr,
         .x = 0,
         .y = 0,
@@ -25,54 +27,54 @@ void init_cursor(register Framebuffer* restrict fb, register struct cursor* rest
     };
 }
 
-inline void put_pixel(register struct cursor* cur, register uint32_t color, register uint16_t x, register uint16_t y)
+inline static void put_pixel(register uint32_t color, register uint16_t x, register uint16_t y)
 {
-    cur->screen[y*cur->s_pitch + x] = color;
+    where.screen[y*where.s_pitch + x] = color;
 }
 
-void fill_screen(register struct cursor* cur, register uint32_t color)
+void fill_screen(register uint32_t color)
 {
     
-    for (uint16_t i = 0; i < cur->s_height; i++)
+    for (uint16_t i = 0; i < where.s_height; i++)
     {
-        for (uint16_t j = 0; j < cur->s_width; j++)
+        for (uint16_t j = 0; j < where.s_width; j++)
         {
-            put_pixel(cur, color, j, i);
+            put_pixel(color, j, i);
         }
     }
-    cur->x = 0;
-    cur->y = 0;
+    where.x = 0;
+    where.y = 0;
 }
 
-void new_line(register struct cursor* cur)
+void new_line()
 {
-    cur->x = 0;
-    cur->y += cur->size;
+    where.x = 0;
+    where.y += where.size;
     // if next block can't fit vertically, wrap around
-    if (cur->y + cur->size > cur->s_height)
-        cur->y = 0;
+    if (where.y + where.size > where.s_height)
+        where.y = 0;
     // clear the line just in case junk is left over
-    for (uint16_t y = cur->y; y < cur->y + cur->size; y++)
+    for (uint16_t y = where.y; y < where.y + where.size; y++)
     {
-        for (uint16_t x = 0; x < cur->s_width; x++)
+        for (uint16_t x = 0; x < where.s_width; x++)
         {
-            put_pixel(cur, 0xFF000000, x, y);
+            put_pixel(0xFF000000, x, y);
         }
     }
 }
 
-void log_color(register struct cursor* cur, register uint32_t color)
+void log_color(register uint32_t color)
 {
-    if (cur->x + cur->size > cur->s_width)
-    new_line(cur);
+    if (where.x + where.size > where.s_width)
+    new_line();
     
-    for (uint16_t i = cur->y; i < cur->y + cur->size; i++)
+    for (uint16_t i = where.y; i < where.y + where.size; i++)
     {
-        for (uint16_t j = cur->x; j < cur->x + cur->size; j++)
+        for (uint16_t j = where.x; j < where.x + where.size; j++)
         {
-            put_pixel(cur, color, j, i);
+            put_pixel(color, j, i);
         }
     }
-    cur->x += cur->size;
+    where.x += where.size;
 }
 

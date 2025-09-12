@@ -1,0 +1,157 @@
+#include <stdint.h>
+#include <stddef.h>
+
+#include <idt.h>
+
+typedef struct _idtr {
+    uint16_t size_minus_one;
+    uint64_t addr;
+} __attribute__((__packed__)) idtr_t;
+
+typedef struct _idt_entry {
+    uint16_t offset_0;
+    uint16_t segment;
+    uint8_t ist;
+    union {
+        uint8_t flags;
+        struct {
+                uint8_t gate_type : 4,
+                    zero : 1,
+                    dpl : 2,
+                    present : 1;
+        };
+    };
+    uint16_t offset_1;
+    uint32_t offset_2;
+    uint32_t reserved;
+} __attribute__((__packed__)) idt_entry_t;
+
+#define NUM_IDTE 256
+
+static idt_entry_t _IDT[NUM_IDTE] __attribute__((aligned(4096)));
+
+inline static uint8_t inb(uint16_t port)
+{
+    uint8_t value;
+    __asm__ volatile(
+        "inb %1, %0"
+        : "=a"(value)
+        : "d"(port)
+        : "memory"
+    );
+    return value;
+}
+
+inline static void outb(uint16_t port, uint8_t value)
+{
+    __asm__ volatile(
+        "outb %1, %0"
+        :
+        : "d"(port), "a"(value)
+        : "memory"
+    );
+}
+
+#define PIC_MASTER_COMMAND    0x20
+#define PIC_MASTER_DATA       0x21
+#define PIC_SLAVE_COMMAND    0xA0
+#define PIC_SLAVE_DATA       0xA1
+
+#define ICW1_INIT       0x10
+#define ICW1_ICW4       0x01
+#define ICW4_8086        0x01
+
+#define PIC_IRQ_OFFSET  32
+
+#include <stdbool.h>
+
+void set_interrupt(uint8_t int_no, void* func, bool trap)
+{
+    // if int is in a PIC, disable the mask
+    // if (int_no >= PIC_IRQ_OFFSET && int_no < PIC_IRQ_OFFSET + 8) {
+    //     outb(PIC_MASTER_DATA, inb(PIC_MASTER_DATA) & ~(uint8_t)(1 << (int_no - PIC_IRQ_OFFSET)));
+    // } else if (int_no >= PIC_IRQ_OFFSET + 8 && int_no < PIC_IRQ_OFFSET + 16) {
+    //     outb(PIC_SLAVE_DATA, inb(PIC_SLAVE_DATA) & ~(uint8_t)(1 << (int_no - (PIC_IRQ_OFFSET + 8))));
+    // }
+    _IDT[int_no] = (idt_entry_t){
+        .offset_0 = (uint64_t)func & 0xFFFF,
+        .segment = 0x08,
+        .ist = 0,
+        .flags = (trap ? 0xF : 0xE) | (1 << 7), // gate type, reserved, ring 0, present
+        .offset_1 = (((uint64_t)func) >> 16) & 0xFFFF,
+        .offset_2 = (((uint64_t)func) >> 32) & 0xFFFFFFFF,
+        .reserved = 0
+    };
+}
+
+extern void** isr_stub_table;
+void init_interrupts()
+{
+    _Static_assert(NUM_IDTE >= 1 && NUM_IDTE <= 256);
+    _Static_assert(sizeof(idtr_t) == 10);
+
+    for (uint32_t i = 0; i < NUM_IDTE; i++)
+    {
+        _IDT[i].present = 0;
+    }
+    
+
+    idtr_t idtr = (idtr_t){
+        .size_minus_one = (sizeof _IDT) - 1,
+        .addr = (uint64_t)_IDT
+    };
+
+    
+    // save which interrupts are enabled to set them back later just in case
+    // uint8_t master_mask = inb(PIC_MASTER_DATA);
+    // uint8_t slave_mask = inb(PIC_SLAVE_DATA);
+    
+    // [ICW1]
+    // start PIC init and enable fourth init step
+    outb(PIC_MASTER_COMMAND, ICW1_INIT | ICW1_ICW4);
+    outb(PIC_SLAVE_COMMAND, ICW1_INIT | ICW1_ICW4);
+    
+    // [ICW2]
+    // set irq base for each chip
+    outb(PIC_MASTER_DATA, PIC_IRQ_OFFSET); // set master after 32 first to not clash with cpu interrupts
+    outb(PIC_SLAVE_DATA, PIC_IRQ_OFFSET + 8); // set slave right after master
+    
+    // [ICW3]
+    // slave is wired to master's IR2, gotta notify the master with a bitmask and the slave with an id
+    outb(PIC_MASTER_DATA, 1 << 2);
+    outb(PIC_SLAVE_DATA, 2);
+    
+    // [ICW4]
+    // we tell the thing to behave like a normal pc and not some dinosaur of a machine like the 8080
+    outb(PIC_MASTER_DATA, ICW4_8086);
+    outb(PIC_SLAVE_DATA, ICW4_8086);
+    
+    // // we put back the mask, can change it later anyways
+    // i'm silly so i disabled everything
+    outb(PIC_MASTER_DATA, 0xFD);
+    outb(PIC_SLAVE_DATA, 0xFF);
+
+    for (uint32_t i = 0; i < PIC_IRQ_OFFSET + 16; i++)
+    {
+        set_interrupt(i, isr_stub_table[i], true);
+    }
+    
+    
+    __asm__ volatile("lidt (%0)" :: "r"((uint64_t)&idtr) : "memory");
+    __asm__ volatile ("sti" ::: "memory");
+
+    outb(0xE9, '@');
+
+}
+void log_color(uint32_t color);
+void interrupt_handler(interrupt_frame_t* context)
+{
+    if (context->int_no >= PIC_IRQ_OFFSET && context->int_no < PIC_IRQ_OFFSET + 16) {
+        if (context->int_no >= PIC_IRQ_OFFSET + 8) {
+            outb(PIC_SLAVE_COMMAND, 0x20);
+        }
+        outb(PIC_MASTER_COMMAND, 0x20);
+    }
+
+    log_color(0xFFFFFFFF);
+}
