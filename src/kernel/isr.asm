@@ -41,17 +41,21 @@ section .text
 isr_base:
     push_regs
     mov     rdi,    rsp
-    xor rdx, rdx
-    mov rax, rsp
-    mov rcx, 16
-    div rcx
-    push rdx
-    sub rsp, rdx
+    ; xor rdx, rdx
+    ; mov rax, rsp
+    ; mov rcx, 16
+    ; div rcx
+    ; push rdx
+    ; sub rsp, rdx
+    ; mov     r12,    rsp
+    ; and     rsp,    ~0x8
     call    interrupt_handler
-    pop rdx
-    add rsp, rdx
+    ; pop rdx
+    ; add rsp, rdx
+    ; mov     rsp,    r12
     pop_regs
     add     rsp,    16  ; pop int number and error code
+    ; hlt
     iretq
 
 %macro build_isr_err 1
@@ -121,10 +125,10 @@ build_isr_noerr 47
 section .data
 global isr_stub_table
 isr_stub_table:
-%assign i 0
-%rep 32
-dq isr_no_%+i
-%assign i i+1
-%endrep
+    %assign i 0
+    %rep 48
+    dq isr_no_%+i
+    %assign i i+1
+    %endrep
 
 section .note.GNU-stack noexec

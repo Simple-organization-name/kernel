@@ -77,14 +77,17 @@ void set_interrupt(uint8_t int_no, void* func, bool trap)
         .offset_0 = (uint64_t)func & 0xFFFF,
         .segment = 0x08,
         .ist = 0,
-        .flags = (trap ? 0xF : 0xE) | (1 << 7), // gate type, reserved, ring 0, present
-        .offset_1 = (((uint64_t)func) >> 16) & 0xFFFF,
-        .offset_2 = (((uint64_t)func) >> 32) & 0xFFFFFFFF,
+        .gate_type = trap ? 0xF : 0xE,  // Use struct fields instead of manual bit manipulation
+        .zero = 0,
+        .dpl = 0,
+        .present = 1,
+        .offset_1 = ((uint64_t)func >> 16) & 0xFFFF,
+        .offset_2 = ((uint64_t)func >> 32) & 0xFFFFFFFF,
         .reserved = 0
     };
 }
 
-extern void** isr_stub_table;
+extern void* isr_stub_table[];
 void init_interrupts()
 {
     _Static_assert(NUM_IDTE >= 1 && NUM_IDTE <= 256);
@@ -128,7 +131,7 @@ void init_interrupts()
     
     // // we put back the mask, can change it later anyways
     // i'm silly so i disabled everything
-    outb(PIC_MASTER_DATA, 0xFD);
+    outb(PIC_MASTER_DATA, 0xFC);
     outb(PIC_SLAVE_DATA, 0xFF);
 
     for (uint32_t i = 0; i < PIC_IRQ_OFFSET + 16; i++)
@@ -137,13 +140,11 @@ void init_interrupts()
     }
     
     
-    __asm__ volatile("lidt (%0)" :: "r"((uint64_t)&idtr) : "memory");
+    __asm__ volatile("lidt %0" :: "m"(idtr) : "memory");
     __asm__ volatile ("sti" ::: "memory");
-
-    outb(0xE9, '@');
-
 }
-void log_color(uint32_t color);
+
+extern void log_color(uint32_t color);
 void interrupt_handler(interrupt_frame_t* context)
 {
     if (context->int_no >= PIC_IRQ_OFFSET && context->int_no < PIC_IRQ_OFFSET + 16) {
@@ -153,5 +154,8 @@ void interrupt_handler(interrupt_frame_t* context)
         outb(PIC_MASTER_COMMAND, 0x20);
     }
 
-    log_color(0xFFFFFFFF);
+    if (context->int_no == 0x21) {
+        inb(0x60);
+        log_color(0xFFFFFFFF);
+    }
 }

@@ -49,12 +49,12 @@ _start:
     retfq
 .reload_cs:
     ; apparently not needed for modern non-segmented memory
-    ; mov     ax,     0x10
-    ; mov     ds,     ax
-    ; mov     es,     ax
-    ; mov     fs,     ax
-    ; mov     gs,     ax
-    ; mov     ss,     ax
+    mov     ax,     0x10
+    mov     ds,     ax
+    mov     es,     ax
+    mov     fs,     ax
+    mov     gs,     ax
+    mov     ss,     ax
 
     mov     cr3,    r10
 
