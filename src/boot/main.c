@@ -17,7 +17,7 @@
 #define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
 #define EFI_CALL_ERROR if (EFI_ERROR(status))
-#define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); return status; }
+#define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); while(1); }
 
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
@@ -27,6 +27,7 @@
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
 MemMap memmap = {0};
+FileArray files = {0};
 
 // UEFI preboot functions and global variables
 // declared as static to be specific to this file
@@ -47,13 +48,14 @@ static inline void changeTextModeRes();
 static EFI_STATUS setupGraphicsMode();
 static EFI_STATUS openRootDir();
 static EFI_STATUS createLogFile();
-static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize);
+static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize);
 static inline void printMemoryMap();
 static EFI_STATUS getMemoryMap();
 static void exitBootServices();
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
 static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation);
 static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
+static EFI_STATUS openFiles(IN CHAR16* configPath, OUT FileArray* files);
 
 
 /**
@@ -93,10 +95,22 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 
+
+    status = openFiles(u"\\EFI\\BOOT\\files.cfg", &files);
+    EFI_CALL_ERROR {
+        EfiPrintError(status, u"Couldn't retrieve startup files");
+        while(1) __asm__("hlt");
+    }
+
+    if (files.count == 0) {
+        EfiPrintError(status, u"Expected at least one startup file for kernel");
+        while (1) __asm__ ("hlt");
+    }
+
     void (*kernelEntry)(BootInfo*) = NULL;
     EFI_PHYSICAL_ADDRESS kernel_pa;
     UINTN imageSize;
-    status = loadKernelImage(u"\\kernel.elf", (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &kernel_pa, &imageSize);
+    status = loadKernelImage(&files.files[0], (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &kernel_pa, &imageSize);
     EFI_CALL_ERROR
         while (1);
 
@@ -128,9 +142,10 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         ((uint32_t*)framebuffer.addr)[px] = 0xFF00FF00;
     }
 
-    BootInfo bootinfo = {
-        &framebuffer,
-        &memmap
+    BootInfo bootinfo = (BootInfo){
+        .frameBuffer = &framebuffer,
+        .memMap = &memmap,
+        .files = &files
     };
 
     pasteBootInfo(bootInfoPasteLocation, &bootinfo);
@@ -330,7 +345,7 @@ static EFI_STATUS createLogFile() {
     return EFI_SUCCESS;
 }
 
-static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize) {
+static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize) {
     EFI_STATUS status = EFI_SUCCESS;
 
     if (!entry || !kernel_pa || !imageSize) {
@@ -339,38 +354,45 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
         return status;
     }
 
-    EFI_FILE_PROTOCOL *kernelFile;
-    status = root->Open(root, &kernelFile, where, EFI_FILE_MODE_READ, 0);
-    EFI_CALL_FATAL_ERROR(u"Could not open kernel image");
+    // EFI_FILE_PROTOCOL *kernelFile;
+    // status = root->Open(root, &kernelFile, where, EFI_FILE_MODE_READ, 0);
+    // EFI_CALL_FATAL_ERROR(u"Could not open kernel image");
 
-    EFI_FILE_INFO *fileInfo = NULL;
-    UINTN sizeofInfo = 0;
-    EFI_GUID EfiFileInfoId = EFI_FILE_INFO_ID;
-    status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, NULL);
-    if(status != EFI_BUFFER_TOO_SMALL)
-        EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
+    // EFI_FILE_INFO *fileInfo = NULL;
+    // UINTN sizeofInfo = 0;
+    // EFI_GUID EfiFileInfoId = EFI_FILE_INFO_ID;
+    // status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, NULL);
+    // if(status != EFI_BUFFER_TOO_SMALL)
+    //     EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
 
-    status = systemTable->BootServices->AllocatePool(EfiLoaderData, sizeofInfo, (void**)&fileInfo);
-    EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
+    // status = systemTable->BootServices->AllocatePool(EfiLoaderData, sizeofInfo, (void**)&fileInfo);
+    // EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
 
-    status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, fileInfo);
-    EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info");
+    // status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, fileInfo);
+    // EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info");
 
-    UINT64 kernelDataSize = fileInfo->FileSize;
-    systemTable->BootServices->FreePool(fileInfo);
+    // UINT64 kernelDataSize = fileInfo->FileSize;
+    // systemTable->BootServices->FreePool(fileInfo);
 
-    if (kernelDataSize == 0) {
+    // if (kernelDataSize == 0) {
+    //     status = -1;
+    //     EfiPrintError(status, u"Kernel file is empty");
+    //     return status;
+    // }
+
+    // UINT8* kernelData;
+    // status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(kernelDataSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
+    // EFI_CALL_FATAL_ERROR(u"Failed to allocate memory to load kernel file");
+
+    // status = kernelFile->Read(kernelFile, &kernelDataSize, kernelData);
+    // EFI_CALL_FATAL_ERROR(u"Failed to read kernel file");
+
+    UINT8* kernelData = file->data;
+    if (file->size == 0) {
         status = -1;
         EfiPrintError(status, u"Kernel file is empty");
         return status;
     }
-
-    UINT8* kernelData;
-    status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(kernelDataSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
-    EFI_CALL_FATAL_ERROR(u"Failed to allocate memory to load kernel file");
-
-    status = kernelFile->Read(kernelFile, &kernelDataSize, kernelData);
-    EFI_CALL_FATAL_ERROR(u"Failed to read kernel file");
 
     // first, validate elf header
     Elf64_Ehdr* ehdr = (Elf64_Ehdr*)kernelData;
@@ -521,9 +543,6 @@ static EFI_STATUS loadKernelImage(IN CHAR16 *where, OUT EFI_PHYSICAL_ADDRESS* en
     *entry = ehdr->e_entry + kernel_va - ps_base_min;
     *kernel_pa = load_base;
     *imageSize = ps_top_max - ps_base_min;
-
-    systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)kernelData, EFI_SIZE_TO_PAGES(kernelDataSize));
-    status = kernelFile->Close(kernelFile);
 
     return EFI_SUCCESS;
 }
@@ -829,7 +848,7 @@ static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, voi
     EFI_CALL_FATAL_ERROR(u"Need to know approx memory map size to alloc trampoline")
 
     UINTN noPages = EFI_SIZE_TO_PAGES(trampoline_size);
-    noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize) / EFI_PAGE_SIZE + 1;
+    noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
 
     EFI_PHYSICAL_ADDRESS addr = 1 << 21;
     systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
@@ -868,5 +887,110 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
     {
         ((UINT8*)bootInfoPasteLocation)[i] = ((UINT8*)bootInfo->memMap->map)[i];
     }
+    *(UINT8*)&bootInfoPasteLocation += bootInfo->memMap->mapSize;
+    *(FileArray*)bootInfoPasteLocation = *bootInfo->files;
+    *(UINT8*)&bootInfoPasteLocation += sizeof(FileArray);
+    for (UINT32 i = 0; i < bootInfo->files->count; i++)
+    {
+        ((FileData*)bootInfoPasteLocation)[i] = bootInfo->files->files[i];
+    }
 }
 
+static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
+{
+    EFI_FILE_INFO *fileInfo = NULL;
+    UINTN sizeofInfo = 0;
+    EFI_GUID EfiFileInfoId = EFI_FILE_INFO_ID;
+    EFI_STATUS status = file->GetInfo(file, &EfiFileInfoId, &sizeofInfo, NULL);
+    if(status != EFI_BUFFER_TOO_SMALL)
+        EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
+
+    status = systemTable->BootServices->AllocatePool(EfiLoaderData, sizeofInfo, (void**)&fileInfo);
+    EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
+
+    status = file->GetInfo(file, &EfiFileInfoId, &sizeofInfo, fileInfo);
+    EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info");
+
+    *size = fileInfo->FileSize;
+    status = systemTable->BootServices->FreePool(fileInfo);
+    EFI_CALL_ERROR EfiPrintError(status, u"Couldn't free pool memory (oh well)");
+
+    return EFI_SUCCESS;
+}
+
+#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderData, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
+
+static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
+{
+    EFI_FILE_PROTOCOL* configFile;
+    EFI_STATUS status = root->Open(root, &configFile, configPath, EFI_FILE_MODE_READ, 0);
+    EFI_CALL_FATAL_ERROR(u"Could not open config file");
+
+    status = getFileSize(configFile, &files->config.size);
+
+    id_alloc(files->config.data, files->config.size);
+    EFI_CALL_FATAL_ERROR(u"Could not get memory for config file");
+
+    status = configFile->Read(configFile, &files->config.size, files->config.data);
+    EFI_CALL_FATAL_ERROR(u"Could not read config file");
+    
+    
+    CHAR16 pathBuffer[512];
+    UINT64 pathOffset;
+    UINT64 configOffset = 0;
+
+    files->count = 0;
+    files->files = NULL;
+
+    while (files->config.size > configOffset && ((char*)files->config.data)[configOffset])
+    {
+        pathOffset = 0;
+        while (1)
+        {
+            pathBuffer[pathOffset] = ((char*)files->config.data)[configOffset];
+            if (pathBuffer[pathOffset] == u'\0') break;
+            if (pathBuffer[pathOffset] == u'\n') {
+                pathBuffer[pathOffset] = u'\0';
+                break;
+            }
+            if (configOffset + 1 == files->config.size) {
+                pathBuffer[++pathOffset] = u'\0';
+                break;
+            }
+            pathOffset++; configOffset++;
+        }
+
+        configOffset++;
+
+        files->count++;
+
+        FileData* prevData = files->files;
+        status = id_alloc(files->files, sizeof(FileData[files->count]));
+        EFI_CALL_FATAL_ERROR(u"Failed to alloc memory for startup files");
+        systemTable->BootServices->CopyMem(files->files, prevData, sizeof(FileData[files->count]));
+        if (prevData != NULL) systemTable->BootServices->FreePages((EFI_PHYSICAL_ADDRESS)prevData, EFI_SIZE_TO_PAGES(sizeof(FileData[files->count - 1])));
+
+        EFI_FILE_PROTOCOL* file;
+        EfiPrint(pathBuffer);
+        EfiPrint(u"\r\n");
+        status = root->Open(root, &file, pathBuffer, EFI_FILE_MODE_READ, 0);
+        EFI_CALL_ERROR {
+            CHAR16 msg[100] = u"Could not open startup file at index ";
+            UINT32 insert_index = (sizeof "Could not open startup file at index ") - 1;
+            intToString(files->count, &msg[insert_index], 100 - insert_index);
+            EfiPrintError(-1, msg);
+            return -1;
+        }
+
+        status = getFileSize(file, &files->files[files->count - 1].size);
+        EFI_CALL_FATAL_ERROR(u"Failed to get startup file size");
+
+        id_alloc(files->files[files->count - 1].data, files->files[files->count - 1].size);
+        status = file->Read(file, &files->files[files->count - 1].size, files->files[files->count - 1].data);
+        EFI_CALL_FATAL_ERROR(u"Couldn't read startup file");
+
+
+    }
+    
+    return EFI_SUCCESS;
+}

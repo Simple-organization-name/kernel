@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <stdalign.h>
+#include <stddef.h>
 
 #include <boot.h>
 
@@ -12,7 +12,10 @@ struct cursor {
         s_width;
 };
 
+typedef void* bmft; // temp
+
 static struct cursor where;
+// static bmft font;
 
 void init_visu(register Framebuffer* fb, register uint16_t size)
 {
@@ -26,6 +29,11 @@ void init_visu(register Framebuffer* fb, register uint16_t size)
         .s_width = fb->width
     };
 }
+
+// void load_bmft(void* data)
+// {
+//     font = NULL;
+// }
 
 inline static void put_pixel(register uint32_t color, register uint16_t x, register uint16_t y)
 {
@@ -77,4 +85,46 @@ void log_color(register uint32_t color)
     }
     where.x += where.size;
 }
+
+// void putc(uint8_t chr)
+// {
+//     if (chr < 32) {
+//         switch (chr)
+//         {
+//         case '\n':  // new line
+//             new_line();
+//             break;
+//         case '\r':  // carriage return
+//             where.x = 0;
+//             break;
+//         case '\t':  // horz tab
+//             where.x += 4*where.size;
+//             break;
+//         case '\b':  // backspace
+//             where.x -= where.size;
+//             log_color(0xFF000000);
+//             where.x -= where.size;
+//             break;
+//         case '\a':  // bell
+//             fill_screen(0xFFFF0000);
+//             break;
+//         default:
+//             break;
+//         }
+//     } else {
+//         for (uint32_t x = 0; x < font.size_x; x++)
+//             for (uint32_t y = 0; y < font.size_y; y++)
+//                 if (font.bitmap[x][y])
+//                     put_pixel(0xFFFFFFFF, where.x + x, where.y + y);
+//     }
+// }
+
+// void puts(const char* str)
+// {
+//     while (str) {
+//         putc(*(str++));
+//     }
+// }
+
+
 

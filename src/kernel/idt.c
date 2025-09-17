@@ -131,7 +131,7 @@ void init_interrupts()
     
     // // we put back the mask, can change it later anyways
     // i'm silly so i disabled everything
-    outb(PIC_MASTER_DATA, 0xFC);
+    outb(PIC_MASTER_DATA, 0xFD);
     outb(PIC_SLAVE_DATA, 0xFF);
 
     for (uint32_t i = 0; i < PIC_IRQ_OFFSET + 16; i++)
@@ -139,7 +139,7 @@ void init_interrupts()
         set_interrupt(i, isr_stub_table[i], true);
     }
     
-    
+
     __asm__ volatile("lidt %0" :: "m"(idtr) : "memory");
     __asm__ volatile ("sti" ::: "memory");
 }
@@ -156,6 +156,6 @@ void interrupt_handler(interrupt_frame_t* context)
 
     if (context->int_no == 0x21) {
         inb(0x60);
-        log_color(0xFFFFFFFF);
     }
+    log_color(0xFFFFFFFF);
 }

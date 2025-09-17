@@ -26,6 +26,8 @@ build: clean
 	@objcopy build/boot/trampoline.bin build/boot/trampoline.o -I binary -O elf64-x86-64 -B i386:x86-64
 	@$(BOOT_CC) $(BOOT_CFLAGS) src/boot/main.c build/boot/trampoline.o -o iso/$(ISO_ENTRY)
 
+	@cp src/boot/files.cfg iso/EFI/BOOT/files.cfg
+	@cp src/boot/main.bmft iso/main.bmft
 
 	@echo Building kernel...
 	@nasm -f elf64 src/kernel/isr.asm -o build/kernel/isr.o
