@@ -872,24 +872,26 @@ static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, voi
 
 static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
 {
-    *bootInfoPasteLocation = (BootInfo){
-        .frameBuffer = (Framebuffer*)((UINT8*)bootInfoPasteLocation + sizeof(BootInfo)),
-        .memMap = (MemMap*)((UINT8*)bootInfoPasteLocation + sizeof(BootInfo))
+    UINT8* loc = (UINT8*)bootInfoPasteLocation;
+    *(BootInfo*)loc = (BootInfo){
+        .frameBuffer = (Framebuffer*)(loc + sizeof(BootInfo)),
+        .memMap = (MemMap*)(loc + sizeof(BootInfo) + sizeof(Framebuffer)),
+        .files = (FileArray*)(loc + sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + bootInfo->memMap->mapSize),
     };
-    *(UINT8*)&bootInfoPasteLocation += sizeof(BootInfo);
-    *(Framebuffer*)bootInfoPasteLocation = *bootInfo->frameBuffer;
-    ((Framebuffer*)bootInfoPasteLocation)->addr = 0xFFFFFF8040000000;
-    *(UINT8*)&bootInfoPasteLocation += sizeof(Framebuffer);
-    *(MemMap*)bootInfoPasteLocation = *bootInfo->memMap;
-    ((MemMap*)bootInfoPasteLocation)->map = (MemoryDescriptor*)((UINT8*)bootInfoPasteLocation + sizeof(MemMap));
-    *(UINT8*)&bootInfoPasteLocation += sizeof(MemMap);
+    loc += sizeof(BootInfo);
+    *(Framebuffer*)loc = *bootInfo->frameBuffer;
+    ((Framebuffer*)loc)->addr = 0xFFFFFF8040000000;
+    loc += sizeof(Framebuffer);
+    *(MemMap*)loc = *bootInfo->memMap;
+    ((MemMap*)loc)->map = (MemoryDescriptor*)(loc + sizeof(MemMap));
+    loc += sizeof(MemMap);
     for (UINT32 i = 0; i < bootInfo->memMap->mapSize; i++)
     {
-        ((UINT8*)bootInfoPasteLocation)[i] = ((UINT8*)bootInfo->memMap->map)[i];
+        loc[i] = ((UINT8*)bootInfo->memMap->map)[i];
     }
-    *(UINT8*)&bootInfoPasteLocation += bootInfo->memMap->mapSize;
-    *(FileArray*)bootInfoPasteLocation = *bootInfo->files;
-    *(UINT8*)&bootInfoPasteLocation += sizeof(FileArray);
+    loc += bootInfo->memMap->mapSize;
+    *(FileArray*)loc = *bootInfo->files;
+    loc += sizeof(FileArray);
     for (UINT32 i = 0; i < bootInfo->files->count; i++)
     {
         ((FileData*)bootInfoPasteLocation)[i] = bootInfo->files->files[i];
