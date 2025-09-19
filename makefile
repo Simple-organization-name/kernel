@@ -33,7 +33,7 @@ bootloader:
 kernel: $(KERNEL_OBJECTS)
 	@echo Building kernel...
 	@nasm -f elf64 src/kernel/isr.asm -o build/kernel/isr.o
-	$(KERNEL_CC) $(KERNEL_OBJECTS) build/kernel/isr.o -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
+	@$(KERNEL_CC) $(KERNEL_OBJECTS) build/kernel/isr.o -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
 
 build/kernel/%.o: src/kernel/%.c
 	@echo Building $*...
@@ -51,7 +51,7 @@ clean:
 
 emul:
 	@echo Starting emulation...
-	@qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none -d int
+	@qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none -d int 2> stderr.log
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade

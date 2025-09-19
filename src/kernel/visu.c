@@ -122,7 +122,6 @@ void kputs(const char* str)
     while (*str) {
         kputc(*(str++));
     }
-    new_line();
 }
 
 
@@ -161,8 +160,8 @@ void kprintf(const char *format, ...) {
         if (*format == '%') {
             switch (*(++format)) {
                 case 's':
-                    uint8_t *str = va_arg(args, uint8_t *);
-                    while (*str) kputc(*(str++));
+                    char *str = va_arg(args, char *);
+                    kputs(str);
                     break;
                 case 'd':
                     int n = va_arg(args, int);
@@ -198,6 +197,7 @@ void kprintf(const char *format, ...) {
                             format--;
                             break;
                     }
+                    break;
                 case '%':
                     kputc('%');
                     break;
