@@ -2,6 +2,7 @@
 #include <stddef.h>
 
 #include <boot.h>
+#include "bmft.h"
 
 struct cursor {
     uint32_t* screen;
@@ -12,13 +13,15 @@ struct cursor {
         s_width;
 };
 
-typedef void* bmft; // temp
 
 static struct cursor where;
-// static bmft font;
+static Bmft *font;
 
-void init_visu(register Framebuffer* fb, register uint16_t size)
+void init_visu(register BootInfo* bootInfo, register uint16_t size)
 {
+    font = (Bmft *)bootInfo->files->files[1].data;
+
+    Framebuffer *fb = bootInfo->frameBuffer;
     where = (struct cursor){
         .screen = (uint32_t*)fb->addr,
         .x = 0,
@@ -86,45 +89,46 @@ void log_color(register uint32_t color)
     where.x += where.size;
 }
 
-// void putc(uint8_t chr)
-// {
-//     if (chr < 32) {
-//         switch (chr)
-//         {
-//         case '\n':  // new line
-//             new_line();
-//             break;
-//         case '\r':  // carriage return
-//             where.x = 0;
-//             break;
-//         case '\t':  // horz tab
-//             where.x += 4*where.size;
-//             break;
-//         case '\b':  // backspace
-//             where.x -= where.size;
-//             log_color(0xFF000000);
-//             where.x -= where.size;
-//             break;
-//         case '\a':  // bell
-//             fill_screen(0xFFFF0000);
-//             break;
-//         default:
-//             break;
-//         }
-//     } else {
-//         for (uint32_t x = 0; x < font.size_x; x++)
-//             for (uint32_t y = 0; y < font.size_y; y++)
-//                 if (font.bitmap[x][y])
-//                     put_pixel(0xFFFFFFFF, where.x + x, where.y + y);
-//     }
-// }
+void putc(uint8_t chr)
+{
+    if (chr < 32) {
+        switch (chr)
+        {
+        case '\n':  // new line
+            new_line();
+            break;
+        case '\r':  // carriage return
+            where.x = 0;
+            break;
+        case '\t':  // horz tab
+            where.x += 4*where.size;
+            break;
+        case '\b':  // backspace
+            where.x -= where.size;
+            log_color(0xFF000000);
+            where.x -= where.size;
+            break;
+        case '\a':  // bell
+            fill_screen(0xFFFF0000);
+            break;
+        default:
+            break;
+        }
+    } else {
+        for (uint32_t x = 0; x < 8; x++)
+            for (uint32_t y = 0; y < 12; y++)
+                if (font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x))
+                    put_pixel(0xFFFFFFFF, where.x + x, where.y + y);
+        where.x += 12;
+    }
+}
 
-// void puts(const char* str)
-// {
-//     while (str) {
-//         putc(*(str++));
-//     }
-// }
+void puts(const char* str)
+{
+    while (*str) {
+        putc(*(str++));
+    }
+}
 
 
 

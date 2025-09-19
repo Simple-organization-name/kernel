@@ -894,7 +894,7 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
     loc += sizeof(FileArray);
     for (UINT32 i = 0; i < bootInfo->files->count; i++)
     {
-        ((FileData*)bootInfoPasteLocation)[i] = bootInfo->files->files[i];
+        ((FileData*)loc)[i] = bootInfo->files->files[i];
     }
 }
 
