@@ -122,25 +122,35 @@ void kputs(const char* str)
     while (*str) {
         kputc(*(str++));
     }
+    new_line();
 }
 
-inline void kprintlong(int64_t n) {
+
+static char tmp[64];
+static inline void kprintlong(int64_t n) {
     if (n<0) {
         kputc('-');
         n *= -1;
     }
+    int8_t i = 0;
     if (n == 0) kputc('0');
-    else while (n>0) {
-        kputc('0' + n%10);
-        n /= 10;
+    else {
+        while (n > 0) {
+            tmp[i++] = '0' + n%10;
+            n /= 10;
+        }
+        while (i-- > 0) kputc(tmp[i]);
     }
 }
-
-inline void kprintulong(uint64_t n) {
+static inline void kprintulong(uint64_t n) {
+    int8_t i = 0;
     if (n == 0) kputc('0');
-    else while (n>0) {
-        kputc('0' + n%10);
-        n /= 10;
+    else {
+        while (n > 0) {
+            tmp[i++] = '0' + n%10;
+            n /= 10;
+        }
+        while (i-- > 0) kputc(tmp[i]);
     }
 }
 
@@ -148,52 +158,53 @@ void kprintf(const char *format, ...) {
     va_list args;
     va_start(args, format);
     while (*format) {
-        switch (*(format++)) {
-            case '%':
-                switch (*(format++)) {
-                    case 's':
-                        uint8_t *str = va_arg(args, uint8_t *);
-                        while (*str) kputc(*(str++));
-                        break;
-                    case 'd':
-                        int n = va_arg(args, int);
-                        kprintlong((long)n);
-                        break;
-                    case 'D':
-                        int ln = va_arg(args, long);
-                        kprintlong(ln);
-                        break;
-                    case 'u':
-                        uint32_t u = va_arg(args, uint32_t);
-                        kprintulong((uint64_t)u);
-                        break;
-                    case 'U':
-                        uint64_t lu = va_arg(args, uint64_t);
-                        kprintulong((uint64_t)lu);
-                        break;
-                    case 'c':
-                        int c = va_arg(args, int);
-                        kputc((uint8_t)c);
-                        break;
-                    case 'l':
-                        switch (*(format++)) {
-                            case 'u':
-                                uint64_t lu = va_arg(args, uint64_t);
-                                kprintulong((uint64_t)lu);
-                                break;
-                            case 'd':
-                                int ln = va_arg(args, long);
-                                kprintlong(ln);
-                                break;
-                            default:
-                                format--;
-                                break;
-                        }
-                }
-                break;
-            default:
-                kputc(*format);
+        if (*format == '%') {
+            switch (*(++format)) {
+                case 's':
+                    uint8_t *str = va_arg(args, uint8_t *);
+                    while (*str) kputc(*(str++));
+                    break;
+                case 'd':
+                    int n = va_arg(args, int);
+                    kprintlong((long)n);
+                    break;
+                case 'D':
+                    long ln = va_arg(args, long);
+                    kprintlong(ln);
+                    break;
+                case 'u':
+                    uint32_t u = va_arg(args, uint32_t);
+                    kprintulong((uint64_t)u);
+                    break;
+                case 'U':
+                    uint64_t lu = va_arg(args, uint64_t);
+                    kprintulong((uint64_t)lu);
+                    break;
+                case 'c':
+                    int c = va_arg(args, int);
+                    kputc((uint8_t)c);
+                    break;
+                case 'l':
+                    switch (*(++format)) {
+                        case 'u':
+                            uint64_t lu = va_arg(args, uint64_t);
+                            kprintulong((uint64_t)lu);
+                            break;
+                        case 'd':
+                            long ln = va_arg(args, long);
+                            kprintlong(ln);
+                            break;
+                        default:
+                            format--;
+                            break;
+                    }
+                case '%':
+                    kputc('%');
+                    break;
+            }
         }
+        else kputc(*format);
+        format++;
     }
 }
 
