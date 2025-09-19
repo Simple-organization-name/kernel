@@ -65,13 +65,13 @@ void new_line()
     if (where.y + where.size > where.s_height)
         where.y = 0;
     // clear the line just in case junk is left over
-    for (uint16_t y = where.y; y < where.y + where.size; y++)
-    {
-        for (uint16_t x = 0; x < where.s_width; x++)
-        {
-            put_pixel(0xFF000000, x, y);
-        }
-    }
+    // for (uint16_t y = where.y; y < where.y + where.size; y++)
+    // {
+    //     for (uint16_t x = 0; x < where.s_width; x++)
+    //     {
+    //         put_pixel(0xFF000000, x, y);
+    //     }
+    // }
 }
 
 void log_color(register uint32_t color)
@@ -104,9 +104,7 @@ void putc(uint8_t chr)
             where.x += 4*where.size;
             break;
         case '\b':  // backspace
-            where.x -= where.size;
-            log_color(0xFF000000);
-            where.x -= where.size;
+            where.x -= 8;
             break;
         case '\a':  // bell
             fill_screen(0xFFFF0000);
@@ -115,11 +113,13 @@ void putc(uint8_t chr)
             break;
         }
     } else {
+        if (where.x + 8 > where.s_width) new_line();
+
         for (uint32_t x = 0; x < 8; x++)
             for (uint32_t y = 0; y < 12; y++)
                 if (font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x))
                     put_pixel(0xFFFFFFFF, where.x + x, where.y + y);
-        where.x += 12;
+        where.x += 8;
     }
 }
 

@@ -4,7 +4,7 @@
 
 _Noreturn void _start(BootInfo* bootInfo)
 {
-    init_visu(bootInfo, 20);
+    init_visu(bootInfo, 12);
     fill_screen(0xFF000000);
 
     init_interrupts();

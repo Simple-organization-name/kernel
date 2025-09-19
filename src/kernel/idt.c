@@ -144,7 +144,7 @@ void init_interrupts()
     __asm__ volatile ("sti" ::: "memory");
 }
 
-extern void log_color(uint32_t color);
+extern void putc(uint8_t c);
 void interrupt_handler(interrupt_frame_t* context)
 {
     if (context->int_no >= PIC_IRQ_OFFSET && context->int_no < PIC_IRQ_OFFSET + 16) {
@@ -155,7 +155,7 @@ void interrupt_handler(interrupt_frame_t* context)
     }
 
     if (context->int_no == 0x21) {
-        inb(0x60);
+        uint8_t chr = inb(0x60);
+        if (!(chr & 0x80)) putc(chr);
     }
-    log_color(0xFFFFFFFF);
 }
