@@ -9,7 +9,7 @@ typedef struct _Framebuffer {
     uint32_t    width,
                 height,
                 pitch;
-    
+
 } Framebuffer;
 
 typedef struct _MemoryDescriptor {

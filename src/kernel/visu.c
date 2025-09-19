@@ -39,7 +39,7 @@ inline static void put_pixel(uint32_t color, uint16_t x, uint16_t y)
 
 void fill_screen(uint32_t color)
 {
-    
+
     for (uint16_t i = 0; i < where.s_height; i++)
     {
         for (uint16_t j = 0; j < where.s_width; j++)
@@ -72,7 +72,7 @@ void log_color(uint32_t color)
 {
     if (where.x + where.size > where.s_width)
     new_line();
-    
+
     for (uint16_t i = where.y; i < where.y + where.size; i++)
     {
         for (uint16_t j = where.x; j < where.x + where.size; j++)
@@ -207,4 +207,3 @@ void kprintf(const char *format, ...) {
         format++;
     }
 }
-

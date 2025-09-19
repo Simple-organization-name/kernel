@@ -117,7 +117,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     void (*trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)) = NULL;
     BootInfo* bootInfoPasteLocation = NULL;
     status = loadTrampoline(&trampoline, &bootInfoPasteLocation);
-    
+
     UINTN cr4;
     __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
     if (cr4 & (1<<12)) {
@@ -799,9 +799,9 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     clear_pt(pdp_high);
 
     pdp_high[0].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW;
-    
+
     clear_pt(pt_dir_top); clear_pt(pt_dir_mid0); clear_pt(pt_dir_low0);
-    
+
     // map page tables to page tables
     pt_dir_top[0].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW;
     pt_dir_mid0[0].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW;
@@ -812,7 +812,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pt_dir_low0[4].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW | PTE_PS;
     pt_dir_low0[5].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW | PTE_PS;
     pt_dir_low0[6].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_PS;
-    
+
     pdp_high[1].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW;
     clear_pt(pt_framebuffer);
     for (UINT16 i = 0; i <= framebuffer.size / (1<<21); i++)
@@ -935,8 +935,8 @@ static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
 
     status = configFile->Read(configFile, &files->config.size, files->config.data);
     EFI_CALL_FATAL_ERROR(u"Could not read config file");
-    
-    
+
+
     CHAR16 pathBuffer[512];
     UINT64 pathOffset;
     UINT64 configOffset = 0;
@@ -993,6 +993,6 @@ static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
 
 
     }
-    
+
     return EFI_SUCCESS;
 }

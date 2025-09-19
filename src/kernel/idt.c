@@ -76,38 +76,38 @@ void init_interrupts()
     {
         _IDT[i].present = 0;
     }
-    
+
 
     idtr_t idtr = (idtr_t){
         .size_minus_one = (sizeof _IDT) - 1,
         .addr = (uint64_t)_IDT
     };
 
-    
+
     // save which interrupts are enabled to set them back later just in case
     // uint8_t master_mask = inb(PIC_MASTER_DATA);
     // uint8_t slave_mask = inb(PIC_SLAVE_DATA);
-    
+
     // [ICW1]
     // start PIC init and enable fourth init step
     outb(PIC_MASTER_COMMAND, ICW1_INIT | ICW1_ICW4);
     outb(PIC_SLAVE_COMMAND, ICW1_INIT | ICW1_ICW4);
-    
+
     // [ICW2]
     // set irq base for each chip
     outb(PIC_MASTER_DATA, PIC_IRQ_OFFSET); // set master after 32 first to not clash with cpu interrupts
     outb(PIC_SLAVE_DATA, PIC_IRQ_OFFSET + 8); // set slave right after master
-    
+
     // [ICW3]
     // slave is wired to master's IR2, gotta notify the master with a bitmask and the slave with an id
     outb(PIC_MASTER_DATA, 1 << 2);
     outb(PIC_SLAVE_DATA, 2);
-    
+
     // [ICW4]
     // we tell the thing to behave like a normal pc and not some dinosaur of a machine like the 8080
     outb(PIC_MASTER_DATA, ICW4_8086);
     outb(PIC_SLAVE_DATA, ICW4_8086);
-    
+
     // // we put back the mask, can change it later anyways
     // i'm silly so i disabled everything
     outb(PIC_MASTER_DATA, 0xFD);
@@ -117,7 +117,7 @@ void init_interrupts()
     {
         set_interrupt(i, isr_stub_table[i], true);
     }
-    
+
 
     __asm__ volatile("lidt %0" :: "m"(idtr) : "memory");
     __asm__ volatile ("sti" ::: "memory");

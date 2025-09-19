@@ -74,7 +74,7 @@ gdt:
         dw 0x0000 ; base
         db 0x00 ; base
         db 0b10011010 ; access byte
-        ;    P  SEDcA 
+        ;    P  SEDcA
         ;     Dpl  RW
         db 0b10100000 ; flags + limit
         ;    G
