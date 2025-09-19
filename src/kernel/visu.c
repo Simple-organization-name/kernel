@@ -1,23 +1,22 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <boot.h>
+#include "visu.h"
+#include "boot.h"
 #include "bmft.h"
+#include "stdarg.h"
 
-struct cursor {
+static struct cursor {
     uint32_t* screen;
     uint16_t x, y,
         size,
         s_pitch,
         s_height,
         s_width;
-};
-
-
-static struct cursor where;
+} where;
 static Bmft *font;
 
-void init_visu(register BootInfo* bootInfo, register uint16_t size)
+void init_visu(BootInfo* bootInfo, uint16_t size)
 {
     font = (Bmft *)bootInfo->files->files[1].data;
 
@@ -33,17 +32,12 @@ void init_visu(register BootInfo* bootInfo, register uint16_t size)
     };
 }
 
-// void load_bmft(void* data)
-// {
-//     font = NULL;
-// }
-
-inline static void put_pixel(register uint32_t color, register uint16_t x, register uint16_t y)
+inline static void put_pixel(uint32_t color, uint16_t x, uint16_t y)
 {
     where.screen[y*where.s_pitch + x] = color;
 }
 
-void fill_screen(register uint32_t color)
+void fill_screen(uint32_t color)
 {
     
     for (uint16_t i = 0; i < where.s_height; i++)
@@ -60,9 +54,9 @@ void fill_screen(register uint32_t color)
 void new_line()
 {
     where.x = 0;
-    where.y += where.size;
+    where.y += 12;
     // if next block can't fit vertically, wrap around
-    if (where.y + where.size > where.s_height)
+    if (where.y + 12 > where.s_height)
         where.y = 0;
     // clear the line just in case junk is left over
     // for (uint16_t y = where.y; y < where.y + where.size; y++)
@@ -74,7 +68,7 @@ void new_line()
     // }
 }
 
-void log_color(register uint32_t color)
+void log_color(uint32_t color)
 {
     if (where.x + where.size > where.s_width)
     new_line();
@@ -89,7 +83,7 @@ void log_color(register uint32_t color)
     where.x += where.size;
 }
 
-void putc(uint8_t chr)
+void kputc(unsigned char chr)
 {
     if (chr < 32) {
         switch (chr)
@@ -123,12 +117,83 @@ void putc(uint8_t chr)
     }
 }
 
-void puts(const char* str)
+void kputs(const char* str)
 {
     while (*str) {
-        putc(*(str++));
+        kputc(*(str++));
     }
 }
 
+inline void kprintlong(int64_t n) {
+    if (n<0) {
+        kputc('-');
+        n *= -1;
+    }
+    if (n == 0) kputc('0');
+    else while (n>0) {
+        kputc('0' + n%10);
+        n /= 10;
+    }
+}
 
+inline void kprintulong(uint64_t n) {
+    if (n == 0) kputc('0');
+    else while (n>0) {
+        kputc('0' + n%10);
+        n /= 10;
+    }
+}
+
+void kprintf(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    while (*format) {
+        switch (*(format++)) {
+            case '%':
+                switch (*(format++)) {
+                    case 's':
+                        uint8_t *str = va_arg(args, uint8_t *);
+                        while (*str) kputc(*(str++));
+                        break;
+                    case 'd':
+                        int n = va_arg(args, int);
+                        kprintlong((long)n);
+                        break;
+                    case 'D':
+                        int ln = va_arg(args, long);
+                        kprintlong(ln);
+                        break;
+                    case 'u':
+                        uint32_t u = va_arg(args, uint32_t);
+                        kprintulong((uint64_t)u);
+                        break;
+                    case 'U':
+                        uint64_t lu = va_arg(args, uint64_t);
+                        kprintulong((uint64_t)lu);
+                        break;
+                    case 'c':
+                        int c = va_arg(args, int);
+                        kputc((uint8_t)c);
+                        break;
+                    case 'l':
+                        switch (*(format++)) {
+                            case 'u':
+                                uint64_t lu = va_arg(args, uint64_t);
+                                kprintulong((uint64_t)lu);
+                                break;
+                            case 'd':
+                                int ln = va_arg(args, long);
+                                kprintlong(ln);
+                                break;
+                            default:
+                                format--;
+                                break;
+                        }
+                }
+                break;
+            default:
+                kputc(*format);
+        }
+    }
+}
 

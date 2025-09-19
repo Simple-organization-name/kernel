@@ -20,6 +20,4 @@ typedef struct _Bmft {
     Glyph       glpyhs[UINT8_MAX - PRINTABLE_ASCII_FIRST + 1]; // Printable + Extended ASCII
 } Bmft;
 
-void loadBMFT();
-
 #endif //__BMFT_H__

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #include <idt.h>
 
@@ -42,8 +43,6 @@ static idt_entry_t _IDT[NUM_IDTE] __attribute__((aligned(4096)));
 #define ICW4_8086        0x01
 
 #define PIC_IRQ_OFFSET  32
-
-#include <stdbool.h>
 
 void set_interrupt(uint8_t int_no, void* func, bool trap)
 {

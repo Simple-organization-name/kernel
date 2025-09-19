@@ -2,6 +2,7 @@
 #define __IDT_H__
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct _register_state {
     uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
@@ -20,6 +21,8 @@ typedef struct _interrupt_frame {
     } on_cpl;
 } interrupt_frame_t;
 
+void set_interrupt(uint8_t int_no, void *func, bool trap);
 void init_interrupts();
+void interrupt_handler(interrupt_frame_t *context);
 
 #endif
