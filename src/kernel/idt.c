@@ -3,6 +3,8 @@
 
 #include <idt.h>
 
+#include <asm.h>
+
 typedef struct _idtr {
     uint16_t size_minus_one;
     uint64_t addr;
@@ -29,28 +31,6 @@ typedef struct _idt_entry {
 #define NUM_IDTE 256
 
 static idt_entry_t _IDT[NUM_IDTE] __attribute__((aligned(4096)));
-
-inline static uint8_t inb(uint16_t port)
-{
-    uint8_t value;
-    __asm__ volatile(
-        "inb %1, %0"
-        : "=a"(value)
-        : "d"(port)
-        : "memory"
-    );
-    return value;
-}
-
-inline static void outb(uint16_t port, uint8_t value)
-{
-    __asm__ volatile(
-        "outb %1, %0"
-        :
-        : "d"(port), "a"(value)
-        : "memory"
-    );
-}
 
 #define PIC_MASTER_COMMAND    0x20
 #define PIC_MASTER_DATA       0x21
