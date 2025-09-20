@@ -2,8 +2,9 @@
 #define __KTERM_H__
 
 #include "boot.h"
+#include <stdbool.h>
 
-int kterminit(BootInfo *bootInfo, uint16_t ratio);
+int kterminit(BootInfo *bootInfo, uint16_t ratio, bool hres);
 void kfillscreen(uint32_t color);
 void knewline();
 void kclearline();

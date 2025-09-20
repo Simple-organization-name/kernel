@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #include "kterm.h"
 #include "boot.h"
@@ -7,17 +8,18 @@
 #include "stdarg.h"
 
 static struct cursor {
-    uint32_t* screen;
-    uint16_t x, y; // Top left of the cursor
-    uint16_t vx, vy; // Top left of the cursor after applying scale (real / scale)
-    uint16_t width, height; // Size of the cursor, also size of a char
-    uint16_t vwidth, vheight; // Size of the cursor, after applying the scale (real / scale)
+    uint32_t*   screen;
+    uint16_t    x, y; // Top left of the cursor
+    uint16_t    vx, vy; // Top left of the cursor after applying scale (real / scale)
+    uint16_t    width, height; // Size of the cursor, also size of a char
+    uint16_t    vwidth, vheight; // Size of the cursor, after applying the scale (real / scale)
     uint32_t // Screen information
-        s_pitch,
-        s_width,
-        s_height, 
-        s_vwidth, // Width of the screen after applying the scale (real / scale)
-        s_vheight; // Height of the screen after applying the scale (real / scale)
+                s_pitch,
+                s_width,
+                s_height, 
+                s_vwidth, // Width of the screen after applying the scale (real / scale)
+                s_vheight; // Height of the screen after applying the scale (real / scale)
+    bool        hres; // Font high res toggle
 } cursor;
 static Bmft         *font;
 static uint16_t     scale;
@@ -75,7 +77,7 @@ inline static void setvcursory(uint16_t y) {
     cursor.vy = y;
 }
 
-int kterminit(BootInfo* bootInfo, uint16_t _scale)
+int kterminit(BootInfo* bootInfo, uint16_t _scale, bool hres)
 {
     font = (Bmft *)bootInfo->files->files[1].data;
     if (font->magicNumber != BMFT_MAGIC)
@@ -93,16 +95,17 @@ int kterminit(BootInfo* bootInfo, uint16_t _scale)
         .vx = 0,
         .vy = 0,
 
-        .width = 8 * scale,
-        .height = 12 * scale,
-        .vwidth = 8,
-        .vheight = 12,
+        .width = 8 * (hres ? 1.5 : 1) * scale,
+        .height = 12 * (hres ? 1.5 : 1) * scale,
+        .vwidth = 8 * (hres ? 1.5 : 1),
+        .vheight = 12 * (hres ? 1.5 : 1),
 
         .s_pitch = fb->pitch,
         .s_width = fb->width,
         .s_height = fb->height,
         .s_vwidth = fb->width / scale,
         .s_vheight = fb->height / scale,
+        .hres = hres,
     };
 
     return 0;
@@ -143,7 +146,7 @@ void knewline()
         }
         kclearline();
     }
-    else cursor.y += cursor.height;
+    else setcursory(cursor.y + cursor.height);
 }
 
 void kputc(unsigned char chr)
@@ -180,9 +183,20 @@ void kputc(unsigned char chr)
         if (cursor.x + cursor.width > cursor.s_width) knewline();
 
         for (uint32_t x = 0; x < cursor.vwidth; x++)
-        for (uint32_t y = 0; y < cursor.vheight; y++)
-        if (font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x))
-            kvputpixel(0xFFFFFFFF, cursor.vx + x, cursor.vy + y);
+        for (uint32_t y = 0; y < cursor.vheight; y++) {
+            bool pixel;
+            switch (cursor.hres) {
+                case 0: {
+                    pixel = font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x);
+                    break;
+                }
+                case 1: {
+                    pixel = font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px18[y] & (1<<x);
+                    break;
+                }
+            }
+            if (pixel) kvputpixel(0xFFFFFFFF, cursor.vx + x, cursor.vy + y);
+        }
         setcursorx(cursor.x + cursor.width);
     }
 }

@@ -40,8 +40,8 @@ build/kernel/%.o: src/kernel/%.c
 	@$(KERNEL_CC) -c $< -o $@ $(KERNEL_CFLAGS)
 
 initBootDir:
-	@cp src/boot/files.cfg iso/EFI/BOOT/files.cfg
-	@cp src/boot/main.bmft iso/main.bmft
+	@cp src/files.cfg iso/EFI/BOOT/files.cfg
+	@cp src/main.bmft iso/main.bmft
 
 clean:
 	@echo Cleaning build files...

@@ -5,7 +5,7 @@
 
 _Noreturn void _start(BootInfo* bootInfo)
 {
-    if (kterminit(bootInfo, 2))
+    if (kterminit(bootInfo, 1, 0))
         while (1) { cli(); hlt(); }
 
     kfillscreen(0xFF000000);
@@ -13,6 +13,7 @@ _Noreturn void _start(BootInfo* bootInfo)
     init_interrupts();
 
     kputs("Hello from SOS kernel !\n");
+    kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890 ,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>");
     // kprintf("");
 
     while (1);
