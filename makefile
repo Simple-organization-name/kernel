@@ -25,18 +25,18 @@ iso: clean initBootDir bootloader kernel
 	@xorriso -report_about WARNING -as mkisofs -iso-level 3 -o SOS.ISO -full-iso9660-filenames -volid "SOS" -eltorito-alt-boot -e $(ISO_ENTRY) -no-emul-boot -isohybrid-gpt-basdat iso/
 
 bootloader:
-	@echo Building bootloader...
+	@echo [BOOT] Building bootloader...
 	@nasm src/boot/trampoline.asm -o build/boot/trampoline.bin -f bin
 	@objcopy build/boot/trampoline.bin build/boot/trampoline.o -I binary -O elf64-x86-64 -B i386:x86-64
 	@$(BOOT_CC) $(BOOT_CFLAGS) src/boot/main.c build/boot/trampoline.o -o iso/$(ISO_ENTRY)
 
 kernel: $(KERNEL_OBJECTS)
-	@echo Building kernel...
+	@echo [KERNEL] Linking kernel...
 	@nasm -f elf64 src/kernel/isr.asm -o build/kernel/isr.o
 	@$(KERNEL_CC) $(KERNEL_OBJECTS) build/kernel/isr.o -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
 
 build/kernel/%.o: src/kernel/%.c
-	@echo Building $*...
+	@echo [KERNEL] Building $*...
 	@$(KERNEL_CC) -c $< -o $@ $(KERNEL_CFLAGS)
 
 initBootDir:

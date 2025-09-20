@@ -3,7 +3,7 @@
 
 #include "boot.h"
 
-void kterminit(BootInfo *bootInfo);
+int kterminit(BootInfo *bootInfo);
 void kfillscreen(uint32_t color);
 void knewline();
 void kclearline();

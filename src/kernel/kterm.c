@@ -8,97 +8,116 @@
 
 static struct cursor {
     uint32_t* screen;
-    uint16_t x, y,
+    uint16_t x, y, // Top left of the cursor
+        width, height, // Size of the cursor, also size of a char
         s_pitch,
         s_height,
         s_width;
-} where;
-static Bmft *font;
+} cursor;
+static Bmft         *font;
+static Framebuffer  *fb;
 
-void kterminit(BootInfo* bootInfo)
+int kterminit(BootInfo* bootInfo)
 {
     font = (Bmft *)bootInfo->files->files[1].data;
+    if (font->magicNumber != BMFT_MAGIC)
+        return -1;
+    if (font->version != BMFT_VERSION)
+        return -2;
 
-    Framebuffer *fb = bootInfo->frameBuffer;
-    where = (struct cursor){
+    fb = bootInfo->frameBuffer;
+    cursor = (struct cursor){
         .screen = (uint32_t*)fb->addr,
         .x = 0,
         .y = 0,
+        .width = 8,
+        .height = 12,
         .s_pitch = fb->pitch,
         .s_height = fb->height,
         .s_width = fb->width
     };
+
+    return 0;
 }
 
 inline static void kputpixel(uint32_t color, uint16_t x, uint16_t y)
 {
-    where.screen[y*where.s_pitch + x] = color;
+    cursor.screen[y*cursor.s_pitch + x] = color;
 }
 
 void kfillscreen(uint32_t color)
 {
 
-    for (uint16_t i = 0; i < where.s_height; i++)
+    for (uint16_t i = 0; i < cursor.s_height; i++)
     {
-        for (uint16_t j = 0; j < where.s_width; j++)
+        for (uint16_t j = 0; j < cursor.s_width; j++)
         {
             kputpixel(color, j, i);
         }
     }
-    where.x = 0;
-    where.y = 0;
-}
-
-void knewline()
-{
-    where.x = 0;
-    where.y += 12;
-    // if next block can't fit vertically, wrap around
-    if (where.y + 12 > where.s_height)
-        where.y = 0;
+    cursor.x = 0;
+    cursor.y = 0;
 }
 
 void kclearline() {
-    for (uint16_t y = where.y; y < where.y + 12; y++)
+    for (uint16_t y = cursor.y; y < cursor.y + cursor.height; y++)
     {
-        for (uint16_t x = 0; x < where.s_width; x++)
+        for (uint16_t x = 0; x < cursor.s_width; x++)
         {
             kputpixel(0xFF000000, x, y);
         }
     }
 }
 
+void knewline()
+{
+    cursor.x = 0;
+    // if next block can't fit vertically, scroll
+    if (cursor.y + 2 * cursor.height > cursor.s_height) {
+        uint32_t *base = (uint32_t *)fb->addr;
+        for (uint64_t i = 0; i < fb->height - cursor.height; i++) {
+            for (uint64_t j = 0; j < fb->width; j++) {
+                uint32_t *addr = base + fb->width * i + j;
+                *(addr) = *(addr + fb->width * cursor.height);
+            }
+        }
+        kclearline();
+    }
+    else cursor.y += cursor.height;
+}
+
 void kputc(unsigned char chr)
 {
-    if (chr < 32) {
+    if (chr < PRINTABLE_ASCII_FIRST) {
         switch (chr)
         {
         case '\n':  // new line
             knewline();
             break;
         case '\r':  // carriage return
-            where.x = 0;
+            cursor.x = 0;
             break;
         case '\t':  // horz tab
-            where.x += 4 * 8;
+            cursor.x += 4 * cursor.width;
             break;
         case '\b':  // backspace
-            where.x -= 8;
+            cursor.x -= cursor.width;
             break;
         case '\a':  // bell
             kfillscreen(0xFFFF0000);
             break;
         default:
+            cursor.x += cursor.width;
             break;
         }
     } else {
-        if (where.x + 8 > where.s_width) knewline();
+        if (cursor.x + cursor.width > cursor.s_width) knewline();
 
-        for (uint32_t x = 0; x < 8; x++)
-            for (uint32_t y = 0; y < 12; y++)
+        for (uint32_t x = 0; x < cursor.width; x++)
+            for (uint32_t y = 0; y < cursor.height; y++)
                 if (font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x))
-                    kputpixel(0xFFFFFFFF, where.x + x, where.y + y);
-        where.x += 8;
+                    kputpixel(0xFFFFFFFF, cursor.x + x, cursor.y + y);
+        cursor.x += cursor.width;
     }
 }
 

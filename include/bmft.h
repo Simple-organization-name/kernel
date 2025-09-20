@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define BMFT_VERSION    (uint32_t)0x0100
-#define BMFT_MAGIC      (uint32_t)0x74626D66  // 'bmft' as hex (little endian)
+#define BMFT_MAGIC      (uint32_t)0x74666D62  // 'bmft' as hex (little endian)
 
 #define PRINTABLE_ASCII_FIRST   33 // Space doesn't count
 
