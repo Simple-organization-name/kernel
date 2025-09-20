@@ -19,6 +19,7 @@ _Noreturn void _start(BootInfo* bootInfo)
     init_interrupts();
     initPhysMem();
     
+    kprintf("%X\n", pml4);
     kputs("Hello from SOS kernel !\n");
     kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 

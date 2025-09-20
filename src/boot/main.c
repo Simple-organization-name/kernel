@@ -24,7 +24,8 @@
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
-#define kernel_va 0xFFFFFFFF80000000
+#define kernel_va       0xFFFFFFFF80000000
+#define framebuffer_va  0xFFFFFFF000000000
 
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
@@ -728,9 +729,9 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
 
     clear_pt(pdp_high);
-    pdp_high[0].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW;
+    pdp_high[448].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW | PTE_NX;
     clear_pt(pt_framebuffer);
-    for (UINT16 i = 0; i <= framebuffer.size / (1<<21); i++)
+    for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
         pt_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
 
     pdp_high[510].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_G;
@@ -742,7 +743,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
         return -1;
     }
 
-    for (uint16_t i = 0; i <= kernel_size >> (21); i++)
+    for (uint16_t i = 0; i < (kernel_size + (1<<21) - 1) >> 21; i++)
         pt_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
 
     *pml4_ = pml4;
@@ -792,10 +793,11 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
         .frameBuffer = (Framebuffer*)(loc + sizeof(BootInfo)),
         .memMap = (MemMap*)(loc + sizeof(BootInfo) + sizeof(Framebuffer)),
         .files = (FileArray*)(loc + sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + bootInfo->memMap->mapSize),
+        .pml4 = bootInfo->pml4,
     };
     loc += sizeof(BootInfo);
     *(Framebuffer*)loc = *bootInfo->frameBuffer;
-    ((Framebuffer*)loc)->addr = 0xFFFFFF8000000000;
+    ((Framebuffer*)loc)->addr = framebuffer_va;
     loc += sizeof(Framebuffer);
     *(MemMap*)loc = *bootInfo->memMap;
     ((MemMap*)loc)->map = (MemoryDescriptor*)(loc + sizeof(MemMap));

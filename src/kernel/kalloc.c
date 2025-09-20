@@ -1,5 +1,7 @@
 #include "memTables.h"
-#include "kalloc.h"
+
+#include <kalloc.h>
+
 
 volatile        pte_t       *pml4;
 volatile        MemMap      *physMemoryMap;
@@ -26,12 +28,6 @@ void initPhysMem() {
     }
 }
 
-#define PD_BASE 0xFFFFFF0000000000
-#define PML4() (PD_BASE)
-#define PDPT(pml4_i) (PML4() | pml4_i << 30)
-#define PD(pml4_i, pdpt_i) (PDPT(pml4_i) | pdpt_i << 21)
-#define PT(pml4_i, pdpt_i, pd_i) (PD(pml4_i, pdpt_i) | pd_i << 12)
-
 bool mapPage(physAddr physical, virtAddr virtual) {
     (void)physical;
     (void)virtual;
@@ -47,21 +43,21 @@ physAddr getMapping(virtAddr virtual) {
     uint32_t pml4_index = (virtual >> 39) & 0x1FF;
     pte_t entry = ((pte_t *)PML4())[pml4_index];
     if (!entry.present) return 0;
-
-    uint32_t pml3_index = (virtual >> 30) & 0x1FF;
-    entry = ((pte_t *)PDPT(pml4_index))[pml3_index];
+    
+    uint32_t pdpt_index = (virtual >> 30) & 0x1FF;
+    entry = ((pte_t *)PDPT(pml4_index))[pdpt_index];
     if (!entry.present) return 0;
-    if (entry.pageSize) return entry.whole | PTE_ADDR;
-
-    uint32_t pml2_index = (virtual >> 21) & 0x1FF;
-    entry = ((pte_t *)PD(pml4_index, pml3_index))[pml2_index];
+    if (entry.pageSize) return entry.whole & PTE_ADDR;
+    
+    uint32_t pd_index = (virtual >> 21) & 0x1FF;
+    entry = ((pte_t *)PD(pml4_index, pdpt_index))[pd_index];
     if (!entry.present) return 0;
-    if (entry.pageSize) return entry.whole | PTE_ADDR;
-
-    uint32_t pml1_index = (virtual >> 12) & 0x1FF;
-    entry = ((pte_t *)PT(pml4_index, pml3_index, pml2_index))[pml1_index];
+    if (entry.pageSize) return entry.whole & PTE_ADDR;
+    
+    uint32_t pt_index = (virtual >> 12) & 0x1FF;
+    entry = ((pte_t *)PT(pml4_index, pdpt_index, pd_index))[pt_index];
     if (!entry.present) return 0;
-    if (entry.pageSize) return entry.whole | PTE_ADDR;
+    if (entry.pageSize) return entry.whole & PTE_ADDR;
 
     return 0;
 }
