@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define HLT "cli\nhlt"
+#define HLT __asm__("cli\nhlt")
 
 typedef struct _Framebuffer {
     uint64_t    addr,

@@ -8,16 +8,74 @@
 
 static struct cursor {
     uint32_t* screen;
-    uint16_t x, y, // Top left of the cursor
-        width, height, // Size of the cursor, also size of a char
+    uint16_t x, y; // Top left of the cursor
+    uint16_t vx, vy; // Top left of the cursor after applying scale (real / scale)
+    uint16_t width, height; // Size of the cursor, also size of a char
+    uint16_t vwidth, vheight; // Size of the cursor, after applying the scale (real / scale)
+    uint32_t // Screen information
         s_pitch,
-        s_height,
-        s_width;
+        s_width,
+        s_height, 
+        s_vwidth, // Width of the screen after applying the scale (real / scale)
+        s_vheight; // Height of the screen after applying the scale (real / scale)
 } cursor;
 static Bmft         *font;
-static Framebuffer  *fb;
+static uint16_t     scale;
 
-int kterminit(BootInfo* bootInfo)
+// Put a pixel at a real position
+inline static void kputpixel(uint32_t color, uint16_t x, uint16_t y)
+{
+    cursor.screen[y * (cursor.s_pitch) + x] = color;
+}
+
+// Put a pixel at a virtual position
+inline static void kvputpixel(uint32_t color, uint16_t x, uint16_t y) {
+    for (uint16_t i = 0; i < scale; i++)
+    for (uint16_t j = 0; j < scale; j++)
+        kputpixel(color, x * scale + i, y * scale + j);
+}
+
+// Put the cursor at a real position
+inline static void setcursor(uint16_t x, uint16_t y) {
+    cursor.x = x;
+    cursor.y = y;
+    cursor.vx = x / scale;
+    cursor.vy = y / scale;
+}
+
+// Put the cursor at a virtual position
+inline static void setvcursor(uint16_t x, uint16_t y) {
+    cursor.x = x * scale;
+    cursor.y = y * scale;
+    cursor.vx = x;
+    cursor.vy = y;
+}
+
+// Set the x coordinate of the real cursor
+inline static void setcursorx(uint16_t x) {
+    cursor.x = x;
+    cursor.vx = x / scale;
+}
+
+// Set the x coordinate of the virtual cursor
+inline static void setvcursorx(uint16_t x) {
+    cursor.x = x * scale;
+    cursor.vx = x;
+}
+
+// Set the y coordinate of the real cursor
+inline static void setcursory(uint16_t y) {
+    cursor.y = y;
+    cursor.vy = y / scale;
+}
+
+// Set the y coordinate of the virtual cursor
+inline static void setvcursory(uint16_t y) {
+    cursor.y = y * scale;
+    cursor.vy = y;
+}
+
+int kterminit(BootInfo* bootInfo, uint16_t _scale)
 {
     font = (Bmft *)bootInfo->files->files[1].data;
     if (font->magicNumber != BMFT_MAGIC)
@@ -25,29 +83,33 @@ int kterminit(BootInfo* bootInfo)
     if (font->version != BMFT_VERSION)
         return -2;
 
-    fb = bootInfo->frameBuffer;
+    scale = _scale;
+    Framebuffer *fb = bootInfo->frameBuffer;
     cursor = (struct cursor){
         .screen = (uint32_t*)fb->addr,
+
         .x = 0,
         .y = 0,
-        .width = 8,
-        .height = 12,
+        .vx = 0,
+        .vy = 0,
+
+        .width = 8 * scale,
+        .height = 12 * scale,
+        .vwidth = 8,
+        .vheight = 12,
+
         .s_pitch = fb->pitch,
+        .s_width = fb->width,
         .s_height = fb->height,
-        .s_width = fb->width
+        .s_vwidth = fb->width / scale,
+        .s_vheight = fb->height / scale,
     };
 
     return 0;
 }
 
-inline static void kputpixel(uint32_t color, uint16_t x, uint16_t y)
-{
-    cursor.screen[y*cursor.s_pitch + x] = color;
-}
-
 void kfillscreen(uint32_t color)
 {
-
     for (uint16_t i = 0; i < cursor.s_height; i++)
     {
         for (uint16_t j = 0; j < cursor.s_width; j++)
@@ -55,31 +117,29 @@ void kfillscreen(uint32_t color)
             kputpixel(color, j, i);
         }
     }
-    cursor.x = 0;
-    cursor.y = 0;
 }
 
 void kclearline() {
-    for (uint16_t y = cursor.y; y < cursor.y + cursor.height; y++)
+    for (uint16_t y = cursor.vy; y < cursor.vy + cursor.vheight; y++)
     {
-        for (uint16_t x = 0; x < cursor.s_width; x++)
+        for (uint16_t x = 0; x < cursor.s_vwidth; x++)
         {
-            kputpixel(0xFF000000, x, y);
+            kvputpixel(0xFF000000, x, y);
         }
     }
 }
 
 void knewline()
 {
-    cursor.x = 0;
+    setcursorx(0);
     // if next block can't fit vertically, scroll
-    if (cursor.y + 2 * cursor.height > cursor.s_height) {
-        uint32_t *base = (uint32_t *)fb->addr;
-        for (uint64_t i = 0; i < fb->height - cursor.height; i++) {
-            for (uint64_t j = 0; j < fb->width; j++) {
-                uint32_t *addr = base + fb->width * i + j;
-                *(addr) = *(addr + fb->width * cursor.height);
-            }
+    if (cursor.y + 2U * cursor.height > cursor.s_height) {
+        uint32_t *base = (uint32_t *)cursor.screen;
+
+        for (uint64_t i = 0; i < cursor.s_height - cursor.height; i++)
+        for (uint64_t j = 0; j < cursor.s_width; j++) {
+            uint32_t *addr = base + cursor.s_width * i + j;
+            *(addr) = *(addr + cursor.s_width * cursor.height);
         }
         kclearline();
     }
@@ -95,29 +155,35 @@ void kputc(unsigned char chr)
             knewline();
             break;
         case '\r':  // carriage return
-            cursor.x = 0;
+            setcursorx(0);
             break;
         case '\t':  // horz tab
-            cursor.x += 4 * cursor.width;
+            setcursorx(cursor.x + 4 * cursor.width);
             break;
         case '\b':  // backspace
-            cursor.x -= cursor.width;
+            setcursorx(cursor.x - cursor.width);
+            for (int i = 0; i < cursor.width; i++)
+            for (int j = 0; j < cursor.height; j++)
+                kputpixel(0xFF000000, cursor.x + i, cursor.y + j);
             break;
         case '\a':  // bell
             kfillscreen(0xFFFF0000);
             break;
         default:
-            cursor.x += cursor.width;
+            for (uint32_t x = 0; x < cursor.width; x++)
+            for (uint32_t y = 0; y < cursor.height; y++)
+                kputpixel(0xFF000000, cursor.x + x, cursor.y + y);
+            setcursorx(cursor.x + cursor.width);
             break;
         }
     } else {
         if (cursor.x + cursor.width > cursor.s_width) knewline();
 
-        for (uint32_t x = 0; x < cursor.width; x++)
-            for (uint32_t y = 0; y < cursor.height; y++)
-                if (font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x))
-                    kputpixel(0xFFFFFFFF, cursor.x + x, cursor.y + y);
-        cursor.x += cursor.width;
+        for (uint32_t x = 0; x < cursor.vwidth; x++)
+        for (uint32_t y = 0; y < cursor.vheight; y++)
+        if (font->glpyhs[chr - PRINTABLE_ASCII_FIRST].px12[y] & (1<<x))
+            kvputpixel(0xFFFFFFFF, cursor.vx + x, cursor.vy + y);
+        setcursorx(cursor.x + cursor.width);
     }
 }
 
