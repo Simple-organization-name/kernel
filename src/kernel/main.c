@@ -20,10 +20,10 @@ _Noreturn void _start(BootInfo* bootInfo)
     initPhysMem();
     
     kputs("Hello from SOS kernel !\n");
-    kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>");
+    kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 
     physAddr kernelPhysAddr = getMapping(0xFFFFFFFF80000000);
-    kprintf("%U\n", kernelPhysAddr);
+    kprintf("%X\n", kernelPhysAddr);
 
     while (1) hlt();
 }
