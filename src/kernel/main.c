@@ -25,6 +25,5 @@ _Noreturn void _start(BootInfo* bootInfo)
     physAddr kernelPhysAddr = getMapping(0xFFFFFFFF80000000);
     kprintf("%U\n", kernelPhysAddr);
 
-    cli();
     while (1) hlt();
 }

@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include <idt.h>
+#include <kterm.h>
 
 #include <asm.h>
 
@@ -136,5 +137,18 @@ void interrupt_handler(interrupt_frame_t* context)
     if (context->int_no == 0x21) {
         uint8_t chr = inb(0x60);
         if (!(chr & 0x80)) kputc(chr);
+    }
+
+    if (context->int_no == 0x0E) {
+        uint64_t addr;
+        __asm__ volatile (
+            "mov %%cr2, %0"
+            : "=r"(addr)
+            :: "memory"
+        );
+        kprintf("\nPage fault at address 0x%X, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
+        kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
+        kprintf("Caused at RIP=0x%X\n", context->rip);
+        hlt();
     }
 }

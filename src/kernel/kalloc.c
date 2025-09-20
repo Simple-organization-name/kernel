@@ -27,7 +27,7 @@ void initPhysMem() {
 }
 
 #define PD_BASE 0xFFFFFF0000000000
-#define PAGE_TABLE(pml4_i, pdpt_i, pd_i, pt_i) ((pte_t *)((PD_BASE) | (pml4_i << 30) | (pdpt_i << 21) | (pd_i << 12) | (pt_i)))
+#define PAGE_TABLE(pml4_i, pdpt_i, pd_i, pt_i) ((pte_t *)((PD_BASE) | (pml4_i << 30) | (pdpt_i << 21) | (pd_i << 12) | (pt_i << 3)))
 
 bool mapPage(physAddr physical, virtAddr virtual) {
     (void)physical;
@@ -39,17 +39,22 @@ bool unmapPage(virtAddr virtual) {
     (void)virtual;
     return false;
 }
-
+#include <asm.h>
 physAddr getMapping(virtAddr virtual) {
     uint32_t pml4_index = (virtual >> 39) & 0x1FF;
     uint32_t pml3_index = (virtual >> 30) & 0x1FF;
     uint32_t pml2_index = (virtual >> 21) & 0x1FF;
     uint32_t pml1_index = (virtual >> 12) & 0x1FF;
 
-    if (!PAGE_TABLE(pml4_index, 0, 0, 0)->present) return 0;
-    if (!PAGE_TABLE(pml4_index, pml3_index, 0, 0)->present) return 0;
-    if (!PAGE_TABLE(pml4_index, pml3_index, pml2_index, 0)->present) return 0;
-    if (!PAGE_TABLE(pml4_index, pml3_index, pml2_index, pml1_index)->present) return 0;
+    // hlt();
+    // if (!PAGE_TABLE(pml4_index, 0, 0, 0)->present) return 0;
+    // hlt();
+    // if (!PAGE_TABLE(pml4_index, pml3_index, 0, 0)->present) return 0;
+    // hlt();
+    // if (!PAGE_TABLE(pml4_index, pml3_index, pml2_index, 0)->present) return 0;
+    // hlt();
+    // if (!PAGE_TABLE(pml4_index, pml3_index, pml2_index, pml1_index)->present) return 0;
+    // hlt();
 
     return PAGE_TABLE(pml4_index, pml3_index, pml2_index, pml1_index)->whole | PTE_ADDR;
 }

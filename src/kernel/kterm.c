@@ -229,6 +229,19 @@ static inline void kprintlong(int64_t n) {
     kprintulong(n);
 }
 
+static inline void kprinthex(uint64_t n) {
+    int8_t i = 0;
+    if (n == 0) kputc('0');
+    else {
+        while (n > 0) {
+            if (n%16 < 10) tmp[i++] = '0' + n%16;
+            else tmp[i++] = 'A' + n%16 - 10;
+            n /= 16;
+        }
+        while (i-- > 0) kputc(tmp[i]);
+    }
+}
+
 void kprintf(const char *format, ...) {
     va_list args;
     va_start(args, format);
@@ -255,6 +268,14 @@ void kprintf(const char *format, ...) {
                     uint64_t lu = va_arg(args, uint64_t);
                     kprintulong((uint64_t)lu);
                     break;
+                case 'x':
+                    uint32_t x = va_arg(args, uint32_t);
+                    kprinthex((uint64_t)x);
+                    break;
+                case 'X':
+                    uint64_t lx = va_arg(args, uint64_t);
+                    kprinthex((uint64_t)lx);
+                    break;
                 case 'c':
                     int c = va_arg(args, int);
                     kputc((uint8_t)c);
@@ -268,6 +289,10 @@ void kprintf(const char *format, ...) {
                         case 'd':
                             long ln = va_arg(args, long);
                             kprintlong(ln);
+                            break;
+                        case 'x':
+                            uint64_t lx = va_arg(args, uint64_t);
+                            kprinthex(lx);
                             break;
                         default:
                             format--;
