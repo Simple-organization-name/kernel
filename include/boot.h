@@ -53,7 +53,6 @@ typedef struct _BootInfo {
     Framebuffer* frameBuffer;
     MemMap* memMap;
     FileArray* files;
-    pte_t *pml4;
 } BootInfo;
 
 

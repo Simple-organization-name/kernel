@@ -155,7 +155,6 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         .frameBuffer = &framebuffer,
         .memMap = &memmap,
         .files = &files,
-        .pml4 = pml4,
     };
 
     pasteBootInfo(bootInfoPasteLocation, &bootinfo);
@@ -793,7 +792,6 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
         .frameBuffer = (Framebuffer*)(loc + sizeof(BootInfo)),
         .memMap = (MemMap*)(loc + sizeof(BootInfo) + sizeof(Framebuffer)),
         .files = (FileArray*)(loc + sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + bootInfo->memMap->mapSize),
-        .pml4 = bootInfo->pml4,
     };
     loc += sizeof(BootInfo);
     *(Framebuffer*)loc = *bootInfo->frameBuffer;

@@ -10,16 +10,14 @@ _Noreturn void _start(BootInfo* bootInfo)
         cli();
         while (1) hlt();
     }
-    
+
     kfillscreen(0xFF000000);
-    
-    pml4 = bootInfo->pml4;
+
     physMemoryMap = bootInfo->memMap;
-    
+
     init_interrupts();
     initPhysMem();
-    
-    kprintf("%X\n", pml4);
+
     kputs("Hello from SOS kernel !\n");
     kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 
