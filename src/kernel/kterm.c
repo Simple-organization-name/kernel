@@ -16,7 +16,7 @@ static struct cursor {
     uint32_t // Screen information
                 s_pitch,
                 s_width,
-                s_height, 
+                s_height,
                 s_vwidth, // Width of the screen after applying the scale (real / scale)
                 s_vheight; // Height of the screen after applying the scale (real / scale)
     bool        hres; // Font high res toggle

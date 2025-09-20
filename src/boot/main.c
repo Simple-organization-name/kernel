@@ -38,26 +38,25 @@ static EFI_SYSTEM_TABLE     *systemTable;
 static EFI_FILE_PROTOCOL    *root       = NULL,
                             *logFile    = NULL;
 
-static inline uint64_t ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
+static inline uint64_t      ucs2ToUtf8(uint16_t *in, uint8_t *out, uint64_t outSize);
 
-static inline EFI_STATUS EfiPrint(CHAR16 *msg);
-static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg);
-static inline void EfiPrintAttr(CHAR16 *msg, UINT16 attr);
-static inline EFI_STATUS intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
+static inline EFI_STATUS    EfiPrint(CHAR16 *msg);
+static inline void          EfiPrintError(EFI_STATUS status, CHAR16 *msg);
+static inline void          EfiPrintAttr(CHAR16 *msg, UINT16 attr);
+static inline EFI_STATUS    intToString(UINT64 number, CHAR16 *buffer, UINT64 bufferSize);
 static inline EFI_INPUT_KEY getKey();
 
-static inline void changeTextModeRes();
-static EFI_STATUS setupGraphicsMode();
-static EFI_STATUS openRootDir();
-static EFI_STATUS createLogFile();
-static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize);
-static inline void printMemoryMap();
-static EFI_STATUS getMemoryMap();
-static void exitBootServices();
-static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
-static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation);
-static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
-static EFI_STATUS openFiles(IN CHAR16* configPath, OUT FileArray* files);
+static inline void  changeTextModeRes();
+static EFI_STATUS   setupGraphicsMode();
+static EFI_STATUS   openRootDir();
+static EFI_STATUS   createLogFile();
+static EFI_STATUS   loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize);
+static EFI_STATUS   getMemoryMap();
+static void         exitBootServices();
+static EFI_STATUS   makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
+static EFI_STATUS   loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation);
+static void         pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
+static EFI_STATUS   openFiles(IN CHAR16* configPath, OUT FileArray* files);
 
 
 /**
@@ -154,7 +153,8 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     BootInfo bootinfo = (BootInfo){
         .frameBuffer = &framebuffer,
         .memMap = &memmap,
-        .files = &files
+        .files = &files,
+        .pml4 = pml4,
     };
 
     pasteBootInfo(bootInfoPasteLocation, &bootinfo);
@@ -364,39 +364,6 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
         return status;
     }
 
-    // EFI_FILE_PROTOCOL *kernelFile;
-    // status = root->Open(root, &kernelFile, where, EFI_FILE_MODE_READ, 0);
-    // EFI_CALL_FATAL_ERROR(u"Could not open kernel image");
-
-    // EFI_FILE_INFO *fileInfo = NULL;
-    // UINTN sizeofInfo = 0;
-    // EFI_GUID EfiFileInfoId = EFI_FILE_INFO_ID;
-    // status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, NULL);
-    // if(status != EFI_BUFFER_TOO_SMALL)
-    //     EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
-
-    // status = systemTable->BootServices->AllocatePool(EfiLoaderData, sizeofInfo, (void**)&fileInfo);
-    // EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
-
-    // status = kernelFile->GetInfo(kernelFile, &EfiFileInfoId, &sizeofInfo, fileInfo);
-    // EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info");
-
-    // UINT64 kernelDataSize = fileInfo->FileSize;
-    // systemTable->BootServices->FreePool(fileInfo);
-
-    // if (kernelDataSize == 0) {
-    //     status = -1;
-    //     EfiPrintError(status, u"Kernel file is empty");
-    //     return status;
-    // }
-
-    // UINT8* kernelData;
-    // status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, EFI_SIZE_TO_PAGES(kernelDataSize), (EFI_PHYSICAL_ADDRESS*)&kernelData);
-    // EFI_CALL_FATAL_ERROR(u"Failed to allocate memory to load kernel file");
-
-    // status = kernelFile->Read(kernelFile, &kernelDataSize, kernelData);
-    // EFI_CALL_FATAL_ERROR(u"Failed to read kernel file");
-
     UINT8* kernelData = file->data;
     if (file->size == 0) {
         status = -1;
@@ -488,7 +455,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
     }
 
     // alocate that memory
-    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiLoaderCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiRuntimeServicesCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
 
     for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
@@ -676,46 +643,6 @@ static EFI_STATUS setupGraphicsMode() {
 #undef CHECK_ERROR
 #undef CHECK_ERROR_MSG
 
-/**
- * Prints the memory map
- */
-static inline void printMemoryMap() {
-    CHAR16 buffer[21];
-    intToString(memmap.mapSize, buffer, sizeof(buffer));
-    EfiPrint(u"Size of memmap: ");
-    EfiPrint(buffer);
-
-    intToString(memmap.descSize, buffer, sizeof(buffer));
-    EfiPrint(u"\r\nSize of descriptor: ");
-    EfiPrint(buffer);
-
-    intToString(memmap.count, buffer, sizeof(buffer));
-    EfiPrint(u"\r\nDescriptor count: ");
-    EfiPrint(buffer);
-
-    for (UINT16 i = 0; i < memmap.count; i++) {
-        EFI_MEMORY_DESCRIPTOR *desc = (EFI_MEMORY_DESCRIPTOR *)((char *)memmap.map + i * memmap.descSize);
-
-        intToString(i, buffer, sizeof(buffer));
-        EfiPrint(u"\r\n\r\nDescriptor ");
-        EfiPrint(buffer);
-
-        intToString(desc->Type, buffer, sizeof(buffer));
-        EfiPrint(u"\r\n    Type: ");
-        EfiPrint(buffer);
-
-        intToString(desc->PhysicalStart, buffer, sizeof(buffer));
-        EfiPrint(u"\r\n    Address: ");
-        EfiPrint(buffer);
-
-        intToString(desc->NumberOfPages, buffer, sizeof(buffer));
-        EfiPrint(u"\r\n    Number of pages: ");
-        EfiPrint(buffer);
-    }
-
-    EfiPrint(u"\r\n");
-}
-
 static EFI_STATUS getMemoryMap() {
     EFI_STATUS status;
     EFI_BOOT_SERVICES *bs = systemTable->BootServices;
@@ -778,48 +705,30 @@ static void exitBootServices() {
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
 
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 8, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 5, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
     pte_t* pml4     = (pte_t*)(pageAddress + 0*4096);
     // each pdp can contain 512GiB so for now we can keep it at one for lower space and one for higher space
     pte_t* pdp_low  = (pte_t*)(pageAddress + 1*4096);
-    pte_t* pdp_high = (pte_t*)(pageAddress + 2*4096);   // use this for kernel, not done yet
-    pte_t* pt_dir_top = (pte_t*)(pageAddress + 3*4096);
-    pte_t* pt_dir_mid0 = (pte_t*)(pageAddress + 4*4096);
-    pte_t* pt_dir_low0 = (pte_t*)(pageAddress + 5*4096);
-    pte_t* pt_kernel = (pte_t*)(pageAddress + 6*4096);
-    pte_t* pt_framebuffer = (pte_t*)(pageAddress + 7*4096);
+    pte_t* pdp_high = (pte_t*)(pageAddress + 2*4096);
+    pte_t* pt_kernel = (pte_t*)(pageAddress + 3*4096);
+    pte_t* pt_framebuffer = (pte_t*)(pageAddress + 4*4096);
 
     clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
     pml4[0].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW;
+    // make pml4 point to itself to recursively map all page tables
+    pml4[510].whole = (uint64_t)(uintptr_t)pml4 | PTE_P | PTE_RW;
     pml4[511].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
 
     clear_pt(pdp_low);
     // this maps all of lower 1GiB by identity
     pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
 
-
     clear_pt(pdp_high);
-
-    pdp_high[0].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW;
-
-    clear_pt(pt_dir_top); clear_pt(pt_dir_mid0); clear_pt(pt_dir_low0);
-
-    // map page tables to page tables
-    pt_dir_top[0].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW;
-    pt_dir_mid0[0].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW;
-    pt_dir_low0[0].whole = (uint64_t)(uintptr_t)pml4 | PTE_P | PTE_RW | PTE_PS;
-    pt_dir_low0[1].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW | PTE_PS;
-    pt_dir_low0[2].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW | PTE_PS;
-    pt_dir_low0[3].whole = (uint64_t)(uintptr_t)pt_dir_top | PTE_P | PTE_RW | PTE_PS;
-    pt_dir_low0[4].whole = (uint64_t)(uintptr_t)pt_dir_mid0 | PTE_P | PTE_RW | PTE_PS;
-    pt_dir_low0[5].whole = (uint64_t)(uintptr_t)pt_dir_low0 | PTE_P | PTE_RW | PTE_PS;
-    pt_dir_low0[6].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_PS;
-
-    pdp_high[1].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW;
+    pdp_high[0].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW;
     clear_pt(pt_framebuffer);
     for (UINT16 i = 0; i <= framebuffer.size / (1<<21); i++)
         pt_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
@@ -857,10 +766,10 @@ static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, voi
     noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
 
     EFI_PHYSICAL_ADDRESS addr = 1 << 21;
-    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
+    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderData, noPages, &addr);
     EFI_CALL_ERROR {
         addr = 1 << 30;
-        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
+        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderData, noPages, &addr);
         EFI_CALL_FATAL_ERROR(u"WTF couldn't get a few pages under the 1GiB bar...");
     }
 
@@ -886,7 +795,7 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
     };
     loc += sizeof(BootInfo);
     *(Framebuffer*)loc = *bootInfo->frameBuffer;
-    ((Framebuffer*)loc)->addr = 0xFFFFFF8040000000;
+    ((Framebuffer*)loc)->addr = 0xFFFFFF8000000000;
     loc += sizeof(Framebuffer);
     *(MemMap*)loc = *bootInfo->memMap;
     ((MemMap*)loc)->map = (MemoryDescriptor*)(loc + sizeof(MemMap));
@@ -996,8 +905,6 @@ static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
         id_alloc(files->files[files->count - 1].data, files->files[files->count - 1].size);
         status = file->Read(file, &files->files[files->count - 1].size, files->files[files->count - 1].data);
         EFI_CALL_FATAL_ERROR(u"Couldn't read startup file");
-
-
     }
 
     return EFI_SUCCESS;

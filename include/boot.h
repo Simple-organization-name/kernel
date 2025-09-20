@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "memTables.h"
+
 typedef struct _Framebuffer {
     uint64_t    addr,
                 size;
@@ -51,6 +53,7 @@ typedef struct _BootInfo {
     Framebuffer* frameBuffer;
     MemMap* memMap;
     FileArray* files;
+    pte_t *pml4;
 } BootInfo;
 
 

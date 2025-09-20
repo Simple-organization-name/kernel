@@ -13,7 +13,7 @@ typedef union _pageTableEntry {
             us : 1,         // can userspace code access it
             pwt : 1,
             pcd : 1,        // if set, will not be cached
-            accessed : 1,   // has it been used in the mapping of a va
+            accessed : 1,   // has it been used in the mapping of a virtAddr
             dirty : 1,      // has it been written to
             pageSize : 1,   // is leaf / ps / whatever
             global : 1,     // if set, not uncached when switching cr3 (for example kernel mapping that is the same in all processes)

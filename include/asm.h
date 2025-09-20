@@ -1,3 +1,6 @@
+#ifndef __ASM_H__
+#define __ASM_H__
+
 #include <stdint.h>
 
 inline static uint8_t inb(uint16_t port)
@@ -36,3 +39,5 @@ inline static void sti()
 {
     __asm__ volatile ("sti");
 }
+
+#endif
