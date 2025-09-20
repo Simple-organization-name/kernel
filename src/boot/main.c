@@ -3,6 +3,8 @@
 #   undef __INT64_C
 #endif
 
+#include "asm.h"
+
 #include "boot.h"
 #include "efi/efi.h"
 #include "elf.h"
@@ -86,7 +88,8 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = openRootDir(&root);
     if (EFI_ERROR(status)) {
         EfiPrintAttr(u"Failed to open root dir\r\n", EFI_MAGENTA);
-        while (1) HLT;
+        cli();
+        while (1) hlt();
     } else EfiPrintAttr(u"Successfully opened root directory !\r\n", EFI_CYAN);
 
     // Create log file
@@ -99,20 +102,24 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = openFiles(u"\\EFI\\BOOT\\files.cfg", &files);
     EFI_CALL_ERROR {
         EfiPrintError(status, u"Couldn't retrieve startup files");
-        while(1) HLT;
+        cli();
+        while(1) hlt();
     }
 
     if (files.count == 0) {
         EfiPrintError(status, u"Expected at least one startup file for kernel");
-        while (1) HLT;
+        cli();
+        while (1) hlt();
     }
 
     void (*kernelEntry)(BootInfo*) = NULL;
     EFI_PHYSICAL_ADDRESS kernel_pa;
     UINTN imageSize;
     status = loadKernelImage(&files.files[0], (EFI_PHYSICAL_ADDRESS*)&kernelEntry, &kernel_pa, &imageSize);
-    EFI_CALL_ERROR
-        while (1) HLT;
+    EFI_CALL_ERROR {
+        cli();
+        while (1) hlt();
+    }
 
     void (*trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)) = NULL;
     BootInfo* bootInfoPasteLocation = NULL;
@@ -122,14 +129,16 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     __asm__ volatile("mov %%cr4, %0" : "=r"(cr4));
     if (cr4 & (1<<12)) {
         EfiPrintAttr(u"LEVEL 5 PAGING ENABLED. ABORTING.\r\n", EFI_WHITE | EFI_BACKGROUND_RED);
-        while (1) HLT;
+        cli();
+        while (1) hlt();
     }
 
     pte_t* pml4 = NULL;
     status = makePageTables(kernel_pa, imageSize, &pml4);
     EFI_CALL_ERROR {
         EfiPrintError(status, u"Failed to map memory");
-        while (1) HLT;
+        cli();
+        while (1) hlt();
     }
 
     // Get memory map
@@ -152,7 +161,8 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     trampoline(pml4, bootInfoPasteLocation, kernelEntry);
 
-    while (1) HLT;
+    cli();
+    while (1) hlt();
     return EFI_ABORTED; // Should never be reached
 }
 
@@ -757,7 +767,8 @@ static void exitBootServices() {
     status = systemTable->BootServices->ExitBootServices(imageHandle, memmap.key);
     EFI_CALL_ERROR {
         EfiPrintError(status, u"Failed to exit boot services !");
-        while (1) HLT;
+        cli();
+        while (1) hlt();
     }
 
 }

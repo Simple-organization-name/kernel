@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#define HLT __asm__("cli\nhlt")
-
 typedef struct _Framebuffer {
     uint64_t    addr,
                 size;
