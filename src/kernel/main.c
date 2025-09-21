@@ -24,8 +24,8 @@ _Noreturn void _start(BootInfo* bootInfo)
     physAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000);
     kprintf("%X\n", kernelPhysAddr);
 
-    if (!unmapPage(0xFFFFFF7F80000000)) kputs("Failed to unmap framebuffer\n");
-    kputs("Test done\n"); // Should not be printed as the framebuffer has been unmapped
+    if (!unmapPage(0xFFFFFF7F80000000)) kputs("Failed to unmap kernel\n");
+    kputs("Test done\n"); // Should not be printed as the kernel has been unmapped
 
     // if (!mapPage(validMemory[0], 0xFFFF643200000000)) kputs("Failed to map page\n");
     // uint64_t *ptr = (uint64_t *)0xFFFF643200000000;

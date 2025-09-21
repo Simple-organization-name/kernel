@@ -40,4 +40,13 @@ inline static void sti()
     __asm__ volatile ("sti");
 }
 
+inline static void invlpg(uint64_t addr)
+{
+    __asm__ volatile (
+        "invlpg %0"
+        :: "m"(addr)
+        : "memory"
+    );
+}
+
 #endif

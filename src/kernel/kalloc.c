@@ -1,6 +1,8 @@
 #include "memTables.h"
 #include "kalloc.h"
 
+#include <asm.h>
+
 volatile MemMap         *physMemoryMap     = NULL;
 volatile MemoryRange    validMemory[512]   = {0};
 volatile uint64_t       validMemoryCount   = 0;
@@ -59,6 +61,7 @@ bool unmapPage(virtAddr virtual) {
     if (!entry->present) return 0;
     if (entry->pageSize) {
         entry->whole = 0;
+        invlpg(virtual);
         return 1;
     }
     
@@ -67,6 +70,7 @@ bool unmapPage(virtAddr virtual) {
     if (!entry->present) return 0;
     if (entry->pageSize) {
         entry->whole = 0;
+        invlpg(virtual);
         return 1;
     }
 
@@ -74,6 +78,7 @@ bool unmapPage(virtAddr virtual) {
     entry = ((pte_t *)PT(pml4_index, pdpt_index, pd_index)) + pt_index;
     if (!entry->present) return 0;
     entry->whole = 0;
+    invlpg(virtual);
     return 1;
 }
 
