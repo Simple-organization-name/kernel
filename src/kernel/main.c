@@ -6,7 +6,7 @@
 
 _Noreturn void _start(BootInfo* bootInfo)
 {
-    if (kterminit(bootInfo, 1, 1)){
+    if (kterminit(bootInfo, 1, 1)) {
         cli();
         while (1) hlt();
     }
@@ -16,13 +16,16 @@ _Noreturn void _start(BootInfo* bootInfo)
     physMemoryMap = bootInfo->memMap;
 
     init_interrupts();
+    
+    physAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
+    kprintf("Kernel at 0x%X\n", kernelPhysAddr);
+    
     initPhysMem();
 
+    kputc('a');
     kputs("Hello from SOS kernel !\n");
     kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
-
-    physAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000);
-    kprintf("%X\n", kernelPhysAddr);
+    
 
     while (1) hlt();
 }

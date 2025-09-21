@@ -124,7 +124,6 @@ void init_interrupts()
     __asm__ volatile ("sti" ::: "memory");
 }
 
-extern void kputc(uint8_t c);
 void interrupt_handler(interrupt_frame_t* context)
 {
     if (context->int_no >= PIC_IRQ_OFFSET && context->int_no < PIC_IRQ_OFFSET + 16) {

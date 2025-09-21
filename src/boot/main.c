@@ -25,7 +25,7 @@
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
 #define kernel_va       0xFFFFFF7F80000000
-#define framebuffer_va  0xFFFFFF7000000000
+#define framebuffer_va  0xFFFFFF0000000000
 
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
@@ -97,7 +97,6 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
     status = createLogFile(root, &logFile);
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
-
 
     status = openFiles(u"\\EFI\\BOOT\\files.cfg", &files);
     EFI_CALL_ERROR {
@@ -705,36 +704,40 @@ static void exitBootServices() {
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
 
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 5, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 6, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
-    pte_t* pml4     = (pte_t*)(pageAddress + 0*4096);
+    pte_t* pml4             = (pte_t*)(pageAddress + 0*4096);
     // each pdp can contain 512GiB so for now we can keep it at one for lower space and one for higher space
-    pte_t* pdp_low  = (pte_t*)(pageAddress + 1*4096);
-    pte_t* pdp_high = (pte_t*)(pageAddress + 2*4096);
-    pte_t* pt_kernel = (pte_t*)(pageAddress + 3*4096);
-    pte_t* pt_framebuffer = (pte_t*)(pageAddress + 4*4096);
+    pte_t* pdp_low          = (pte_t*)(pageAddress + 1*4096);
+    pte_t* pdp_high         = (pte_t*)(pageAddress + 2*4096);
+    pte_t* pd_kernel        = (pte_t*)(pageAddress + 3*4096);
+    pte_t* pd_framebuffer   = (pte_t*)(pageAddress + 4*4096);
+    pte_t* pd_memory        = (pte_t*)(pageAddress + 5*4096);
 
     clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
-    pml4[0].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW;
-    pml4[510].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
+    pml4[0].whole = (uint64_t)((uintptr_t)pdp_low & PTE_ADDR) | PTE_P | PTE_RW;
+    pml4[510].whole = (uint64_t)((uintptr_t)pdp_high & PTE_ADDR) | PTE_P | PTE_RW;
     // make pml4 point to itself to recursively map all page tables
-    pml4[511].whole = (uint64_t)(uintptr_t)pml4 | PTE_P | PTE_RW;
+    pml4[511].whole = (uint64_t)((uintptr_t)pml4 & PTE_ADDR) | PTE_P | PTE_RW;
 
     clear_pt(pdp_low);
     // this maps all of lower 1GiB by identity
     pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
 
     clear_pt(pdp_high);
-    pdp_high[448].whole = (uint64_t)(uintptr_t)pt_framebuffer | PTE_P | PTE_RW | PTE_NX;
-    clear_pt(pt_framebuffer);
+    pdp_high[0].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX;
+    clear_pt(pd_framebuffer);
     for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
-        pt_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
+        pd_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
 
-    pdp_high[510].whole = (uint64_t)(uintptr_t)pt_kernel | PTE_P | PTE_RW | PTE_G;
-    clear_pt(pt_kernel);
+    pdp_high[1].whole = (uint64_t)((uintptr_t)pd_memory & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX;
+    clear_pt(pd_memory);
+
+    pdp_high[510].whole = (uint64_t)((uintptr_t)pd_kernel & PTE_ADDR) | PTE_P | PTE_RW | PTE_G;
+    clear_pt(pd_kernel);
 
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
@@ -743,7 +746,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     }
 
     for (uint16_t i = 0; i < (kernel_size + (1<<21) - 1) >> 21; i++)
-        pt_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
+        pd_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
 
     *pml4_ = pml4;
 
@@ -752,7 +755,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
 
 #undef clear_pt
 
-static EFI_STATUS loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation)
+static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation)
 {
     extern uint8_t _binary_build_boot_trampoline_bin_start[];
     extern uint8_t _binary_build_boot_trampoline_bin_end[];
@@ -822,7 +825,7 @@ static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
 
-    status = systemTable->BootServices->AllocatePool(EfiLoaderData, sizeofInfo, (void**)&fileInfo);
+    status = systemTable->BootServices->AllocatePool(EfiRuntimeServicesData, sizeofInfo, (void**)&fileInfo);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
 
     status = file->GetInfo(file, &EfiFileInfoId, &sizeofInfo, fileInfo);
@@ -835,7 +838,7 @@ static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
     return EFI_SUCCESS;
 }
 
-#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderData, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
+#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
 
 static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
 {

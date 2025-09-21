@@ -8,8 +8,8 @@
 #include "boot.h"
 #include "memTables.h"
 
-#define RECURSIVE_BASE 0xFFFFFF8000000000ULL
-#define RECURSIVE_SLOT 511ULL
+#define RECURSIVE_BASE 0xFFFFFF8000000000UL
+#define RECURSIVE_SLOT 511UL
 
 // Standard recursive page table mapping formulas
 #define PML4() ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
@@ -17,6 +17,10 @@
 #define PD(i, j) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
 #define PT(i, j, k) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
 
+#define memoryBitmap_va ((MemBitmap *)0xFFFFFF0040000000)
+
+#define PHYSICAL
+#define VIRTUAL
 typedef uint64_t physAddr;
 typedef uint64_t virtAddr;
 
@@ -44,19 +48,21 @@ typedef struct _MemoryRange {
 } MemoryRange;
 
 typedef struct _MemBlock {
-    size_t  size;
-    void    *ptr;
-    struct _MemBlock *next;
+    size_t              size;
+    virtAddr            ptr;
+    struct _MemBlock    *next;
 } MemBlock;
 
+typedef struct _MemBitmap {
+    uint8_t bitmap[2 << 20];
+} MemBitmap;
+
 extern volatile MemMap  *physMemoryMap;
-extern volatile MemoryRange validMemory[512];
-extern volatile uint64_t validMemoryCount;
 
 void initPhysMem();
 
 bool mapPage(physAddr physical, virtAddr virtual);
 bool unmapPage(virtAddr virtual);
-physAddr getMapping(virtAddr virtual);
+physAddr getMapping(virtAddr virtual, uint8_t *pageLevel);
 
-#endif
+#endif 

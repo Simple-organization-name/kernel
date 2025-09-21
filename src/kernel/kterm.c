@@ -295,8 +295,7 @@ void kprintf(const char *format, ...) {
                             kprinthex(lx);
                             break;
                         default:
-                            format--;
-                            break;
+                            return;
                     }
                     break;
                 case '%':
