@@ -1,11 +1,11 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #include "kterm.h"
 #include "boot.h"
 #include "bmft.h"
-#include "stdarg.h"
 
 static struct cursor {
     uint32_t*   screen;

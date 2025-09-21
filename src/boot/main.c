@@ -55,7 +55,7 @@ static EFI_STATUS   loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS*
 static EFI_STATUS   getMemoryMap();
 static void         exitBootServices();
 static EFI_STATUS   makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
-static EFI_STATUS   loadTrampoline(void (* OUT *trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), BootInfo* OUT * bootInfoPasteLocation);
+static EFI_STATUS   loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation);
 static void         pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
 static EFI_STATUS   openFiles(IN CHAR16* configPath, OUT FileArray* files);
 
@@ -655,7 +655,7 @@ static EFI_STATUS getMemoryMap() {
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Failed to get memory map information !");
 
-    status = bs->AllocatePool(EfiLoaderData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
+    status = bs->AllocatePool(EfiRuntimeServicesData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
     EFI_CALL_FATAL_ERROR(u"Failed to allocate memory for memmap");
 
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
@@ -704,7 +704,7 @@ static void exitBootServices() {
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
 
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 6, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 5, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
@@ -714,7 +714,6 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pte_t* pdp_high         = (pte_t*)(pageAddress + 2*4096);
     pte_t* pd_kernel        = (pte_t*)(pageAddress + 3*4096);
     pte_t* pd_framebuffer   = (pte_t*)(pageAddress + 4*4096);
-    pte_t* pd_memory        = (pte_t*)(pageAddress + 5*4096);
 
     clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
@@ -732,9 +731,6 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     clear_pt(pd_framebuffer);
     for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
         pd_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
-
-    pdp_high[1].whole = (uint64_t)((uintptr_t)pd_memory & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX;
-    clear_pt(pd_memory);
 
     pdp_high[510].whole = (uint64_t)((uintptr_t)pd_kernel & PTE_ADDR) | PTE_P | PTE_RW | PTE_G;
     clear_pt(pd_kernel);
@@ -769,10 +765,10 @@ static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void
     noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
 
     EFI_PHYSICAL_ADDRESS addr = 1 << 21;
-    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderData, noPages, &addr);
+    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, noPages, &addr);
     EFI_CALL_ERROR {
         addr = 1 << 30;
-        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderData, noPages, &addr);
+        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, noPages, &addr);
         EFI_CALL_FATAL_ERROR(u"WTF couldn't get a few pages under the 1GiB bar...");
     }
 
