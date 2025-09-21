@@ -24,8 +24,8 @@
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
-#define kernel_va       0xFFFFFFFF80000000
-#define framebuffer_va  0xFFFFFFF000000000
+#define kernel_va       0xFFFFFF7F80000000
+#define framebuffer_va  0xFFFFFF7000000000
 
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
@@ -705,7 +705,7 @@ static void exitBootServices() {
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
 
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderData, 5, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 5, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
@@ -719,9 +719,9 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     clear_pt(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
     pml4[0].whole = (uint64_t)(uintptr_t)pdp_low | PTE_P | PTE_RW;
+    pml4[510].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
     // make pml4 point to itself to recursively map all page tables
-    pml4[510].whole = (uint64_t)(uintptr_t)pml4 | PTE_P | PTE_RW;
-    pml4[511].whole = (uint64_t)(uintptr_t)pdp_high | PTE_P | PTE_RW;
+    pml4[511].whole = (uint64_t)(uintptr_t)pml4 | PTE_P | PTE_RW;
 
     clear_pt(pdp_low);
     // this maps all of lower 1GiB by identity

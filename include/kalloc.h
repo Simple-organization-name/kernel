@@ -8,8 +8,8 @@
 #include "boot.h"
 #include "memTables.h"
 
-#define RECURSIVE_BASE 0xFFFFFF0000000000ULL
-#define RECURSIVE_SLOT 510ULL
+#define RECURSIVE_BASE 0xFFFFFF8000000000ULL
+#define RECURSIVE_SLOT 511ULL
 
 // Standard recursive page table mapping formulas
 #define PML4() ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
