@@ -1,7 +1,6 @@
 test.*
 .vscode/
 build/
-drive/
 iso/
 
 output.iso
