@@ -75,7 +75,6 @@ void initPhysMem() {
     validMemory[where].size -= totalSize;
     // kprintf("Bitmap base: %X\n", bitmapBase);
 
-    // Supposed to be kernel's pd
     ((pte_t *)PD(510, 1))[0].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
 
     initMemoryBitmap();
