@@ -134,12 +134,38 @@ void interrupt_handler(interrupt_frame_t* context)
         outb(PIC_MASTER_COMMAND, 0x20);
     }
 
-    if (context->int_no == 0x21) {
-        uint8_t chr = inb(0x60);
-        if (!(chr & 0x80)) kputc(chr);
-    }
+    switch (context->int_no)
+    {
+    case 0x00:  // division error
+        kprintf("A division error has occured at RIP=0x%X.\n", context->rip);
+        hlt();
+        return;
+    
+    case 0x06:  // invalid opcode
+        kprintf("An invalid opcode was encountered at RIP=0x%X.\n", context->rip);
+        hlt();
+        return;
 
-    if (context->int_no == 0x0E) {
+    case 0x07:
+        kprintf("Tried to execute an FPU instruction while it was absent or disabled at RIP=0x%X.\n", context->rip);
+        hlt();
+        return;
+
+    case 0x08:  // double fault
+        kprintf("A double fault has occured at RIP=0x%X.\n", context->rip);
+        kputs("Execution will be frozen to prevent an automatic reboot.\n");
+        cli();
+        while (1) hlt();
+    
+    case 0x0D:  // general protection fault
+        kprintf("A general protection fault was triggered at RIP=0x%x.\n", context->rip);
+        if (context->err_code != 0) {
+            kprintf("It was related to segment selector number %X.\n", context->err_code);
+        }
+        hlt();
+        return;
+
+    case 0x0E:  // page fault
         uint64_t addr;
         __asm__ volatile (
             "mov %%cr2, %0"
@@ -148,7 +174,17 @@ void interrupt_handler(interrupt_frame_t* context)
         );
         kprintf("\nPage fault at address 0x%X, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
         kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
-        kprintf("Caused at RIP=0x%X\n", context->rip);
+        kprintf("Caused at RIP=0x%X, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
         hlt();
+        return;
+
+    case 0x21:  // PS/2 keyboard IRQ
+        uint8_t chr = inb(0x60);
+        if (!(chr & 0x80)) kputc(chr);
+        return;
+    
+    default:
+        kprintf("Interrupt vector %X was triggered but is not handled.\n", context->int_no);
+        return;
     }
 }
