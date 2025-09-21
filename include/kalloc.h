@@ -20,9 +20,6 @@
 typedef uint64_t physAddr;
 typedef uint64_t virtAddr;
 
-extern volatile pte_t   *pml4;
-extern volatile MemMap  *physMemoryMap;
-
 typedef enum {
     EfiReservedMemoryType,
     EfiLoaderCode,
@@ -51,6 +48,10 @@ typedef struct _MemBlock {
     void    *ptr;
     struct _MemBlock *next;
 } MemBlock;
+
+extern volatile MemMap  *physMemoryMap;
+extern volatile MemoryRange validMemory[512];
+extern volatile uint64_t validMemoryCount;
 
 void initPhysMem();
 
