@@ -22,10 +22,10 @@ void initPhysMem() {
     for (uint64_t i = 0; i < physMemoryMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemoryMap->map + physMemoryMap->descSize * i);
         switch (desc->Type) {
-            case EfiLoaderCode:
-            case EfiLoaderData:
-            case EfiBootServicesCode:
-            case EfiBootServicesData:
+            // case EfiLoaderCode:
+            // case EfiLoaderData:
+            // case EfiBootServicesCode:
+            // case EfiBootServicesData:
             case EfiConventionalMemory:
                 kprintf("Memory type: %d | ", desc->Type);
                 if (validMemoryCount > 0 &&
@@ -76,7 +76,7 @@ void initPhysMem() {
     validMemory[where].size -= totalSize;
     kprintf("Bitmap base: 0x%X\n", bitmapBase);
 
-    ((pte_t *)PDPT(510))[1].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
+    ((pte_t *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
     invlpg(memoryBitmap_va);
 
     physAddr pdpt = getMapping((virtAddr)PDPT(510), NULL);
@@ -90,8 +90,11 @@ void initPhysMem() {
         while (1) hlt();
     }
     kprintf("MemoryBitmap at 0x%X end at 0x%X, paging level %u\n", bitmapBase, bitmapBase + sizeof(MemBitmap), bitmapPageLevel);
+    kprintf("Stack around 0x%X\n", &pdpt);
+
 
     initMemoryBitmap();
+    kputs("hehehe");
 }
 
 // physAddr reserveMemory(size_t size) {

@@ -17,7 +17,7 @@
 #define PD(i, j) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
 #define PT(i, j, k) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
 
-#define memoryBitmap_va 0xFFFFFF0040000000
+#define memoryBitmap_va 0xFFFFFF7FBFE00000
 
 #define PHYSICAL
 #define VIRTUAL
