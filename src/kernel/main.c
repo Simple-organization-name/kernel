@@ -4,7 +4,7 @@
 #include "asm.h"
 #include "kalloc.h"
 
-_Noreturn void _start(BootInfo* bootInfo)
+_Noreturn void kmain(BootInfo* bootInfo)
 {
     if (kterminit(bootInfo, 1, 0)) {
         cli();
@@ -26,7 +26,6 @@ _Noreturn void _start(BootInfo* bootInfo)
 
     kputs("Hello from SOS kernel !\n");
     kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
-    
 
     while (1) hlt();
 }

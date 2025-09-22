@@ -42,7 +42,6 @@ _start:
     lgdt    [rel gdtr]
 
     ; reload segment descriptors
-    lea     rsp,    [rel kstack_temp_top]
     push    0x08
     lea     rax,    [rel .reload_cs]
     push    rax
@@ -106,7 +105,4 @@ gdtr:
     dw 0
     dq 0
 
-section .bss
-    kstack_temp:
-        resq 2048
-    kstack_temp_top:
+times 64 dq 0

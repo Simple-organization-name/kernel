@@ -453,8 +453,8 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
         return status;
     }
 
-    // alocate that memory
-    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiRuntimeServicesCode, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    // allocate that memory
+    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiRuntimeServicesData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
 
     for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
@@ -765,10 +765,10 @@ static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void
     noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
 
     EFI_PHYSICAL_ADDRESS addr = 1 << 21;
-    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, noPages, &addr);
+    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
     EFI_CALL_ERROR {
         addr = 1 << 30;
-        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, noPages, &addr);
+        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
         EFI_CALL_FATAL_ERROR(u"WTF couldn't get a few pages under the 1GiB bar...");
     }
 
@@ -779,7 +779,6 @@ static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void
 
     *trampoline = (void (*)(pte_t*, BootInfo*, void (*)(BootInfo*)))addr;
     *bootInfoPasteLocation = (BootInfo*)(addr + EFI_SIZE_TO_PAGES(trampoline_size)*EFI_PAGE_SIZE);
-
 
     return EFI_SUCCESS;
 }
@@ -849,7 +848,6 @@ static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
 
     status = configFile->Read(configFile, &files->config.size, files->config.data);
     EFI_CALL_FATAL_ERROR(u"Could not read config file");
-
 
     CHAR16 pathBuffer[512];
     UINT64 pathOffset;
