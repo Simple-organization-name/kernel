@@ -27,13 +27,13 @@ void initPhysMem() {
             case EfiBootServicesCode:
             case EfiBootServicesData:
             case EfiConventionalMemory:
-                kprintf("Memory type: %d | ", desc->Type);
+                // kprintf("Memory type: %d | ", desc->Type);
                 if (validMemoryCount > 0 &&
                     validMemory[validMemoryCount - 1].start +
                     validMemory[validMemoryCount - 1].size ==
                     desc->PhysicalStart)
                 {
-                    kputs("Adjacent memory | ");
+                    // kputs("Adjacent memory | ");
                     validMemory[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
                 } 
                 else
@@ -43,7 +43,7 @@ void initPhysMem() {
                         .size = desc->NumberOfPages * 4096,
                     };
                 }
-                kprintf("Memory start: %X, memory size: %X\n", validMemory[validMemoryCount - 1].start, validMemory[validMemoryCount -1].size);
+                // kprintf("Memory start: %X, memory size: %X\n", validMemory[validMemoryCount - 1].start, validMemory[validMemoryCount -1].size);
                 break;
             default:
                 break;
@@ -56,7 +56,6 @@ void initPhysMem() {
     physAddr bitmapBase = 0;
     for (uint16_t i = 0; i < validMemoryCount; i++)
     {
-        kprintf("Segment start at %X, of size %X\n", validMemory[i].start, validMemory[i].size);
         bitmapBase = align(validMemory[i].start);
         totalSize = bitmapBase - validMemory[i].start + sizeof(MemBitmap);
         if (validMemory[i].size >= totalSize) {
@@ -72,15 +71,32 @@ void initPhysMem() {
         while (1) hlt();
     }
 
-    validMemory[where].start += totalSize;
+    if (bitmapBase != validMemory[where].start) {
+        // Shift all MemoryRange
+        for (uint16_t i = validMemoryCount - 1; i >= where; i--)
+            validMemory[i + 1] = validMemory[i];
+
+        // Segment target in 2 parts
+        // First part is the part before the MemBitmap
+        MemoryRange target = validMemory[where];
+        validMemory[where++] = (MemoryRange){
+            .start = target.start,
+            .size = bitmapBase - target.start,
+        };
+        // Second part (right below) is after the MemBitmap
+    }
+    validMemory[where].start = bitmapBase + sizeof(MemBitmap);
     validMemory[where].size -= totalSize;
+
     kprintf("Bitmap base: 0x%X\n", bitmapBase);
+
+    kputs("\nValid memory after memory bitmap allocation:\n");
+    for (uint16_t i = 0; i < validMemoryCount; i++)
+        kprintf("Memory start: %X, memory size: %X\n", validMemory[i].start, validMemory[i].size);
+    kputc('\n');
 
     ((pte_t *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
     invlpg(memoryBitmap_va);
-
-    physAddr pdpt = getMapping((virtAddr)PDPT(510), NULL);
-    kprintf("PDPT at 0x%X\n", pdpt);
 
     uint8_t bitmapPageLevel = 0;
     bitmapBase = getMapping(memoryBitmap_va, &bitmapPageLevel);
@@ -89,7 +105,7 @@ void initPhysMem() {
         cli();
         while (1) hlt();
     }
-    kprintf("MemoryBitmap at 0x%X end at 0x%X, paging level %u\n", bitmapBase, bitmapBase + sizeof(MemBitmap), bitmapPageLevel);
+    // kprintf("MemoryBitmap at 0x%X end at 0x%X, paging level %u\n", bitmapBase, bitmapBase + sizeof(MemBitmap), bitmapPageLevel);
 
     initMemoryBitmap();
 }
