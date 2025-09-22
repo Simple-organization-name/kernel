@@ -98,15 +98,6 @@ void initPhysMem() {
     ((pte_t *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
     invlpg(memoryBitmap_va);
 
-    uint8_t bitmapPageLevel = 0;
-    bitmapBase = getMapping(memoryBitmap_va, &bitmapPageLevel);
-    if (bitmapBase == 0) {
-        kputs("Failed to map memory bitmap\n");
-        cli();
-        while (1) hlt();
-    }
-    // kprintf("MemoryBitmap at 0x%X end at 0x%X, paging level %u\n", bitmapBase, bitmapBase + sizeof(MemBitmap), bitmapPageLevel);
-
     initMemoryBitmap();
 }
 
