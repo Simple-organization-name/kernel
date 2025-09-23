@@ -1,4 +1,3 @@
-
 section .text
     extern interrupt_handler
 

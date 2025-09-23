@@ -5,21 +5,38 @@
 
 #include "memTables.h"
 #include "kalloc.h"
+#include "kterm.h"
 
-volatile MemMap     *physMemoryMap      = NULL;
-static MemoryRange  validMemory[512]    = {0};
-static uint64_t     validMemoryCount    = 0;
+volatile MemMap *physMemoryMap = NULL;
 
-#include <kterm.h>
+inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemoryCount) {
+    MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
+    for (size_t i = 0; i < sizeof(MemBitmap); i++)
+        memBitmap->whole[i].value = 255U;
 
-inline static void initMemoryBitmap() {
-    for (size_t i = 0; i < sizeof(MemBitmap); i++) {
-        ((MemBitmap *)memoryBitmap_va)->bitmap[i] = 0;
+    for (uint16_t i = 0; i < validMemoryCount; i++) {
+        MemoryRange target = validMemory[i];
+        uint64_t start = target.start / 4096; 
+        uint64_t pageCount = target.size / 4096;
+        for (uint64_t j = 0; j < pageCount; j++)
+            memBitmap->level1[start + j/8].value ^= (1<<(j%8));
+        for (uint64_t j = 0; j < BITMAP_LEVEL3_SIZE; j++) {
+            uint64_t all = 0;
+            for (uint8_t n = 0; n < BITMAP_LEVEL_JUMP; n++)
+                all |= memBitmap->level1[start + j/8 + n].value << n;
+
+            if (all != UINT64_MAX) {
+                memBitmap->level2[start + j/8].value ^= (1<<(j%8));
+            }
+        }
     }
 }
 
 void initPhysMem() {
-    for (uint64_t i = 0; i < physMemoryMap->count; i++) {
+    MemoryRange validMemory[512] = {0};
+    uint16_t    validMemoryCount = 0;
+
+    for (uint16_t i = 0; i < physMemoryMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemoryMap->map + physMemoryMap->descSize * i);
         switch (desc->Type) {
             case EfiLoaderCode:
@@ -98,7 +115,7 @@ void initPhysMem() {
     ((pte_t *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
     invlpg(memoryBitmap_va);
 
-    initMemoryBitmap();
+    initMemoryBitmap(&validMemory, validMemoryCount);
 }
 
 // physAddr reserveMemory(size_t size) {
