@@ -25,13 +25,13 @@ static Bmft         *font;
 static uint16_t     scale;
 
 // Put a pixel at a real position
-inline static void kputpixel(uint32_t color, uint16_t x, uint16_t y)
+void kputpixel(uint32_t color, uint16_t x, uint16_t y)
 {
     cursor.screen[y * (cursor.s_pitch) + x] = color;
 }
 
 // Put a pixel at a virtual position
-inline static void kvputpixel(uint32_t color, uint16_t x, uint16_t y) {
+void kvputpixel(uint32_t color, uint16_t x, uint16_t y) {
     for (uint16_t i = 0; i < scale; i++)
     for (uint16_t j = 0; j < scale; j++)
         kputpixel(color, x * scale + i, y * scale + j);

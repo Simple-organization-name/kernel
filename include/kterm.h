@@ -5,6 +5,8 @@
 #include <stdbool.h>
 
 int kterminit(BootInfo *bootInfo, uint16_t ratio, bool hres);
+void kputpixel(uint32_t color, uint16_t x, uint16_t y);
+void kvputpixel(uint32_t color, uint16_t x, uint16_t y);
 void kfillscreen(uint32_t color);
 void knewline();
 void kclearline();

@@ -76,7 +76,7 @@ typedef union _BitmapValue {
 #define BITMAP_LEVEL6_SIZE  (BITMAP_LEVEL5_SIZE/BITMAP_LEVEL_JUMP)
 #define BITMAP_SIZE         (BITMAP_LEVEL1_SIZE + BITMAP_LEVEL2_SIZE + BITMAP_LEVEL3_SIZE + BITMAP_LEVEL4_SIZE + BITMAP_LEVEL5_SIZE + BITMAP_LEVEL6_SIZE)
 typedef union _MemBitmap {
-    BitmapValue whole[MEM_BITMAP_SIZE];
+    BitmapValue whole[BITMAP_SIZE];
     struct {
         BitmapValue level1[BITMAP_LEVEL1_SIZE];
         BitmapValue level2[BITMAP_LEVEL2_SIZE];
@@ -90,6 +90,7 @@ typedef union _MemBitmap {
 extern volatile MemMap *physMemoryMap;
 
 void initPhysMem();
+void printMemBitmap();
 
 bool mapPage(physAddr physical, virtAddr virtual);
 bool unmapPage(virtAddr virtual);

@@ -10,10 +10,12 @@
 volatile MemMap *physMemoryMap = NULL;
 
 inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemoryCount) {
+    // Set all memory to invalid
     MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
-    for (size_t i = 0; i < sizeof(MemBitmap); i++)
+    for (size_t i = 0; i < BITMAP_SIZE; i++)
         memBitmap->whole[i].value = 255U;
 
+    // For every valid range set the corresponding bit
     for (uint16_t i = 0; i < validMemoryCount; i++) {
         MemoryRange target = validMemory[i];
         uint64_t start = target.start / 4096; 
@@ -21,11 +23,27 @@ inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemo
         for (uint64_t j = 0; j < pageCount; j++)
             memBitmap->level1[start + j/8].value ^= (1<<(j%8));
     }
-    for (uint64_t j = 0; j < BITMAP_LEVEL1_SIZE; j++) {
-        uint64_t lowerRange = (memBitmap->level1)[start + j];
 
-        if (lowerRange != 255U)
-            memBitmap->level2[start + j/8].value ^= (1<<(j%8));
+    // Cascade level
+    for (uint64_t j = 0; j < BITMAP_LEVEL1_SIZE; j++) {
+        if (memBitmap->level1[j].value != 255U)
+            memBitmap->level2[j/8].value ^= (1<<(j%8));
+    }
+    for (uint64_t j = 0; j < BITMAP_LEVEL2_SIZE; j++) {
+        if (memBitmap->level2[j].value != 255U)
+            memBitmap->level3[j/8].value ^= (1<<(j%8));
+    }
+    for (uint64_t j = 0; j < BITMAP_LEVEL3_SIZE; j++) {
+        if (memBitmap->level3[j].value != 255U)
+            memBitmap->level4[j/8].value ^= (1<<(j%8));
+    }
+    for (uint64_t j = 0; j < BITMAP_LEVEL4_SIZE; j++) {
+        if (memBitmap->level4[j].value != 255U)
+            memBitmap->level5[j/8].value ^= (1<<(j%8));
+    }
+    for (uint64_t j = 0; j < BITMAP_LEVEL5_SIZE; j++) {
+        if (memBitmap->level5[j].value != 255U)
+            memBitmap->level6[j/8].value ^= (1<<(j%8));
     }
 }
 
@@ -71,7 +89,7 @@ void initPhysMem() {
     for (uint16_t i = 0; i < validMemoryCount; i++)
     {
         bitmapBase = align(validMemory[i].start);
-        totalSize = bitmapBase - validMemory[i].start + sizeof(MemBitmap);
+        totalSize = bitmapBase - validMemory[i].start + (2<<20);
         if (validMemory[i].size >= totalSize) {
             where = i;
             break;
@@ -99,7 +117,7 @@ void initPhysMem() {
         };
         // Second part (right below) is after the MemBitmap
     }
-    validMemory[where].start = bitmapBase + sizeof(MemBitmap);
+    validMemory[where].start = bitmapBase + (2<<20);
     validMemory[where].size -= totalSize;
 
     kprintf("Bitmap base: 0x%X\n", bitmapBase);
@@ -112,7 +130,27 @@ void initPhysMem() {
     ((pte_t *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
     invlpg(memoryBitmap_va);
 
-    initMemoryBitmap(&validMemory, validMemoryCount);
+    initMemoryBitmap(validMemory, validMemoryCount);
+}
+
+void printMemBitmap() {
+    MemBitmap *bitmap = (MemBitmap *)(memoryBitmap_va);
+    for (uint64_t i = 0; i < 64; i++) {
+        for (uint8_t j = 0; j < 8; j++){
+            kputc(bitmap->level1[i].value & (1<<j) ? 'x' : 'o');
+        }
+    }
+    knewline();
+    for (uint64_t i = 0; i < 8; i++) {
+        for (uint8_t j = 0; j < 8; j++) {
+            kputc(bitmap->level2[i].value & (1<<j) ? 'x' : 'o');
+        }
+    }
+    knewline();
+    for (uint64_t j = 0; j < 8; j++) {
+        kputc(bitmap->level3[1].value & (1<<j) ? 'x' : 'o');
+    }
+    knewline();
 }
 
 // physAddr reserveMemory(size_t size) {
