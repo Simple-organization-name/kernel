@@ -20,15 +20,12 @@ inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemo
         uint64_t pageCount = target.size / 4096;
         for (uint64_t j = 0; j < pageCount; j++)
             memBitmap->level1[start + j/8].value ^= (1<<(j%8));
-        for (uint64_t j = 0; j < BITMAP_LEVEL3_SIZE; j++) {
-            uint64_t all = 0;
-            for (uint8_t n = 0; n < BITMAP_LEVEL_JUMP; n++)
-                all |= memBitmap->level1[start + j/8 + n].value << n;
+    }
+    for (uint64_t j = 0; j < BITMAP_LEVEL1_SIZE; j++) {
+        uint64_t lowerRange = (memBitmap->level1)[start + j];
 
-            if (all != UINT64_MAX) {
-                memBitmap->level2[start + j/8].value ^= (1<<(j%8));
-            }
-        }
+        if (lowerRange != 255U)
+            memBitmap->level2[start + j/8].value ^= (1<<(j%8));
     }
 }
 
