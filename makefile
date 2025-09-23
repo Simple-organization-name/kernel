@@ -12,7 +12,7 @@ KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wex
 				-I include -nostartfiles -O2
 
 KERNEL_ASM		= nasm
-KERNEL_ASMFLAGS = -f elf64 -w+orphan-labels -w+number-overflow -w+all -Werror -O2 -X gnu
+KERNEL_ASMFLAGS = -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror -O2 -X gnu
 
 KERNEL			= kernel
 

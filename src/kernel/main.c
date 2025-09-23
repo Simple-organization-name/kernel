@@ -23,6 +23,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
     
     initPhysMem();
+    printMemBitmap();
 
     kputs("Hello from SOS kernel !\n");
     kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
