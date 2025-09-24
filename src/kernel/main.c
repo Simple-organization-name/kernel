@@ -16,12 +16,12 @@ _Noreturn void kmain(BootInfo* bootInfo)
     physMemoryMap = bootInfo->memMap;
 
     init_interrupts();
-    
+
     physAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
     kprintf("Kernel at 0x%X\n", kernelPhysAddr);
     physAddr fbPhysAddr = getMapping(0xFFFFFF0000000000, NULL);
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
-    
+
     initPhysMem();
     printMemBitmap();
 

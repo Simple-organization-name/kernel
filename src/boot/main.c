@@ -699,8 +699,6 @@ static void exitBootServices() {
 
 }
 
-#define clear_pt(pt) for (uint32_t i = 0; i < 512; i++) pt[i].whole = 0
-
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
 
     EFI_PHYSICAL_ADDRESS pageAddress;
@@ -715,25 +713,25 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pte_t* pd_kernel        = (pte_t*)(pageAddress + 3*4096);
     pte_t* pd_framebuffer   = (pte_t*)(pageAddress + 4*4096);
 
-    clear_pt(pml4);
+    CLEAR_PT(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
     pml4[0].whole = (uint64_t)((uintptr_t)pdp_low & PTE_ADDR) | PTE_P | PTE_RW;
     pml4[510].whole = (uint64_t)((uintptr_t)pdp_high & PTE_ADDR) | PTE_P | PTE_RW;
     // make pml4 point to itself to recursively map all page tables
     pml4[511].whole = (uint64_t)((uintptr_t)pml4 & PTE_ADDR) | PTE_P | PTE_RW;
 
-    clear_pt(pdp_low);
+    CLEAR_PT(pdp_low);
     // this maps all of lower 1GiB by identity
     pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
 
-    clear_pt(pdp_high);
+    CLEAR_PT(pdp_high);
     pdp_high[0].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
-    clear_pt(pd_framebuffer);
+    CLEAR_PT(pd_framebuffer);
     for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
         pd_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
 
     pdp_high[510].whole = (uint64_t)((uintptr_t)pd_kernel & PTE_ADDR) | PTE_P | PTE_RW | PTE_G;
-    clear_pt(pd_kernel);
+    CLEAR_PT(pd_kernel);
 
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
@@ -748,8 +746,6 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
 
     return EFI_SUCCESS;
 }
-
-#undef clear_pt
 
 static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation)
 {

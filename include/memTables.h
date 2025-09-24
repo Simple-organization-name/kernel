@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-// to manipulate one field by one
+#define CLEAR_PT(PT) for (uint32_t i = 0; i < 512; i++) (PT)[i].whole = 0
 
+// to manipulate one field by one
 typedef union _pageTableEntry {
     uint64_t whole;
     struct {

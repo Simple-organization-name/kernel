@@ -12,13 +12,34 @@
 #define RECURSIVE_SLOT 511UL
 
 // Standard recursive page table mapping formulas
-#define PML4() ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
-#define PDPT(i) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((i) << 12)))
-#define PD(i, j) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
+#define PML4()      ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
+#define PDPT(i)     ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((i) << 12)))
+#define PD(i, j)    ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
 #define PT(i, j, k) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
 
-#define memoryBitmap_va 0xFFFFFF7FBFE00000
+// Memory bitmap
+#define BMP_LEVEL_JUMP  8
+#define BMP_L1_SIZE     (2<<19)
+#define BMP_L2_SIZE     (BMP_L1_SIZE/BMP_LEVEL_JUMP)
+#define BMP_L3_SIZE     (BMP_L2_SIZE/BMP_LEVEL_JUMP)
+#define BMP_L4_SIZE     (BMP_L3_SIZE/BMP_LEVEL_JUMP)
+#define BMP_L5_SIZE     (BMP_L4_SIZE/BMP_LEVEL_JUMP)
+#define BMP_L6_SIZE     (BMP_L5_SIZE/BMP_LEVEL_JUMP)
+#define BMP_SIZE        (BMP_L1_SIZE + BMP_L2_SIZE + BMP_L3_SIZE + BMP_L4_SIZE + BMP_L5_SIZE + BMP_L6_SIZE)
 
+#define BMP_L1_MEM_SIZE 4096
+#define BMP_L2_MEM_SIZE (BMP_L1_MEM_SIZE * BMP_LEVEL_JUMP)
+#define BMP_L3_MEM_SIZE (BMP_L2_MEM_SIZE * BMP_LEVEL_JUMP)
+#define BMP_L4_MEM_SIZE (BMP_L3_MEM_SIZE * BMP_LEVEL_JUMP)
+#define BMP_L5_MEM_SIZE (BMP_L4_MEM_SIZE * BMP_LEVEL_JUMP)
+#define BMP_L6_MEM_SIZE (BMP_L5_MEM_SIZE * BMP_LEVEL_JUMP)
+
+#define memoryBitmap_va                 0xFFFFFF7FBFE00000
+#define MEM_BMP_PAGE_TABLE_START(BMP_VA)    (((uint64_t)(BMP_VA) + BMP_SIZE + 0xFFF) & ~0xFFF)
+#define MEM_BMP_PAGE_TABLE_END(BMP_VA)      (((uint64_t)(BMP_VA) + (2<<20) - 1) & ~0xFFF)
+#define MEM_BMP_PAGE_TABLE_SIZE(BMP_VA)     ((MEM_BMP_PAGE_TABLE_END((uint64_t)(BMP_VA)) - MEM_BMP_PAGE_TABLE_START((uint64_t)(BMP_VA)))/4096)
+
+// Address types
 #define PHYSICAL
 #define VIRTUAL
 typedef uint64_t physAddr;
@@ -67,23 +88,15 @@ typedef union _BitmapValue {
     };
 } BitmapValue;
 
-#define BITMAP_LEVEL_JUMP   8
-#define BITMAP_LEVEL1_SIZE  (2<<19)
-#define BITMAP_LEVEL2_SIZE  (BITMAP_LEVEL1_SIZE/BITMAP_LEVEL_JUMP)
-#define BITMAP_LEVEL3_SIZE  (BITMAP_LEVEL2_SIZE/BITMAP_LEVEL_JUMP)
-#define BITMAP_LEVEL4_SIZE  (BITMAP_LEVEL3_SIZE/BITMAP_LEVEL_JUMP)
-#define BITMAP_LEVEL5_SIZE  (BITMAP_LEVEL4_SIZE/BITMAP_LEVEL_JUMP)
-#define BITMAP_LEVEL6_SIZE  (BITMAP_LEVEL5_SIZE/BITMAP_LEVEL_JUMP)
-#define BITMAP_SIZE         (BITMAP_LEVEL1_SIZE + BITMAP_LEVEL2_SIZE + BITMAP_LEVEL3_SIZE + BITMAP_LEVEL4_SIZE + BITMAP_LEVEL5_SIZE + BITMAP_LEVEL6_SIZE)
 typedef union _MemBitmap {
-    BitmapValue whole[BITMAP_SIZE];
+    BitmapValue whole[BMP_SIZE];
     struct {
-        BitmapValue level1[BITMAP_LEVEL1_SIZE];
-        BitmapValue level2[BITMAP_LEVEL2_SIZE];
-        BitmapValue level3[BITMAP_LEVEL3_SIZE];
-        BitmapValue level4[BITMAP_LEVEL4_SIZE];
-        BitmapValue level5[BITMAP_LEVEL5_SIZE];
-        BitmapValue level6[BITMAP_LEVEL6_SIZE];
+        BitmapValue level1[BMP_L1_SIZE];
+        BitmapValue level2[BMP_L2_SIZE];
+        BitmapValue level3[BMP_L3_SIZE];
+        BitmapValue level4[BMP_L4_SIZE];
+        BitmapValue level5[BMP_L5_SIZE];
+        BitmapValue level6[BMP_L6_SIZE];
     };
 } MemBitmap;
 
@@ -91,6 +104,7 @@ extern volatile MemMap *physMemoryMap;
 
 void initPhysMem();
 void printMemBitmap();
+physAddr resPhysMemory(size_t size);
 
 bool mapPage(physAddr physical, virtAddr virtual);
 bool unmapPage(virtAddr virtual);

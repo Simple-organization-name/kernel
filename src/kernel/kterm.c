@@ -21,8 +21,8 @@ static struct cursor {
                 s_vheight; // Height of the screen after applying the scale (real / scale)
     bool        hres; // Font high res toggle
 } cursor;
-static Bmft         *font;
-static uint16_t     scale;
+static Bmft     *font;
+static uint16_t scale;
 
 // Put a pixel at a real position
 void kputpixel(uint32_t color, uint16_t x, uint16_t y)
