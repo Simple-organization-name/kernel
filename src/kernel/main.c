@@ -27,7 +27,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
     for (uint8_t i = 0; i < 16; i++) {
         kputc('a');
-        physAddr test = resPhysMemory(2<<20);
+        physAddr test = resPhysMemory(4096);
         kprintf("Memory reserved at %X\n", test);
     }
     printMemBitmap();

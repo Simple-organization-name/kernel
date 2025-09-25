@@ -134,7 +134,6 @@ void kclearline() {
 
 void knewline()
 {
-    setcursorx(0);
     // if next block can't fit vertically, scroll
     if (cursor.y + 2U * cursor.height > cursor.s_height) {
         uint32_t *base = (uint32_t *)cursor.screen;
@@ -147,6 +146,7 @@ void knewline()
         kclearline();
     }
     else setcursory(cursor.y + cursor.height);
+    setcursorx(0);
 }
 
 void kputc(unsigned char chr)
@@ -165,17 +165,14 @@ void kputc(unsigned char chr)
             break;
         case '\b':  // backspace
             setcursorx(cursor.x - cursor.width);
-            for (int i = 0; i < cursor.width; i++)
-            for (int j = 0; j < cursor.height; j++)
+            for (uint32_t i = 0; i < cursor.width; i++)
+            for (uint32_t j = 0; j < cursor.height; j++)
                 kputpixel(0xFF000000, cursor.x + i, cursor.y + j);
             break;
         case '\a':  // bell
             kfillscreen(0xFFFF0000);
             break;
         default:
-            for (uint32_t x = 0; x < cursor.width; x++)
-            for (uint32_t y = 0; y < cursor.height; y++)
-                kputpixel(0xFF000000, cursor.x + x, cursor.y + y);
             setcursorx(cursor.x + cursor.width);
             break;
         }

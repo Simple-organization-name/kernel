@@ -18,23 +18,14 @@
 #define PT(i, j, k) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
 
 // Memory bitmap
-#define BMP_LEVEL_JUMP  8
-#define BMP_L1_SIZE     (2<<19)
-#define BMP_L2_SIZE     (BMP_L1_SIZE/BMP_LEVEL_JUMP)
-#define BMP_L3_SIZE     (BMP_L2_SIZE/BMP_LEVEL_JUMP)
-#define BMP_L4_SIZE     (BMP_L3_SIZE/BMP_LEVEL_JUMP)
-#define BMP_L5_SIZE     (BMP_L4_SIZE/BMP_LEVEL_JUMP)
-#define BMP_L6_SIZE     (BMP_L5_SIZE/BMP_LEVEL_JUMP)
-#define BMP_SIZE        (BMP_L1_SIZE + BMP_L2_SIZE + BMP_L3_SIZE + BMP_L4_SIZE + BMP_L5_SIZE + BMP_L6_SIZE)
+#define memoryBitmap_va 0xFFFFFF7FBFE00000
 
-#define BMP_L1_MEM_SIZE 4096
-#define BMP_L2_MEM_SIZE (BMP_L1_MEM_SIZE * BMP_LEVEL_JUMP)
-#define BMP_L3_MEM_SIZE (BMP_L2_MEM_SIZE * BMP_LEVEL_JUMP)
-#define BMP_L4_MEM_SIZE (BMP_L3_MEM_SIZE * BMP_LEVEL_JUMP)
-#define BMP_L5_MEM_SIZE (BMP_L4_MEM_SIZE * BMP_LEVEL_JUMP)
-#define BMP_L6_MEM_SIZE (BMP_L5_MEM_SIZE * BMP_LEVEL_JUMP)
+#define BMP_JUMP_POW2       3
+#define BMP_JUMP            (2<<BMP_JUMP_POW2)
+#define BMP_SIZE_OF(N)      (uint64_t)(((uint8_t)(N) < 6) ? 2<<(19-(BMP_JUMP_POW2*(uint8_t)(N))) : 0)
+#define BMP_SIZE            (uint64_t)(BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4) + BMP_SIZE_OF(5))
+#define BMP_MEM_SIZE_OF(N)  (uint64_t)(((uint8_t)(N) < 6) ? 2<<(11 + 3*(uint8_t)(N)) : 0)
 
-#define memoryBitmap_va                     0xFFFFFF7FBFE00000
 #define MEM_BMP_PAGE_TABLE_START(BMP_VA)    (((uint64_t)(BMP_VA) + BMP_SIZE + 0xFFF) & ~0xFFF)
 #define MEM_BMP_PAGE_TABLE_END(BMP_VA)      (((uint64_t)(BMP_VA) + (2<<20) - 1) & ~0xFFF)
 #define MEM_BMP_PAGE_TABLE_SIZE(BMP_VA)     ((MEM_BMP_PAGE_TABLE_END((uint64_t)(BMP_VA)) - MEM_BMP_PAGE_TABLE_START((uint64_t)(BMP_VA)))/4096)
@@ -91,12 +82,12 @@ typedef union _BitmapValue {
 typedef union _MemBitmap {
     BitmapValue whole[BMP_SIZE];
     struct {
-        BitmapValue level1[BMP_L1_SIZE];
-        BitmapValue level2[BMP_L2_SIZE];
-        BitmapValue level3[BMP_L3_SIZE];
-        BitmapValue level4[BMP_L4_SIZE];
-        BitmapValue level5[BMP_L5_SIZE];
-        BitmapValue level6[BMP_L6_SIZE];
+        BitmapValue level0[BMP_SIZE_OF(0)];
+        BitmapValue level1[BMP_SIZE_OF(1)];
+        BitmapValue level2[BMP_SIZE_OF(2)];
+        BitmapValue level3[BMP_SIZE_OF(3)];
+        BitmapValue level4[BMP_SIZE_OF(4)];
+        BitmapValue level5[BMP_SIZE_OF(5)];
     };
 } MemBitmap;
 
