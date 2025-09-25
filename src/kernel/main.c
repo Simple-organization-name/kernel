@@ -25,8 +25,15 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem();
     printMemBitmap();
 
-    kputs("Hello from SOS kernel !\n");
-    kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
+    for (uint8_t i = 0; i < 16; i++) {
+        kputc('a');
+        physAddr test = resPhysMemory(2<<20);
+        kprintf("Memory reserved at %X\n", test);
+    }
+    printMemBitmap();
+
+    // kputs("Hello from SOS kernel !\n");
+    // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 
     while (1) hlt();
 }

@@ -103,6 +103,7 @@ void initPhysMem() {
         while (1) hlt();
     }
 
+    // If there's memory available before the start of the memory mapping made by the alignment
     if (bitmapBase != validMemory[where].start) {
         // Shift all MemoryRange
         for (uint16_t i = validMemoryCount - 1; i >= where; i--) {
@@ -132,55 +133,12 @@ void initPhysMem() {
 
     initMemoryBitmap(validMemory, validMemoryCount);
 
+    // Clear page tables available after memory bitmap 
     volatile pte_t *pageTableEntry = (pte_t *)MEM_BMP_PAGE_TABLE_START(memoryBitmap_va);
     uint64_t i = 0;
     for (; i < MEM_BMP_PAGE_TABLE_SIZE(memoryBitmap_va); i++)
         CLEAR_PT(pageTableEntry + i);
     kprintf("Nb pte free in the 2mb mem bmp: %U\n", i);
-}
-
-physAddr resPhysMemory(size_t size) {
-    if (size > BMP_L6_MEM_SIZE) return -1;
-    MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
-    uint64_t lvl6Idx, lvl5Idx, lvl4Idx, lvl3Idx, lvl2Idx, lvl1Idx;
-
-    for (lvl6Idx = 0; lvl6Idx < BMP_L6_SIZE * 8; lvl6Idx++) {
-        if (!(bitmap->level6[lvl6Idx/8].value & (1<<(lvl6Idx%8)))) {
-            if (size > BMP_L5_MEM_SIZE) return lvl6Idx * BMP_L6_MEM_SIZE;
-            break;
-        }
-    }
-    for (lvl5Idx = lvl6Idx * BMP_L6_MEM_SIZE; lvl5Idx < lvl6Idx * BMP_L6_MEM_SIZE + 8; lvl5Idx++) {
-        if (!(bitmap->level5[lvl5Idx/8].value & (1<<(lvl5Idx%8)))) {
-            if (size > BMP_L4_MEM_SIZE) return lvl5Idx * BMP_L5_MEM_SIZE;
-            break;
-        }
-    }
-    for (lvl4Idx = lvl5Idx * BMP_L5_MEM_SIZE; lvl4Idx < lvl5Idx * BMP_L5_MEM_SIZE + 8; lvl4Idx++) {
-        if (!(bitmap->level4[lvl4Idx/8].value & (1<<(lvl4Idx%8)))) {
-            if (size > BMP_L3_MEM_SIZE) return lvl4Idx * BMP_L4_MEM_SIZE;
-            break;
-        }
-    }
-    for (lvl3Idx = lvl4Idx * BMP_L4_MEM_SIZE; lvl3Idx < lvl4Idx * BMP_L4_MEM_SIZE + 8; lvl3Idx++) {
-        if (!(bitmap->level3[lvl3Idx/8].value & (1<<(lvl3Idx%8)))) {
-            if (size > BMP_L2_MEM_SIZE) return lvl3Idx * BMP_L3_MEM_SIZE;
-            break;
-        }
-    }
-    for (lvl2Idx = lvl3Idx * BMP_L3_MEM_SIZE; lvl2Idx < lvl3Idx * BMP_L3_MEM_SIZE + 8; lvl2Idx++) {
-        if (!(bitmap->level2[lvl2Idx/8].value & (1<<(lvl2Idx%8)))) {
-            if (size > BMP_L1_MEM_SIZE) return lvl2Idx * BMP_L2_MEM_SIZE;
-            break;
-        }
-    }
-    for (lvl1Idx = lvl2Idx * BMP_L2_MEM_SIZE; lvl1Idx < lvl2Idx * BMP_L2_MEM_SIZE + 8; lvl1Idx++) {
-        if (!(bitmap->level1[lvl1Idx/8].value & (1<<(lvl1Idx%8)))) {
-            return lvl1Idx * BMP_L1_MEM_SIZE;
-        }
-    }
-
-    return -1;
 }
 
 void printMemBitmap() {
@@ -271,6 +229,162 @@ void printMemBitmap() {
     knewline();
 }
 
+inline void rippleBitFlip(bool targetState, uint8_t level, uint64_t lvl1Idx, uint64_t lvl2Idx, uint64_t lvl3Idx, uint64_t lvl4Idx, uint64_t lvl5Idx, uint64_t lvl6Idx) {
+    if (level >= 6 || level <= 0) return;
+    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    bool filled;
+    kprintf("%d %d %d %d %d %d\n", lvl1Idx, lvl2Idx, lvl3Idx, lvl4Idx, lvl5Idx, lvl6Idx);
+
+    if (level >= 1) {
+        kputc('k');
+        filled = bitmap->level1[lvl1Idx].value == UINT8_MAX;
+        if (targetState ? filled : !filled) {
+            uint8_t targetBit = lvl1Idx - lvl2Idx * BMP_L2_MEM_SIZE;
+            bitmap->level2[lvl2Idx].value ^= 1<<targetBit;
+        } else return;
+    }
+
+    if (level >= 2) {
+        kputc('k');
+        filled = bitmap->level2[lvl2Idx].value == UINT8_MAX;
+        if (targetState ? filled : !filled) {
+            uint8_t targetBit = lvl2Idx - lvl3Idx * BMP_L3_MEM_SIZE;
+            bitmap->level3[lvl3Idx].value ^= 1<<targetBit;
+        } else return;
+    }
+
+    if (level >= 3) {
+        kputc('k');
+        filled = bitmap->level3[lvl3Idx].value == UINT8_MAX;
+        if (targetState ? filled : !filled) {
+            uint8_t targetBit = lvl3Idx - lvl4Idx * BMP_L4_MEM_SIZE;
+            bitmap->level4[lvl4Idx].value ^= 1<<targetBit;
+        } else return;
+    }
+
+    if (level >= 4) {
+        kputc('k');
+        filled = bitmap->level4[lvl4Idx].value == UINT8_MAX;
+        if (targetState ? filled : !filled) {
+            uint8_t targetBit = lvl4Idx - lvl5Idx * BMP_L5_MEM_SIZE;
+            bitmap->level5[lvl5Idx].value ^= 1<<targetBit;
+        } else return;
+    }
+
+    kputc('k');
+    if (level >= 5) {
+        filled = bitmap->level5[lvl5Idx].value == UINT8_MAX;
+        if (targetState ? filled : !filled) {
+            uint8_t targetBit = lvl5Idx - lvl6Idx * BMP_L6_MEM_SIZE;
+            bitmap->level6[lvl6Idx].value ^= 1<<targetBit;
+        }
+    }
+}
+
+inline bool checkMem(uint64_t idx) {
+    (void)idx;
+    return 1;
+}
+
+physAddr _resPhysMemory(size_t size, uint8_t curLevel, uint64_t idx) {
+    if (size > BMP_L6_MEM_SIZE) return -1;
+    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    kputc(':');
+
+    switch (curLevel) {
+        case 6:
+            for (; idx < BMP_L6_SIZE * 8; idx++) {
+                if (!(bitmap->level6[idx/8].value & (1<<(idx%8)))) {
+                    if (size > BMP_L5_MEM_SIZE) {
+                        if (checkMem(idx)) {
+                            rippleBitFlip(1, 6, 0, 0, 0, 0, 0, idx);
+                            return idx * BMP_L6_MEM_SIZE;
+                        }
+                    } else return _resPhysMemory(size, curLevel - 1, idx);
+                }
+            }
+            break;
+        case 5:
+            for (; idx < BMP_L5_SIZE * 8; idx++) {
+                if (!(bitmap->level5[idx/8].value & (1<<(idx%8)))) {
+                    if (size > BMP_L4_MEM_SIZE) {
+                        if (checkMem(idx)) {
+                            uint64_t lvl6Idx = idx / 8;
+                            rippleBitFlip(1, 5, 0, 0, 0, 0, idx, lvl6Idx);
+                            return idx * BMP_L5_MEM_SIZE;
+                        }
+                    } else return _resPhysMemory(size, curLevel - 1, idx);
+                }
+            }
+            break;
+        case 4:
+            for (; idx < BMP_L4_SIZE * 8; idx++) {
+                if (!(bitmap->level4[idx/8].value & (1<<(idx%8)))) {
+                    if (size > BMP_L3_MEM_SIZE) {
+                        if (checkMem(idx)) {
+                            uint64_t lvl5Idx = idx / 8;
+                            uint64_t lvl6Idx = lvl5Idx / 8;
+                            rippleBitFlip(1, 4, 0, 0, 0, idx, lvl5Idx, lvl6Idx);
+                            return idx * BMP_L4_MEM_SIZE;
+                        }
+                    } else return _resPhysMemory(size, curLevel - 1, idx);
+                }
+            }
+            break;
+        case 3:
+            for (; idx < BMP_L3_SIZE * 8; idx++) {
+                if (!(bitmap->level3[idx/8].value & (1<<(idx%8)))) {
+                    if (size > BMP_L2_MEM_SIZE) {
+                        if (checkMem(idx)) {
+                            uint64_t lvl4Idx = idx / 8;
+                            uint64_t lvl5Idx = lvl4Idx / 8;
+                            uint64_t lvl6Idx = lvl5Idx / 8;
+                            rippleBitFlip(1, 3, 0, 0, idx, lvl4Idx, lvl5Idx, lvl6Idx);
+                            
+                            return idx * BMP_L3_MEM_SIZE;
+                        }
+                    } else return _resPhysMemory(size, curLevel - 1, idx);
+                }
+            }
+            break;
+        case 2:
+            for (; idx < BMP_L2_SIZE * 8; idx++) {
+                if (!(bitmap->level2[idx/8].value & (1<<(idx%8)))) {
+                    if (size > BMP_L1_MEM_SIZE) {
+                        if (checkMem(idx)) {
+                            uint64_t lvl3Idx = idx / 8;
+                            uint64_t lvl4Idx = lvl3Idx / 8;
+                            uint64_t lvl5Idx = lvl4Idx / 8;
+                            uint64_t lvl6Idx = lvl5Idx / 8;
+                            rippleBitFlip(1, 2, 0, idx, lvl3Idx, lvl4Idx, lvl5Idx, lvl6Idx);
+                            return idx * BMP_L2_MEM_SIZE;
+                        }
+                    } else return _resPhysMemory(size, curLevel - 1, idx);
+                }
+            }
+            break;
+        case 1:
+            for (; idx < BMP_L1_SIZE * 8; idx++) {
+                if (!(bitmap->level1[idx/8].value & (1<<(idx%8)))) {
+                    uint64_t lvl2Idx = idx / 8;
+                    uint64_t lvl3Idx = lvl2Idx / 8;
+                    uint64_t lvl4Idx = lvl3Idx / 8;
+                    uint64_t lvl5Idx = lvl4Idx / 8;
+                    uint64_t lvl6Idx = lvl5Idx / 8;
+                    rippleBitFlip(1, 1, idx, lvl2Idx, lvl3Idx, lvl4Idx, lvl5Idx, lvl6Idx);
+                    return idx * BMP_L1_MEM_SIZE;
+                }
+            }
+            break;
+        default:
+            return -1;
+    }
+    return -1;
+}
+
+physAddr resPhysMemory(size_t size) {
+    return _resPhysMemory(size, 6, 0);
+}
 
 #define map(physical) entry->whole = (uint64_t)((uintptr_t)physical & PTE_ADDR) | PTE_P | PTE_RW
 bool mapPage(physAddr physical, virtAddr virtual) {

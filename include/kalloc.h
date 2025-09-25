@@ -34,7 +34,7 @@
 #define BMP_L5_MEM_SIZE (BMP_L4_MEM_SIZE * BMP_LEVEL_JUMP)
 #define BMP_L6_MEM_SIZE (BMP_L5_MEM_SIZE * BMP_LEVEL_JUMP)
 
-#define memoryBitmap_va                 0xFFFFFF7FBFE00000
+#define memoryBitmap_va                     0xFFFFFF7FBFE00000
 #define MEM_BMP_PAGE_TABLE_START(BMP_VA)    (((uint64_t)(BMP_VA) + BMP_SIZE + 0xFFF) & ~0xFFF)
 #define MEM_BMP_PAGE_TABLE_END(BMP_VA)      (((uint64_t)(BMP_VA) + (2<<20) - 1) & ~0xFFF)
 #define MEM_BMP_PAGE_TABLE_SIZE(BMP_VA)     ((MEM_BMP_PAGE_TABLE_END((uint64_t)(BMP_VA)) - MEM_BMP_PAGE_TABLE_START((uint64_t)(BMP_VA)))/4096)
