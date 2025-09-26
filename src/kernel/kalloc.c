@@ -158,17 +158,19 @@ void printMemBitmap() {
 }
 
 inline void rippleBitFlip(bool targetState, uint8_t level, volatile uint64_t idx[6]) {
-    if (level >= 6 || level <= 0) return;
-    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
-    bool filled;
     kprintf("%d %d %d %d %d %d %d %d\n", targetState, level, idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
+    if (level > 5) return;
+    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
     for (uint8_t i = level; i < 6; i++) {
         kputc('k');
-        filled = (bitmap->whole[bmpGetOffset(i) + idx[i]].value == UINT8_MAX);
+        bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i]/8].value == UINT8_MAX);
+        kprintf("%U ", filled);
         if (targetState ? filled : !filled) {
+            kputc('f');
             uint8_t targetBit = idx[i]%BMP_JUMP;
-            bitmap->whole[bmpGetOffset(i+1) + idx[i+1]].value ^= 1<<targetBit;
+            kprintf("t=%d", targetBit);
+            bitmap->whole[bmpGetOffset(i+1) + idx[i+1]/8].value ^= 1<<(7-targetBit);
         } else return;
     }
 }
@@ -181,9 +183,9 @@ inline bool checkMem(volatile uint64_t idx[6]) {
 physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6]) {
     if (size > BMP_MEM_SIZE_OF(5)) return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
-    kputc(':');
+    // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
 
-    uint64_t i = idx[curLevel];
+    uint64_t i = idx[curLevel] + (curLevel != 5 ? idx[curLevel + 1] * 8 : 0);
     for (; i < BMP_SIZE_OF(curLevel) * BMP_JUMP; i++) {
         if (!(bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)))) {
             idx[curLevel] = i;
@@ -194,7 +196,13 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
                     rippleBitFlip(1, curLevel, idx);
                     return addrOffset;
                 }
-            } else return addrOffset + _resPhysMemory(size, curLevel - 1, idx); // need to fix that
+            } else {
+                physAddr nextLevelOffset = _resPhysMemory(size, curLevel - 1, idx);
+                if (nextLevelOffset != -1UL) {
+                    kprintf("| %d %d %d %d %d %d |", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
+                    return addrOffset + nextLevelOffset;
+                }
+            }
         }
     }
     return -1;
