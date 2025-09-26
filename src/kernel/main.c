@@ -23,14 +23,18 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
 
     initPhysMem();
-    printMemBitmap();
+    // printMemBitmap();
 
-    for (uint8_t i = 0; i < 16; i++) {
-        kputc('a');
+    for (uint8_t i = 0; i < 10; i++) {
         physAddr test = resPhysMemory(4096);
-        kprintf("Memory reserved at %X\n", test);
+        if (test == -1UL)
+            kputs("Failed to reserve memory");
+        else
+            kprintf("Memory reserved at %X\n", test);
+        printMemBitmapLevel(0);
+        printMemBitmapLevel(1);
     }
-    printMemBitmap();
+    knewline();
 
     // kputs("Hello from SOS kernel !\n");
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");

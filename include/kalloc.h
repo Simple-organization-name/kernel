@@ -94,6 +94,7 @@ typedef union _MemBitmap {
 extern volatile MemMap *physMemoryMap;
 
 void initPhysMem();
+void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
 physAddr resPhysMemory(size_t size);
 
@@ -101,4 +102,4 @@ bool mapPage(physAddr physical, virtAddr virtual);
 bool unmapPage(virtAddr virtual);
 physAddr getMapping(virtAddr virtual, uint8_t *pageLevel);
 
-#endif 
+#endif

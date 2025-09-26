@@ -28,7 +28,6 @@ inline static void initMemoryBitmap(volatile MemoryRange *validMemory, uint16_t 
         MemoryRange target = validMemory[i];
         uint64_t start = target.start / 4096;
         uint64_t pageCount = target.size / 4096;
-        kprintf("Start = %U, pageCount = %U\n", start, pageCount);
         for (uint64_t j = 0; j < pageCount; j++)
             memBitmap->level0[(start + j)/8].value &= ~(1<<(j%8));
     }
@@ -136,41 +135,43 @@ void initPhysMem() {
     kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", i);
 }
 
-void printMemBitmap() {
+void printMemBitmapLevel(uint8_t n) {
     MemBitmap *bitmap = (MemBitmap *)(memoryBitmap_va);
-    for (uint8_t n = 0; n < 6; n++) {
-        uint64_t count = 0;
-        uint8_t sucBit = bitmap->whole[bmpGetOffset(n)].bit1;
-        kprintf("Level %d memory bitmap (size: %U):\n", n, BMP_SIZE_OF(n));
-        for (uint64_t i = 0; i < BMP_SIZE_OF(n); i++) {
-            for (uint8_t j = 0; j < 8; j++) {
-                register uint8_t bit = bitmap->whole[bmpGetOffset(n) + i].value & (1 << j);
-                bit >>= j;
-                if (bit != sucBit) {
-                    kprintf("%Dx%c ", count, sucBit ? 'O' : 'F');
-                    count = 1;
-                    sucBit = bit;
-                } else count++;
-            }
+    uint64_t count = 0;
+    uint8_t sucBit = bitmap->whole[bmpGetOffset(n)].bit1;
+    kprintf("Level %d memory bitmap (memSize: %X, size: %U):\n", n, BMP_MEM_SIZE_OF(n), BMP_SIZE_OF(n));
+    for (uint64_t i = 0; i < BMP_SIZE_OF(n); i++) {
+        for (uint8_t j = 0; j < 8; j++) {
+            register uint8_t bit = bitmap->whole[bmpGetOffset(n) + i].value & (1 << j);
+            bit >>= j;
+            if (bit != sucBit) {
+                kprintf("%Dx%c ", count, sucBit ? 'O' : 'F');
+                count = 1;
+                sucBit = bit;
+            } else count++;
         }
-        kprintf("%Dx%c\n\n", count, sucBit ? 'O' : 'F');
+    }
+    kprintf("%Dx%c\n", count, sucBit ? 'O' : 'F');
+}
+
+void printMemBitmap() {
+    for (uint8_t n = 0; n < 6; n++) {
+        printMemBitmapLevel(n);
+        knewline();
     }
 }
 
 inline void rippleBitFlip(bool targetState, uint8_t level, volatile uint64_t idx[6]) {
-    kprintf("%d %d %d %d %d %d %d %d\n", targetState, level, idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
     if (level > 5) return;
-    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
-    for (uint8_t i = level; i < 6; i++) {
-        kputc('k');
-        bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i]/8].value == UINT8_MAX);
-        kprintf("%U ", filled);
+    kprintf("level: %u ", level);
+    for (uint8_t i = level; i < 5; i++) {
+        kprintf("i: %u, idx: %U, value: %u\n", i, bmpGetOffset(i) + idx[i]/BMP_JUMP, bitmap->whole[bmpGetOffset(i) + idx[i]/BMP_JUMP].value);
+        bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i]/BMP_JUMP].value == UINT8_MAX);
         if (targetState ? filled : !filled) {
-            kputc('f');
-            uint8_t targetBit = idx[i]%BMP_JUMP;
-            kprintf("t=%d", targetBit);
-            bitmap->whole[bmpGetOffset(i+1) + idx[i+1]/8].value ^= 1<<(7-targetBit);
+            uint8_t targetBit = idx[i+1]%BMP_JUMP;
+            bitmap->whole[bmpGetOffset(i+1) + idx[i+1]/BMP_JUMP].value ^= 1<<(targetBit);
         } else return;
     }
 }
@@ -185,8 +186,10 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
 
-    uint64_t i = idx[curLevel] + (curLevel != 5 ? idx[curLevel + 1] * 8 : 0);
+    uint64_t i = curLevel != 5 ? idx[curLevel + 1] * 8 : 0;
     for (; i < BMP_SIZE_OF(curLevel) * BMP_JUMP; i++) {
+        // kprintf("level: %d i: %U, idx: %U, ", curLevel, i, bmpGetOffset(curLevel) + i/BMP_JUMP);
+        // kprintf("current bit: %d\n", bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)));
         if (!(bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)))) {
             idx[curLevel] = i;
             physAddr addrOffset = i * BMP_MEM_SIZE_OF(curLevel);
@@ -199,8 +202,8 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
             } else {
                 physAddr nextLevelOffset = _resPhysMemory(size, curLevel - 1, idx);
                 if (nextLevelOffset != -1UL) {
-                    kprintf("| %d %d %d %d %d %d |", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
-                    return addrOffset + nextLevelOffset;
+                    // kprintf("|%d %d %d %d %d %d|", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
+                    return nextLevelOffset;
                 }
             }
         }
