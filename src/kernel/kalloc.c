@@ -105,7 +105,7 @@ void initPhysMem() {
             validMemory[i + 1].size = tmp.size;
             validMemory[i + 1].start = tmp.start;
         }
-        
+
         // Segment target in 2 parts
         // First part is the part before the MemBitmap
         validMemory[where].size = bitmapBase - validMemory[where].start;
@@ -127,7 +127,7 @@ void initPhysMem() {
 
     initMemoryBitmap(validMemory, validMemoryCount);
 
-    // Clear page tables available after memory bitmap 
+    // Clear page tables available after memory bitmap
     volatile pte_t *pageTableEntry = (pte_t *)MEM_BMP_PAGE_TABLE_START(memoryBitmap_va);
     uint64_t i = 0;
     for (; i < MEM_BMP_PAGE_TABLE_SIZE(memoryBitmap_va); i++)
@@ -165,9 +165,9 @@ inline void rippleBitFlip(bool targetState, uint8_t level, volatile uint64_t idx
     if (level > 5) return;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
-    kprintf("level: %u ", level);
+    // kprintf("level: %u\n", level);
     for (uint8_t i = level; i < 5; i++) {
-        kprintf("i: %u, idx: %U, value: %u\n", i, bmpGetOffset(i) + idx[i]/BMP_JUMP, bitmap->whole[bmpGetOffset(i) + idx[i]/BMP_JUMP].value);
+        // kprintf("i: %u, idx: %U, value: %u\n", i, idx[i]/BMP_JUMP, bitmap->whole[bmpGetOffset(i) + idx[i]/BMP_JUMP].value);
         bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i]/BMP_JUMP].value == UINT8_MAX);
         if (targetState ? filled : !filled) {
             uint8_t targetBit = idx[i+1]%BMP_JUMP;
@@ -176,9 +176,20 @@ inline void rippleBitFlip(bool targetState, uint8_t level, volatile uint64_t idx
     }
 }
 
-inline bool checkMem(volatile uint64_t idx[6]) {
-    (void)idx;
-    return 1;
+inline bool checkMem(uint8_t curLevel, uint64_t index) {
+    MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    for (uint8_t i = curLevel - 1; i < 5; i--) {
+        uint64_t levelOffset = bmpGetOffset(i);
+        uint64_t thingsToCheck = (1<<(BMP_JUMP_POW2 * (curLevel-i)));
+        kprintf("%U", thingsToCheck);
+        for (uint64_t uwu = 0; uwu < thingsToCheck; uwu++) {
+            if (bitmap->whole[levelOffset + index * BMP_SIZE_OF(i) / BMP_SIZE_OF(curLevel) + uwu].value != 0) {
+                kputc('!');
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6]) {
@@ -194,7 +205,7 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
             idx[curLevel] = i;
             physAddr addrOffset = i * BMP_MEM_SIZE_OF(curLevel);
             if (size > BMP_MEM_SIZE_OF(curLevel-1)) {
-                if (curLevel == 0 || checkMem(idx)) {
+                if (curLevel == 0 || checkMem(curLevel, idx[curLevel])) {
                     bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value |= (1<<(i%BMP_JUMP));
                     rippleBitFlip(1, curLevel, idx);
                     return addrOffset;
@@ -211,10 +222,19 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
     return -1;
 }
 
-physAddr resPhysMemory(size_t size) {
+physAddr resPhysMemory(uint8_t level, uint64_t count) {
     volatile uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
-    return _resPhysMemory(size, 5, idx);
+    return _resPhysMemory(BMP_MEM_SIZE_OF(level) * count, 5, idx);
+}
+
+virtAddr allocVirtMemory(uint8_t level, uint64_t count)
+{
+    physAddr memory = resPhysMemory(level, count);
+    
+    // no risk of memory leak here dw
+
+    return NULL;
 }
 
 #define map(entry, physical) entry->whole = (uint64_t)((uintptr_t)physical & PTE_ADDR) | PTE_P | PTE_RW
@@ -244,7 +264,7 @@ bool unmapPage(virtAddr virtual) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     pte_t *entry = ((pte_t *)PML4()) + pml4_index;
     if (!entry->present) return 0;
-    
+
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
     entry = ((pte_t *)PDPT(pml4_index)) + pdpt_index;
     if (!entry->present) return 0;
@@ -253,7 +273,7 @@ bool unmapPage(virtAddr virtual) {
         invlpg(virtual);
         return 1;
     }
-    
+
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
     entry = ((pte_t *)PD(pml4_index, pdpt_index)) + pd_index;
     if (!entry->present) return 0;

@@ -20,8 +20,15 @@
 // Memory bitmap
 #define memoryBitmap_va 0xFFFFFF7FBFE00000
 
+#define MEM_4K      0
+#define MEM_32K     1
+#define MEM_256K    2
+#define MEM_2M      3
+#define MEM_16M     4
+#define MEM_128M    5
+
 #define BMP_JUMP_POW2       3
-#define BMP_JUMP            (2<<BMP_JUMP_POW2)
+#define BMP_JUMP            (1<<BMP_JUMP_POW2)
 #define BMP_SIZE_OF(N)      (uint64_t)(((uint8_t)(N) < 6) ? 2<<(19-(BMP_JUMP_POW2*(uint8_t)(N))) : 0)
 #define BMP_SIZE            (uint64_t)(BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4) + BMP_SIZE_OF(5))
 #define BMP_MEM_SIZE_OF(N)  (uint64_t)(((uint8_t)(N) < 6) ? 2<<(11 + 3*(uint8_t)(N)) : 0)
@@ -96,7 +103,9 @@ extern volatile MemMap *physMemoryMap;
 void initPhysMem();
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
-physAddr resPhysMemory(size_t size);
+physAddr resPhysMemory(uint8_t level, uint64_t count);
+
+virtAddr allocVirtMemory(uint8_t level, uint64_t count);
 
 bool mapPage(physAddr physical, virtAddr virtual);
 bool unmapPage(virtAddr virtual);
