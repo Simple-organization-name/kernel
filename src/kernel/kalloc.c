@@ -192,8 +192,8 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6]) {
-    if (size > BMP_MEM_SIZE_OF(5)) return -1;
+physAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t idx[6]) {
+    if (size > 5) return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
 
@@ -204,7 +204,7 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
         if (!(bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)))) {
             idx[curLevel] = i;
             physAddr addrOffset = i * BMP_MEM_SIZE_OF(curLevel);
-            if (size > BMP_MEM_SIZE_OF(curLevel-1)) {
+            if (size == curLevel) {
                 if (curLevel == 0 || checkMem(curLevel, idx[curLevel])) {
                     bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value |= (1<<(i%BMP_JUMP));
                     rippleBitFlip(1, curLevel, idx);
@@ -222,15 +222,15 @@ physAddr _resPhysMemory(size_t size, uint8_t curLevel, volatile uint64_t idx[6])
     return -1;
 }
 
-physAddr resPhysMemory(uint8_t level, uint64_t count) {
+physAddr resPhysMemory(PhysMemSize size) {
     volatile uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
-    return _resPhysMemory(BMP_MEM_SIZE_OF(level) * count, 5, idx);
+    return _resPhysMemory(size, 5, idx);
 }
 
 virtAddr allocVirtMemory(uint8_t level, uint64_t count)
 {
-    physAddr memory = resPhysMemory(level, count);
+    physAddr memory = resPhysMemory(level);
     
     // no risk of memory leak here dw
 
