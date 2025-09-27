@@ -17,16 +17,16 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
     init_interrupts();
 
-    physAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
+    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
     kprintf("Kernel at 0x%X\n", kernelPhysAddr);
-    physAddr fbPhysAddr = getMapping(0xFFFFFF0000000000, NULL);
+    PhysAddr fbPhysAddr = getMapping(0xFFFFFF0000000000, NULL);
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
 
     initPhysMem();
     // printMemBitmap();
 
     for (uint8_t i = 0; i < 10; i++) {
-        physAddr test = resPhysMemory(MEM_4K, 1);
+        PhysAddr test = resPhysMemory(MEM_4K);
         if (test == -1UL)
             kputs("Failed to reserve memory");
         else
@@ -34,7 +34,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     }
     knewline();
 
-    physAddr a = resPhysMemory(MEM_2M, 1);
+    PhysAddr a = resPhysMemory(MEM_2M);
     kprintf("big at %X\n", a);
 
     // kputs("Hello from SOS kernel !\n");

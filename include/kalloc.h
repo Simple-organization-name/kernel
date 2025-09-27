@@ -33,8 +33,8 @@
 // Address types
 #define PHYSICAL
 #define VIRTUAL
-typedef uint64_t physAddr;
-typedef uint64_t virtAddr;
+typedef uint64_t PhysAddr;
+typedef uint64_t VirtAddr;
 
 typedef enum _PhysMemSize {
     MEM_4K      = 0,
@@ -42,9 +42,14 @@ typedef enum _PhysMemSize {
     MEM_256K,
     MEM_2M,
     MEM_16M,
-    MEM_128M
+    MEM_128M,
 } PhysMemSize;
 
+typedef enum _PageType {
+    PTE_PT,
+    PTE_PD,
+    PTE_PDP,
+} PageType;
 
 typedef enum {
     EfiReservedMemoryType,
@@ -65,13 +70,13 @@ typedef enum {
 } PhysicalMemoryType;
 
 typedef struct _MemoryRange {
-    physAddr    start;
+    PhysAddr    start;
     size_t      size;
 } MemoryRange;
 
 typedef struct _MemBlock {
     size_t              size;
-    virtAddr            ptr;
+    VirtAddr            ptr;
     struct _MemBlock    *next;
 } MemBlock;
 
@@ -106,12 +111,12 @@ extern volatile MemMap *physMemoryMap;
 void initPhysMem();
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
-physAddr resPhysMemory(uint8_t level);
+PhysAddr resPhysMemory(PhysMemSize size);
 
-virtAddr allocVirtMemory(uint8_t level, uint64_t count);
+VirtAddr allocVirtMemory(PhysMemSize size, uint64_t count);
 
-bool mapPage(physAddr physical, virtAddr virtual);
-bool unmapPage(virtAddr virtual);
-physAddr getMapping(virtAddr virtual, uint8_t *pageLevel);
+bool mapPage(PhysAddr physical, VirtAddr virtual, PageType page);
+bool unmapPage(VirtAddr virtual);
+PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 
 #endif

@@ -79,7 +79,7 @@ void initPhysMem() {
     #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
     int16_t where = -1;
     uint64_t totalSize = 0;
-    physAddr bitmapBase = 0;
+    PhysAddr bitmapBase = 0;
     for (uint16_t i = 0; i < validMemoryCount; i++)
     {
         bitmapBase = align(validMemory[i].start);
@@ -181,10 +181,8 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     for (uint8_t i = curLevel - 1; i < 5; i--) {
         uint64_t levelOffset = bmpGetOffset(i);
         uint64_t thingsToCheck = (1<<(BMP_JUMP_POW2 * (curLevel-i)));
-        kprintf("%U", thingsToCheck);
         for (uint64_t uwu = 0; uwu < thingsToCheck; uwu++) {
             if (bitmap->whole[levelOffset + index * BMP_SIZE_OF(i) / BMP_SIZE_OF(curLevel) + uwu].value != 0) {
-                kputc('!');
                 return false;
             }
         }
@@ -192,7 +190,7 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-physAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t idx[6]) {
+static PhysAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t idx[6]) {
     if (size > 5) return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
@@ -203,7 +201,7 @@ physAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t id
         // kprintf("current bit: %d\n", bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)));
         if (!(bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)))) {
             idx[curLevel] = i;
-            physAddr addrOffset = i * BMP_MEM_SIZE_OF(curLevel);
+            PhysAddr addrOffset = i * BMP_MEM_SIZE_OF(curLevel);
             if (size == curLevel) {
                 if (curLevel == 0 || checkMem(curLevel, idx[curLevel])) {
                     bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value |= (1<<(i%BMP_JUMP));
@@ -211,7 +209,7 @@ physAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t id
                     return addrOffset;
                 }
             } else {
-                physAddr nextLevelOffset = _resPhysMemory(size, curLevel - 1, idx);
+                PhysAddr nextLevelOffset = _resPhysMemory(size, curLevel - 1, idx);
                 if (nextLevelOffset != -1UL) {
                     // kprintf("|%d %d %d %d %d %d|", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
                     return nextLevelOffset;
@@ -222,23 +220,24 @@ physAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t id
     return -1;
 }
 
-physAddr resPhysMemory(PhysMemSize size) {
+PhysAddr resPhysMemory(PhysMemSize size) {
     volatile uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
     return _resPhysMemory(size, 5, idx);
 }
 
-virtAddr allocVirtMemory(uint8_t level, uint64_t count)
+VirtAddr allocVirtMemory(PhysMemSize size, uint64_t count)
 {
-    physAddr memory = resPhysMemory(level);
-    
+    PhysAddr memory = resPhysMemory(size);
+
     // no risk of memory leak here dw
 
-    return NULL;
+    (void)memory; (void)size; (void)count;
+    return 0;
 }
 
 #define map(entry, physical) entry->whole = (uint64_t)((uintptr_t)physical & PTE_ADDR) | PTE_P | PTE_RW
-bool mapPage(physAddr physical, virtAddr virtual) {
+bool mapPage(PhysAddr physical, VirtAddr virtual, PageType page) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     pte_t *entry = ((pte_t *)PML4()) + pml4_index;
     if (!entry->present) return 0;
@@ -247,11 +246,19 @@ bool mapPage(physAddr physical, virtAddr virtual) {
     entry = ((pte_t *)PDPT(pml4_index)) + pdpt_index;
     if (!entry->present) return 0;
     if (entry->pageSize) return 0;
+    if (page == PTE_PDP) {
+        map(entry, physical);
+        return 1;
+    }
 
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
     entry = ((pte_t *)PD(pml4_index, pdpt_index)) + pd_index;
     if (!entry->present) return 0;
     if (entry->pageSize) return 0;
+    if (page == PTE_PD) {
+        map(entry, physical);
+        return 1;
+    }
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
     entry = ((pte_t *)PT(pml4_index, pdpt_index, pd_index)) + pt_index;
@@ -260,7 +267,7 @@ bool mapPage(physAddr physical, virtAddr virtual) {
     return 1;
 }
 
-bool unmapPage(virtAddr virtual) {
+bool unmapPage(VirtAddr virtual) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     pte_t *entry = ((pte_t *)PML4()) + pml4_index;
     if (!entry->present) return 0;
@@ -291,7 +298,7 @@ bool unmapPage(virtAddr virtual) {
     return 1;
 }
 
-physAddr getMapping(virtAddr virtual, uint8_t *pageLevel) {
+PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     pte_t entry = ((pte_t *)PML4())[pml4_index];
     if (!entry.present) return 0;
