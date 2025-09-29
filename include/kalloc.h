@@ -111,9 +111,9 @@ extern volatile MemMap *physMemoryMap;
 void initPhysMem();
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
-PhysAddr resPhysMemory(PhysMemSize size);
+PhysAddr resPhysMemory(uint8_t size);
 
-VirtAddr allocVirtMemory(PhysMemSize size, uint64_t count);
+VirtAddr allocVirtMemory(uint8_t size, uint64_t count);
 
 bool mapPage(PhysAddr physical, VirtAddr virtual, PageType page);
 bool unmapPage(VirtAddr virtual);

@@ -17,33 +17,8 @@ inline uint64_t bmpGetOffset(uint8_t level) {
     return offset;
 }
 
-inline static void initMemoryBitmap(volatile MemoryRange *validMemory, uint16_t validMemoryCount) {
-    // Set all memory to invalid
-    MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
-    for (size_t i = 0; i < BMP_SIZE; i++)
-        memBitmap->whole[i].value = 255U;
-
-    // For every valid range set the corresponding bit
-    for (uint16_t i = 0; i < validMemoryCount; i++) {
-        MemoryRange target = validMemory[i];
-        uint64_t start = target.start / 4096;
-        uint64_t pageCount = target.size / 4096;
-        for (uint64_t j = 0; j < pageCount; j++)
-            memBitmap->level0[(start + j)/8].value &= ~(1<<(j%8));
-    }
-
-    // Cascade level
-    for (uint64_t i = 0; i < 5; i++) {
-        for (uint64_t j = 0; j < BMP_SIZE_OF(i); j++) {
-            if (memBitmap->whole[bmpGetOffset(i) + j].value != 255U)
-                memBitmap->whole[bmpGetOffset(i+1) + j/8].value &= ~(1<<(j%8));
-        }
-    }
-}
-
-void initPhysMem() {
+inline static uint16_t getValidMemRanges(volatile MemoryRange *validMemory) {
     // keep volatile or it breaks
-    volatile MemoryRange validMemory[256] = {0};
     uint16_t validMemoryCount = 0;
 
     for (uint16_t i = 0; i < physMemoryMap->count; i++) {
@@ -75,6 +50,48 @@ void initPhysMem() {
                 break;
         }
     }
+
+    return validMemoryCount;
+}
+
+inline static void initMemoryBitmap(volatile MemoryRange *validMemory, uint16_t validMemoryCount) {
+    // Set all memory to invalid
+    MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
+    for (size_t i = 0; i < BMP_SIZE; i++)
+        memBitmap->whole[i].value = 255U;
+
+    // For every valid range set the corresponding bit
+    for (uint16_t i = 0; i < validMemoryCount; i++) {
+        MemoryRange target = validMemory[i];
+        uint64_t start = target.start / 4096;
+        uint64_t pageCount = target.size / 4096;
+        for (uint64_t j = 0; j < pageCount; j++)
+            memBitmap->level0[(start + j)/8].value &= ~(1<<(j%8));
+    }
+
+    // Cascade level
+    for (uint64_t i = 0; i < 5; i++) {
+        for (uint64_t j = 0; j < BMP_SIZE_OF(i); j++) {
+            if (memBitmap->whole[bmpGetOffset(i) + j].value != 255U)
+                memBitmap->whole[bmpGetOffset(i+1) + j/8].value &= ~(1<<(j%8));
+        }
+    }
+}
+
+inline static void initPages() {
+    // Clear page tables available after memory bitmap
+    volatile pte_t *pageTableEntry = (pte_t *)MEM_BMP_PAGE_TABLE_START(memoryBitmap_va);
+    uint64_t i = 0;
+    for (; i < MEM_BMP_PAGE_TABLE_SIZE(memoryBitmap_va); i++)
+        CLEAR_PT(pageTableEntry + i);
+    kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", i);
+
+    // volatile pte_t pdpt = (pte_t)(PML4())[1];
+}
+
+void initPhysMem() {
+    volatile MemoryRange validMemory[256] = {0};
+    uint16_t validMemoryCount = getValidMemRanges(validMemory);
 
     #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
     int16_t where = -1;
@@ -115,24 +132,17 @@ void initPhysMem() {
     validMemory[where].start = bitmapBase + (2<<20);
     validMemory[where].size -= totalSize;
 
-    kprintf("Bitmap base: 0x%X\n", bitmapBase);
+    // kprintf("Bitmap base: 0x%X\n", bitmapBase);
 
-    kputs("\nValid memory after memory bitmap allocation:\n");
-    for (uint16_t i = 0; i < validMemoryCount; i++)
-        kprintf("Memory start: %X, memory size: %X\n", validMemory[i].start, validMemory[i].size);
-    kputc('\n');
+    // kputs("\nValid memory after memory bitmap allocation:\n");
+    // for (uint16_t i = 0; i < validMemoryCount; i++)
+    //     kprintf("Memory start: %X, memory size: %X\n", validMemory[i].start, validMemory[i].size);
+    // kputc('\n');
 
     ((pte_t *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
     invlpg(memoryBitmap_va);
 
     initMemoryBitmap(validMemory, validMemoryCount);
-
-    // Clear page tables available after memory bitmap
-    volatile pte_t *pageTableEntry = (pte_t *)MEM_BMP_PAGE_TABLE_START(memoryBitmap_va);
-    uint64_t i = 0;
-    for (; i < MEM_BMP_PAGE_TABLE_SIZE(memoryBitmap_va); i++)
-        CLEAR_PT(pageTableEntry + i);
-    kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", i);
 }
 
 void printMemBitmapLevel(uint8_t n) {
@@ -190,7 +200,7 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-static PhysAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint64_t idx[6]) {
+static PhysAddr _resPhysMemory(uint8_t size, uint8_t curLevel, volatile uint64_t idx[6]) {
     if (size > 5) return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
@@ -220,17 +230,15 @@ static PhysAddr _resPhysMemory(PhysMemSize size, uint8_t curLevel, volatile uint
     return -1;
 }
 
-PhysAddr resPhysMemory(PhysMemSize size) {
+PhysAddr resPhysMemory(uint8_t size) {
     volatile uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
     return _resPhysMemory(size, 5, idx);
 }
 
-VirtAddr allocVirtMemory(PhysMemSize size, uint64_t count)
+VirtAddr allocVirtMemory(uint8_t size, uint64_t count)
 {
     PhysAddr memory = resPhysMemory(size);
-
-    // no risk of memory leak here dw
 
     (void)memory; (void)size; (void)count;
     return 0;

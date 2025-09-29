@@ -728,7 +728,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     pdp_high[0].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
     CLEAR_PT(pd_framebuffer);
     for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
-        pd_framebuffer[i].whole = (framebuffer.addr + (i<<21)) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
+        pd_framebuffer[i].whole = ((framebuffer.addr + (i<<21)) & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
 
     pdp_high[510].whole = (uint64_t)((uintptr_t)pd_kernel & PTE_ADDR) | PTE_P | PTE_RW | PTE_G;
     CLEAR_PT(pd_kernel);
