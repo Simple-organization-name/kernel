@@ -26,7 +26,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // printMemBitmap();
 
     for (uint8_t i = 0; i < 10; i++) {
-        PhysAddr test = resPhysMemory(MEM_4K);
+        PhysAddr test = resPhysMemory(MEM_4K, 2);
         if (test == -1UL)
             kputs("Failed to reserve memory");
         else
@@ -34,7 +34,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     }
     knewline();
 
-    PhysAddr a = resPhysMemory(MEM_2M);
+    PhysAddr a = resPhysMemory(MEM_2M, 1);
     kprintf("big at %X\n", a);
 
     // kputs("Hello from SOS kernel !\n");

@@ -17,11 +17,11 @@ inline uint64_t bmpGetOffset(uint8_t level) {
     return offset;
 }
 
-inline static uint16_t getValidMemRanges(volatile MemoryRange *validMemory) {
+inline static uint8_t getValidMemRanges(volatile MemoryRange *validMemory) {
     // keep volatile or it breaks
-    uint16_t validMemoryCount = 0;
+    uint8_t validMemoryCount = 0;
 
-    for (uint16_t i = 0; i < physMemoryMap->count; i++) {
+    for (uint8_t i = 0; i < physMemoryMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemoryMap->map + physMemoryMap->descSize * i);
         switch (desc->Type) {
             case EfiLoaderCode:
@@ -93,13 +93,13 @@ inline static void initPages() {
 
 void initPhysMem() {
     volatile MemoryRange validMemory[256] = {0};
-    uint16_t validMemoryCount = getValidMemRanges(validMemory);
+    uint8_t validMemoryCount = getValidMemRanges(validMemory);
 
     #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
     int16_t where = -1;
     uint64_t totalSize = 0;
     PhysAddr bitmapBase = 0;
-    for (uint16_t i = 0; i < validMemoryCount; i++)
+    for (uint8_t i = 0; i < validMemoryCount; i++)
     {
         bitmapBase = align(validMemory[i].start);
         totalSize = bitmapBase - validMemory[i].start + (2<<20);
@@ -119,7 +119,7 @@ void initPhysMem() {
     // If there's memory available before the start of the memory mapping made by the alignment
     if (bitmapBase != validMemory[where].start) {
         // Shift all MemoryRange
-        for (uint16_t i = validMemoryCount - 1; i >= where; i--) {
+        for (uint8_t i = validMemoryCount - 1; i >= where; i--) {
             MemoryRange tmp = validMemory[i];
             validMemory[i + 1].size = tmp.size;
             validMemory[i + 1].start = tmp.start;
@@ -137,7 +137,7 @@ void initPhysMem() {
     // kprintf("Bitmap base: 0x%X\n", bitmapBase);
 
     // kputs("\nValid memory after memory bitmap allocation:\n");
-    // for (uint16_t i = 0; i < validMemoryCount; i++)
+    // for (uint8_t i = 0; i < validMemoryCount; i++)
     //     kprintf("Memory start: %X, memory size: %X\n", validMemory[i].start, validMemory[i].size);
     // kputc('\n');
 
@@ -202,7 +202,7 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-static PhysAddr _resPhysMemory(uint8_t size, uint8_t curLevel, volatile uint64_t idx[6]) {
+static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, volatile uint64_t idx[6]) {
     if (size > 5) return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
@@ -213,18 +213,24 @@ static PhysAddr _resPhysMemory(uint8_t size, uint8_t curLevel, volatile uint64_t
         // kprintf("current bit: %d\n", bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)));
         if (!(bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)))) {
             idx[curLevel] = i;
-            PhysAddr addrOffset = i * BMP_MEM_SIZE_OF(curLevel);
+            PhysAddr addr = i * BMP_MEM_SIZE_OF(curLevel);
             if (size == curLevel) {
-                if (curLevel == 0 || checkMem(curLevel, idx[curLevel])) {
-                    bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value |= (1<<(i%BMP_JUMP));
-                    rippleBitFlip(1, curLevel, idx);
-                    return addrOffset;
+                uint8_t valid = 0;
+                for (uint8_t j = 0; j < count; j++)
+                    if (curLevel == 0 || checkMem(curLevel, idx[curLevel] + j))
+                        ++valid;
+                if (valid == count) {
+                    for (uint8_t j = 0; j < count; j++) {
+                        bitmap->whole[bmpGetOffset(curLevel) + (i + j)/BMP_JUMP].value |= (1<<((i + j)%BMP_JUMP));
+                        rippleBitFlip(1, curLevel, idx);
+                    }
+                    return addr;
                 }
             } else {
-                PhysAddr nextLevelOffset = _resPhysMemory(size, curLevel - 1, idx);
-                if (nextLevelOffset != -1UL) {
+                PhysAddr addr = _resPhysMemory(size, count, curLevel - 1, idx);
+                if (addr != -1UL) {
                     // kprintf("|%d %d %d %d %d %d|", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
-                    return nextLevelOffset;
+                    return addr;
                 }
             }
         }
@@ -232,15 +238,15 @@ static PhysAddr _resPhysMemory(uint8_t size, uint8_t curLevel, volatile uint64_t
     return -1;
 }
 
-PhysAddr resPhysMemory(uint8_t size) {
+PhysAddr resPhysMemory(uint8_t size, uint8_t count) {
     volatile uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
-    return _resPhysMemory(size, 5, idx);
+    return _resPhysMemory(size, count, 5, idx);
 }
 
 VirtAddr allocVirtMemory(uint8_t size, uint64_t count)
 {
-    PhysAddr memory = resPhysMemory(size);
+    PhysAddr memory = resPhysMemory(size, count);
 
     (void)memory; (void)size; (void)count;
     return 0;
