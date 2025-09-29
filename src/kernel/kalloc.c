@@ -80,13 +80,15 @@ inline static void initMemoryBitmap(volatile MemoryRange *validMemory, uint16_t 
 
 inline static void initPages() {
     // Clear page tables available after memory bitmap
-    volatile pte_t *pageTableEntry = (pte_t *)MEM_BMP_PAGE_TABLE_START(memoryBitmap_va);
+    volatile pte_t *pageTableEntry = (pte_t *)BMP_PAGE_TABLE_START(memoryBitmap_va);
     uint64_t i = 0;
-    for (; i < MEM_BMP_PAGE_TABLE_SIZE(memoryBitmap_va); i++)
+    for (; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); i++)
         CLEAR_PT(pageTableEntry + i);
     kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", i);
 
-    // volatile pte_t pdpt = (pte_t)(PML4())[1];
+    volatile pte_t pdpt = (pte_t)(PML4())[1];
+    pdpt.whole = (uint64_t)((uintptr_t)BMP_PAGE_TABLE_START(memoryBitmap_va) | PTE_ADDR) | PTE_P | PTE_RW;
+    (void)pdpt;
 }
 
 void initPhysMem() {
