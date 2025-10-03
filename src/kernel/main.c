@@ -37,7 +37,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     PhysAddr a = resPhysMemory(MEM_2M, 1);
     kprintf("big at %X\n", a);
 
-    // kputs("Hello from SOS kernel !\n");
+    kputs("Hello from SOS kernel !\n");
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 
     while (1) hlt();
