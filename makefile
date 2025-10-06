@@ -75,7 +75,4 @@ setup-msys:
 	pacman -Syu
 	pacman -S xorriso mingw-w64-x86_64-qemu mingw-w64-x86_64-gcc
 
-test:
-	mkdir -p a/{b,c}
-
 .PHONY: all emul setup kernel iso bootloader initBootDir
