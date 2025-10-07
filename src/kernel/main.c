@@ -23,7 +23,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
 
     initPhysMem();
-    // printMemBitmap();
+    printMemBitmap();
 
     for (uint8_t i = 0; i < 10; i++) {
         PhysAddr test = resPhysMemory(MEM_4K, 2);
@@ -33,7 +33,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
             kprintf("Memory reserved at %X\n", test);
     }
     knewline();
-
+    
     PhysAddr a = resPhysMemory(MEM_2M, 1);
     kprintf("big at %X\n", a);
 

@@ -1,6 +1,6 @@
-BOOT 		= boot
-BOOT_NAME	= BOOTX64.EFI
-ISO_ENTRY	= EFI/BOOT/$(BOOT_NAME)
+BOOT 			= boot
+BOOT_NAME		= BOOTX64.EFI
+ISO_ENTRY		= EFI/BOOT/$(BOOT_NAME)
 
 BOOT_CC 		= x86_64-w64-mingw32-gcc
 BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
