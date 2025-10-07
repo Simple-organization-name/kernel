@@ -98,13 +98,13 @@ inline static void initPages(PhysAddr bitmapBase) {
     ptPool->count = 0;
     ptPool->next = NULL;
     kprintf("First page pool at %X\n", bitmapBase + BMP_SIZE);
-    for (uint64_t i = 0; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va) - 1; i++) {
+    for (uint64_t i = 0; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); i++) {
         ptPool->pool[i] = bitmapBase + BMP_SIZE + (i + 1)*4096;
     }
     for (uint64_t i = 0; i < 10; i++) {
         kprintf("Page table at %X\n", ptPool->pool[i]);
     }
-    kprintf("...\nLast page table in pool at %X\n", ptPool->pool[BMP_PAGE_TABLE_COUNT(memoryBitmap_va)-2]);
+    kprintf("...\nLast page table in pool at %X\n", ptPool->pool[BMP_PAGE_TABLE_COUNT(memoryBitmap_va)-1]);
     kprintf("Bitmap physical end at %X\n", bitmapBase + 0x200000);
     knewline();
 }
