@@ -18,7 +18,7 @@ inline uint64_t bmpGetOffset(uint8_t level) {
     return offset;
 }
 
-inline static uint8_t getValidMemRanges(volatile MemoryRange *validMemory) {
+inline static uint8_t getValidMemRanges(MemoryRange *validMemory) {
     uint8_t validMemoryCount = 0;
 
     for (uint8_t i = 0; i < physMemoryMap->count; i++) {
@@ -54,9 +54,9 @@ inline static uint8_t getValidMemRanges(volatile MemoryRange *validMemory) {
     return validMemoryCount;
 }
 
-inline static void initMemoryBitmap(volatile MemoryRange *validMemory, uint16_t validMemoryCount) {
+inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemoryCount) {
     // Set all memory to invalid
-    volatile MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
+    MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
     for (size_t i = 0; i < BMP_SIZE; i++)
         memBitmap->whole[i].value = 255U;
 
@@ -80,7 +80,7 @@ inline static void initMemoryBitmap(volatile MemoryRange *validMemory, uint16_t 
 
 inline static void initPages(PhysAddr bitmapBase) {
     // Clear page tables available after memory bitmap
-    volatile pte_t *pageTableEntry = (pte_t *)BMP_PAGE_TABLE_START(memoryBitmap_va);
+    pte_t *pageTableEntry = (pte_t *)BMP_PAGE_TABLE_START(memoryBitmap_va);
     for (uint64_t i = 0; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); i++)
         CLEAR_PT(pageTableEntry + i);
     kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", BMP_PAGE_TABLE_COUNT(memoryBitmap_va));
@@ -102,7 +102,7 @@ inline static void initPages(PhysAddr bitmapBase) {
 }
 
 void initPhysMem() {
-    volatile MemoryRange validMemory[256] = {0};
+    MemoryRange validMemory[256] = {0};
     uint8_t validMemoryCount = getValidMemRanges(validMemory);
 
     #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
@@ -159,7 +159,7 @@ void initPhysMem() {
 }
 
 void printMemBitmapLevel(uint8_t n) {
-    volatile MemBitmap *bitmap = (MemBitmap *)(memoryBitmap_va);
+    MemBitmap *bitmap = (MemBitmap *)(memoryBitmap_va);
     uint64_t count = 0;
     uint8_t sucBit = bitmap->whole[bmpGetOffset(n)].bit1;
     kprintf("Level %d memory bitmap (memSize: %X, size: %U):\n", n, BMP_MEM_SIZE_OF(n), BMP_SIZE_OF(n));
@@ -184,9 +184,9 @@ void printMemBitmap() {
     }
 }
 
-inline void rippleBitFlip(bool targetState, uint8_t level, volatile uint64_t idx[6]) {
+inline void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6]) {
     if (level > 5) return;
-    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
     // kprintf("level: %u\n", level);
     for (uint8_t i = level; i < 5; i++) {
@@ -200,7 +200,7 @@ inline void rippleBitFlip(bool targetState, uint8_t level, volatile uint64_t idx
 }
 
 inline bool checkMem(uint8_t curLevel, uint64_t index) {
-    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     for (uint8_t i = curLevel - 1; i < 5; i--) {
         uint64_t levelOffset = bmpGetOffset(i);
         uint64_t thingsToCheck = (1<<(BMP_JUMP_POW2 * (curLevel-i)));
@@ -213,9 +213,9 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, volatile uint64_t idx[6]) {
+static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, uint64_t idx[6]) {
     if (size > 5) return -1;
-    volatile MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
+    MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
     // kprintf("%d %d %d %d %d %d\n", idx[0], idx[1], idx[2], idx[3], idx[4], idx[5]);
 
     uint64_t i = curLevel != 5 ? idx[curLevel + 1] * 8 : 0;
@@ -250,7 +250,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, vo
 }
 
 PhysAddr resPhysMemory(uint8_t size, uint8_t count) {
-    volatile uint64_t idx[6];
+    uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
     return _resPhysMemory(size, count, 5, idx);
 }
@@ -266,7 +266,7 @@ VirtAddr allocVirtMemory(uint8_t size, uint64_t count)
 #define map(entry, physical) entry->whole = (uint64_t)((uintptr_t)physical & PTE_ADDR) | PTE_P | PTE_RW
 bool mapPage(PhysAddr physical, VirtAddr virtual, PageType page) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
-    volatile pte_t *entry = ((pte_t *)PML4()) + pml4_index;
+    pte_t *entry = ((pte_t *)PML4()) + pml4_index;
     if (!entry->present) return 0;
 
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
