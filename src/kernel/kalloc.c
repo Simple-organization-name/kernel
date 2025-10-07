@@ -7,7 +7,8 @@
 #include "kalloc.h"
 #include "kterm.h"
 
-volatile MemMap *physMemoryMap = NULL;
+volatile    MemMap          *physMemoryMap = NULL;
+static      PageTablePool   *ptPool = NULL;
 
 inline uint64_t bmpGetOffset(uint8_t level) {
     if (level > 5) return 0;
@@ -77,17 +78,27 @@ inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemo
     }
 }
 
-inline static void initPages() {
+inline static void initPages(PhysAddr bitmapBase) {
     // Clear page tables available after memory bitmap
     pte_t *pageTableEntry = (pte_t *)BMP_PAGE_TABLE_START(memoryBitmap_va);
-    uint64_t i = 0;
-    for (; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); i++)
+    for (uint64_t i = 0; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); i++)
         CLEAR_PT(pageTableEntry + i);
-    kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", i);
+    kprintf("Nb pte free in the 2mb mem bmp: %U\n\n", BMP_PAGE_TABLE_COUNT(memoryBitmap_va));
 
-    pte_t pdpt = (pte_t)(PML4())[1];
-    pdpt.whole = (uint64_t)((uintptr_t)BMP_PAGE_TABLE_START(memoryBitmap_va) | PTE_ADDR) | PTE_P | PTE_RW;
-    (void)pdpt;
+    // Create the first pool of page table entry
+    ptPool = (PageTablePool *)BMP_PAGE_TABLE_START(memoryBitmap_va);
+    ptPool->count = 0;
+    ptPool->next = NULL;
+    kprintf("First page pool at %X\n", bitmapBase + BMP_SIZE);
+    for (uint64_t i = 0; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va) - 1; i++) {
+        ptPool->pool[i] = bitmapBase + BMP_SIZE + (i + 1)*4096;
+    }
+    for (uint64_t i = 0; i < 10; i++) {
+        kprintf("Page table at %X\n", ptPool->pool[i]);
+    }
+    kprintf("...\nLast page table in pool at %X\n", ptPool->pool[BMP_PAGE_TABLE_COUNT(memoryBitmap_va)-2]);
+    kprintf("Bitmap physical end at %X\n", bitmapBase + 0x200000);
+    knewline();
 }
 
 void initPhysMem() {
@@ -144,6 +155,7 @@ void initPhysMem() {
     invlpg(memoryBitmap_va);
 
     initMemoryBitmap(validMemory, validMemoryCount);
+    initPages(bitmapBase);
 }
 
 void printMemBitmapLevel(uint8_t n) {

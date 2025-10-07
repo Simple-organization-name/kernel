@@ -104,6 +104,13 @@ typedef union _MemBitmap {
     };
 } MemBitmap;
 
+#define PT_POOL_SIZE 4096/sizeof(uint64_t) - 2
+typedef struct _ChainedPageTablePool {
+    uint64_t                        count;
+    struct _ChainedPageTablePool    *next;
+    PhysAddr                        pool[PT_POOL_SIZE];
+} PageTablePool;
+
 extern volatile MemMap *physMemoryMap;
 
 void initPhysMem();

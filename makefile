@@ -1,6 +1,6 @@
-BOOT 		= boot
-BOOT_NAME	= BOOTX64.EFI
-ISO_ENTRY	= EFI/BOOT/$(BOOT_NAME)
+BOOT 			= boot
+BOOT_NAME		= BOOTX64.EFI
+ISO_ENTRY		= EFI/BOOT/$(BOOT_NAME)
 
 BOOT_CC 		= x86_64-w64-mingw32-gcc
 BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
@@ -9,6 +9,7 @@ BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
 
 KERNEL_CC		= gcc
 KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
+<<<<<<< HEAD
 				-I include -nostartfiles -O2 -fno-tree-slp-vectorize
 
 KERNEL_ASM		= nasm
