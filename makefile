@@ -9,7 +9,6 @@ BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
 
 KERNEL_CC		= gcc
 KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
-<<<<<<< HEAD
 				-I include -nostartfiles -O2 -fno-tree-slp-vectorize
 
 KERNEL_ASM		= nasm
