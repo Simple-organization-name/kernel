@@ -7,8 +7,17 @@
 #include "kalloc.h"
 #include "kterm.h"
 
+#define __attribute_no_vectorize__ __attribute__((optimize("no-tree-slp-vectorize")))
+
 volatile    MemMap          *physMemoryMap = NULL;
 static      PageTablePool   *ptPool = NULL;
+
+__attribute__((__unused__))
+void *memset(void *dest, int val, size_t count) {
+    for (size_t i = 0; i < count; i++)
+        ((uint8_t *)dest)[i] = val;
+    return dest;
+}
 
 inline uint64_t bmpGetOffset(uint8_t level) {
     if (level > 5) return 0;
@@ -62,9 +71,8 @@ inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemo
 
     // For every valid range set the corresponding bit
     for (uint16_t i = 0; i < validMemoryCount; i++) {
-        MemoryRange target = validMemory[i];
-        uint64_t start = target.start / 4096;
-        uint64_t pageCount = target.size / 4096;
+        uint64_t start = validMemory[i].start / 4096;
+        uint64_t pageCount = validMemory[i].size / 4096;
         for (uint64_t j = 0; j < pageCount; j++)
             memBitmap->level0[(start + j)/8].value &= ~(1<<(j%8));
     }
@@ -101,6 +109,7 @@ inline static void initPages(PhysAddr bitmapBase) {
     knewline();
 }
 
+__attribute_no_vectorize__
 void initPhysMem() {
     MemoryRange validMemory[256] = {0};
     uint8_t validMemoryCount = getValidMemRanges(validMemory);
@@ -109,8 +118,7 @@ void initPhysMem() {
     int16_t where = -1;
     uint64_t totalSize = 0;
     PhysAddr bitmapBase = 0;
-    for (uint8_t i = 0; i < validMemoryCount; i++)
-    {
+    for (uint8_t i = 0; i < validMemoryCount; i++) {
         bitmapBase = align(validMemory[i].start);
         totalSize = bitmapBase - validMemory[i].start + (2<<20);
         if (validMemory[i].size >= totalSize) {
@@ -249,6 +257,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, ui
     return -1;
 }
 
+__attribute_no_vectorize__
 PhysAddr resPhysMemory(uint8_t size, uint8_t count) {
     uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;

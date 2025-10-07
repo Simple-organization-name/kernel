@@ -113,6 +113,8 @@ typedef struct _ChainedPageTablePool {
 
 extern volatile MemMap *physMemoryMap;
 
+void *memset(void *dest, int val, size_t count);
+
 void initPhysMem();
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
