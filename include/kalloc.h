@@ -72,12 +72,6 @@ typedef struct _MemoryRange {
     size_t      size;
 } MemoryRange;
 
-typedef struct _MemBlock {
-    size_t              size;
-    VirtAddr            ptr;
-    struct _MemBlock    *next;
-} MemBlock;
-
 typedef union _BitmapValue {
     uint8_t value;
     struct {
@@ -111,11 +105,9 @@ typedef struct _ChainedPageTablePool {
     PhysAddr                        pool[PT_POOL_SIZE];
 } PageTablePool;
 
-extern volatile MemMap *physMemoryMap;
-
 void *memset(void *dest, int val, size_t count);
 
-void initPhysMem();
+void initPhysMem(EfiMemMap *physMemMap);
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
 PhysAddr resPhysMemory(uint8_t size, uint8_t count);

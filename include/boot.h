@@ -23,13 +23,13 @@ typedef struct _MemoryDescriptor {
     uint64_t    Attribute;
 } MemoryDescriptor;
 
-typedef struct _MemMap {
+typedef struct _EfiMemMap {
     uint64_t            count;
     uint64_t            mapSize;
     uint64_t            descSize;
     MemoryDescriptor    *map;
     uint64_t            key;
-} MemMap;
+} EfiMemMap;
 
 typedef struct _Pixel {
     uint8_t a;
@@ -51,7 +51,7 @@ typedef struct _fileArray {
 
 typedef struct _BootInfo {
     Framebuffer* frameBuffer;
-    MemMap* memMap;
+    EfiMemMap* memMap;
     FileArray* files;
 } BootInfo;
 

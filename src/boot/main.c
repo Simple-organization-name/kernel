@@ -29,7 +29,7 @@
 
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
-MemMap      memmap      = {0};
+EfiMemMap      memmap      = {0};
 FileArray   files       = {0};
 
 // UEFI preboot functions and global variables
@@ -758,7 +758,7 @@ static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void
     EFI_CALL_FATAL_ERROR(u"Need to know approx memory map size to alloc trampoline")
 
     UINTN noPages = EFI_SIZE_TO_PAGES(trampoline_size);
-    noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
+    noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(EfiMemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
 
     EFI_PHYSICAL_ADDRESS addr = 1 << 21;
     systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
@@ -784,16 +784,16 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
     UINT8* loc = (UINT8*)bootInfoPasteLocation;
     *(BootInfo*)loc = (BootInfo){
         .frameBuffer = (Framebuffer*)(loc + sizeof(BootInfo)),
-        .memMap = (MemMap*)(loc + sizeof(BootInfo) + sizeof(Framebuffer)),
-        .files = (FileArray*)(loc + sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(MemMap) + bootInfo->memMap->mapSize),
+        .memMap = (EfiMemMap*)(loc + sizeof(BootInfo) + sizeof(Framebuffer)),
+        .files = (FileArray*)(loc + sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(EfiMemMap) + bootInfo->memMap->mapSize),
     };
     loc += sizeof(BootInfo);
     *(Framebuffer*)loc = *bootInfo->frameBuffer;
     ((Framebuffer*)loc)->addr = framebuffer_va;
     loc += sizeof(Framebuffer);
-    *(MemMap*)loc = *bootInfo->memMap;
-    ((MemMap*)loc)->map = (MemoryDescriptor*)(loc + sizeof(MemMap));
-    loc += sizeof(MemMap);
+    *(EfiMemMap*)loc = *bootInfo->memMap;
+    ((EfiMemMap*)loc)->map = (MemoryDescriptor*)(loc + sizeof(EfiMemMap));
+    loc += sizeof(EfiMemMap);
     for (UINT32 i = 0; i < bootInfo->memMap->mapSize; i++)
     {
         loc[i] = ((UINT8*)bootInfo->memMap->map)[i];

@@ -13,8 +13,6 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
     kfillscreen(0xFF000000);
 
-    physMemoryMap = bootInfo->memMap;
-
     init_interrupts();
 
     PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
@@ -22,8 +20,8 @@ _Noreturn void kmain(BootInfo* bootInfo)
     PhysAddr fbPhysAddr = getMapping(0xFFFFFF0000000000, NULL);
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
 
-    initPhysMem();
-    printMemBitmap();
+    initPhysMem(bootInfo->memMap);
+    // printMemBitmap();
 
     for (uint8_t i = 0; i < 10; i++) {
         PhysAddr test = resPhysMemory(MEM_4K, 2);
