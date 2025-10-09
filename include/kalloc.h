@@ -110,7 +110,7 @@ void *memset(void *dest, int val, size_t count);
 void initPhysMem(EfiMemMap *physMemMap);
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
-PhysAddr resPhysMemory(uint8_t size, uint8_t count);
+PhysAddr resPhysMemory(uint8_t size, uint64_t count);
 
 VirtAddr allocVirtMemory(uint8_t size, uint64_t count);
 

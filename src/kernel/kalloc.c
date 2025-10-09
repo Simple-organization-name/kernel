@@ -197,7 +197,7 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, uint64_t idx[6]) {
+static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, uint64_t idx[6]) {
     if (size > 5) return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
@@ -228,7 +228,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint8_t count, uint8_t curLevel, ui
 }
 
 __attribute_no_vectorize__
-PhysAddr resPhysMemory(uint8_t size, uint8_t count) {
+PhysAddr resPhysMemory(uint8_t size, uint64_t count) {
     uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
     return _resPhysMemory(size, count, 5, idx);
