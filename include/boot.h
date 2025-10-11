@@ -39,20 +39,20 @@ typedef struct _Pixel {
 } Pixel;
 
 typedef struct _fileData {
-    void* data;
-    uint64_t size;
+    void*       data;
+    uint64_t    size;
 } FileData;
 
 typedef struct _fileArray {
-    FileData config;
-    FileData* files;
-    uint64_t count;
+    FileData    config;
+    FileData*   files;
+    uint64_t    count;
 } FileArray;
 
 typedef struct _BootInfo {
-    Framebuffer* frameBuffer;
-    EfiMemMap* memMap;
-    FileArray* files;
+    Framebuffer*    frameBuffer;
+    EfiMemMap*      memMap;
+    FileArray*      files;
 } BootInfo;
 
 

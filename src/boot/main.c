@@ -54,8 +54,8 @@ static EFI_STATUS   createLogFile();
 static EFI_STATUS   loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* entry, OUT EFI_PHYSICAL_ADDRESS* kernel_pa, OUT UINTN* imageSize);
 static EFI_STATUS   getMemoryMap();
 static void         exitBootServices();
-static EFI_STATUS   makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_);
-static EFI_STATUS   loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation);
+static EFI_STATUS   makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageEntry** OUT pml4_);
+static EFI_STATUS   loadTrampoline(OUT void (**trampoline)(PageEntry*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation);
 static void         pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
 static EFI_STATUS   openFiles(IN CHAR16* configPath, OUT FileArray* files);
 
@@ -120,7 +120,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         while (1) hlt();
     }
 
-    void (*trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)) = NULL;
+    void (*trampoline)(PageEntry*, BootInfo*, void (*)(BootInfo*)) = NULL;
     BootInfo* bootInfoPasteLocation = NULL;
     status = loadTrampoline(&trampoline, &bootInfoPasteLocation);
 
@@ -132,7 +132,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
         while (1) hlt();
     }
 
-    pte_t* pml4 = NULL;
+    PageEntry* pml4 = NULL;
     status = makePageTables(kernel_pa, imageSize, &pml4);
     EFI_CALL_ERROR {
         EfiPrintError(status, u"Failed to map memory");
@@ -430,7 +430,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
     status = getMemoryMap();
     EFI_CALL_FATAL_ERROR(u"Failed to get memory map to know where the kernel can be put");
 
-#define alignup_2mo(addr) (((UINT64)(addr) + 0x1FFFFF) & ~0x1FFFFF)
+    #define alignup_2mo(addr) (((UINT64)(addr) + 0x1FFFFF) & ~0x1FFFFF)
 
     for (UINT64 memSegment_i = 0; memSegment_i < memmap.count; memSegment_i++)
     {
@@ -445,7 +445,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
         load_base = alignup_2mo(memSegment->PhysicalStart);
     }
 
-#undef alignup_2mo
+    #undef alignup_2mo
 
     if (load_base == 0) {
         status = -1;
@@ -699,19 +699,18 @@ static void exitBootServices() {
 
 }
 
-static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t** OUT pml4_) {
-
+static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageEntry** OUT pml4_) {
     EFI_PHYSICAL_ADDRESS pageAddress;
     EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 5, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
-    pte_t* pml4             = (pte_t*)(pageAddress + 0*4096);
+    PageEntry* pml4             = (PageEntry*)(pageAddress + 0*4096);
     // each pdp can contain 512GiB so for now we can keep it at one for lower space and one for higher space
-    pte_t* pdp_low          = (pte_t*)(pageAddress + 1*4096);
-    pte_t* pdp_high         = (pte_t*)(pageAddress + 2*4096);
-    pte_t* pd_kernel        = (pte_t*)(pageAddress + 3*4096);
-    pte_t* pd_framebuffer   = (pte_t*)(pageAddress + 4*4096);
+    PageEntry* pdp_low          = (PageEntry*)(pageAddress + 1*4096);
+    PageEntry* pdp_high         = (PageEntry*)(pageAddress + 2*4096);
+    PageEntry* pd_kernel        = (PageEntry*)(pageAddress + 3*4096);
+    PageEntry* pd_framebuffer   = (PageEntry*)(pageAddress + 4*4096);
 
     CLEAR_PT(pml4);
     // delegate low 512GiB VA mapping to the pdp_low table
@@ -747,7 +746,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, pte_t
     return EFI_SUCCESS;
 }
 
-static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation)
+static EFI_STATUS loadTrampoline(OUT void (**trampoline)(PageEntry*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation)
 {
     extern uint8_t _binary_build_boot_trampoline_bin_start[];
     extern uint8_t _binary_build_boot_trampoline_bin_end[];
@@ -773,7 +772,7 @@ static EFI_STATUS loadTrampoline(OUT void (**trampoline)(pte_t*, BootInfo*, void
         ((UINT8*)addr)[i] = _binary_build_boot_trampoline_bin_start[i];
     }
 
-    *trampoline = (void (*)(pte_t*, BootInfo*, void (*)(BootInfo*)))addr;
+    *trampoline = (void (*)(PageEntry*, BootInfo*, void (*)(BootInfo*)))addr;
     *bootInfoPasteLocation = (BootInfo*)(addr + EFI_SIZE_TO_PAGES(trampoline_size)*EFI_PAGE_SIZE);
 
     return EFI_SUCCESS;

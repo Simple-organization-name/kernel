@@ -23,17 +23,18 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     // printMemBitmap();
 
-    for (uint8_t i = 0; i < 10; i++) {
-        PhysAddr test = resPhysMemory(MEM_4K, 2);
-        if (test == -1UL)
-            kputs("Failed to reserve memory");
-        else
-            kprintf("Memory reserved at %X\n", test);
-    }
-    knewline();
-    
-    PhysAddr a = resPhysMemory(MEM_2M, 1);
-    kprintf("big at %X\n", a);
+    kprintf("%X", vaToPa(memoryBitmap_va, PTE_PT));
+
+    // PhysAddr test = resPhysMemory(MEM_4K, 1);
+    // char *ptr = NULL;
+    // if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
+    //     kprintf("failed to map test\n");
+    // for (uint64_t i = 0; i < (2<<11); i++) {
+    //     kprintf("%d ", i);
+    //     ptr[i] = i;
+    // }
+    // for (uint64_t i = 0; i < (2<<11); i++)
+    //     kprintf("%d ", ptr[i]);
 
     kputs("Hello from SOS kernel !\n");
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");

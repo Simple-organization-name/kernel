@@ -12,10 +12,10 @@
 #define RECURSIVE_SLOT 511UL
 
 // Standard recursive page table mapping formulas
-#define PML4()      ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
-#define PDPT(i)     ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((i) << 12)))
-#define PD(i, j)    ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
-#define PT(i, j, k) ((pte_t*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
+#define PML4()      ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
+#define PDPT(i)     ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((i) << 12)))
+#define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
+#define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
 
 // Memory bitmap
 #define memoryBitmap_va 0xFFFFFF7FBFE00000
@@ -29,8 +29,11 @@
 
 #define BMP_JUMP_POW2       3
 #define BMP_JUMP            (1<<BMP_JUMP_POW2)
+// Size of a bitmap level
 #define BMP_SIZE_OF(N)      (uint64_t)(((uint8_t)(N) < 6) ? 2<<(19-(BMP_JUMP_POW2*(uint8_t)(N))) : 0)
+// Size of the whole bitmap
 #define BMP_SIZE            (uint64_t)(BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4) + BMP_SIZE_OF(5))
+// Size of a page at level N
 #define BMP_MEM_SIZE_OF(N)  (uint64_t)(((uint8_t)(N) < 6) ? 2<<(11 + 3*(uint8_t)(N)) : 0)
 
 #define BMP_PAGE_TABLE_START(BMP_VA)    (((uint64_t)(BMP_VA) + BMP_SIZE + 0xFFF) & ~0xFFF)
@@ -44,9 +47,9 @@ typedef uint64_t PhysAddr;
 typedef uint64_t VirtAddr;
 
 typedef enum _PageType {
-    PTE_PT,
-    PTE_PD,
-    PTE_PDP,
+    PTE_PDP,    // PageDirectoryPointer:    1GiB
+    PTE_PD,     // PageDirectory:           2MiB
+    PTE_PT,     // PageTable:               4kiB
 } PageType;
 
 typedef enum {
@@ -98,14 +101,16 @@ typedef union _MemBitmap {
     };
 } MemBitmap;
 
-#define PT_POOL_SIZE 4096/sizeof(uint64_t) - 2
-typedef struct _ChainedPageTablePool {
-    uint64_t                        count;
-    struct _ChainedPageTablePool    *next;
-    PhysAddr                        pool[PT_POOL_SIZE];
-} PageTablePool;
+#define PT_POOL_SIZE 4096/sizeof(PageEntry *) - 2
+typedef struct _PageTablePool {
+    uint64_t                count;
+    struct _PageTablePool   *next;
+    PhysAddr                pool[PT_POOL_SIZE];
+} PageEntryPool;
 
 void *memset(void *dest, int val, size_t count);
+
+PhysAddr vaToPa(VirtAddr va, PageType type);
 
 void initPhysMem(EfiMemMap *physMemMap);
 void printMemBitmapLevel(uint8_t n);
@@ -114,7 +119,7 @@ PhysAddr resPhysMemory(uint8_t size, uint64_t count);
 
 VirtAddr allocVirtMemory(uint8_t size, uint64_t count);
 
-bool mapPage(PhysAddr physical, VirtAddr virtual, PageType page);
+bool mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
 bool unmapPage(VirtAddr virtual);
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 

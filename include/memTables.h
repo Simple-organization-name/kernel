@@ -6,7 +6,7 @@
 #define CLEAR_PT(PT) for (uint32_t i = 0; i < 512; i++) (PT)[i].whole = 0
 
 // to manipulate one field by one
-typedef union _pageTableEntry {
+typedef union _PageEntry {
     uint64_t whole;
     struct {
     uint64_t present : 1,   // is used
@@ -23,7 +23,7 @@ typedef union _pageTableEntry {
             avl_2 : 11,
             xd : 1;         // if set, cannot execute page
     };
-} pte_t;
+} PageEntry;
 
 // to OR things together
 
