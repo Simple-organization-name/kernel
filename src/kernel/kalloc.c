@@ -275,47 +275,16 @@ PhysAddr resPhysMemory(uint8_t size, uint64_t count) {
     return _resPhysMemory(size, count, 5, idx);
 }
 
-inline void refillPageTable() {
-    PhysAddr addr = resPhysMemory(MEM_2M, 1);
-    PageEntry *ptr;
-    if (!mapPage((VirtAddr *)&ptr, addr, PTE_PDP, (uint64_t)(PTE_RW))) {
-        kprintf("Failed to map new pages\n");
-        cli();
-        while (1) hlt();
-    }
-    memset(ptr, 0, (2<<20));
+// inline void refillPageTable() {
+//     PhysAddr addr = resPhysMemory(MEM_2M, 1);
 
-    for (uint16_t i = 0; i < (2<<20)/4096; i++) {
-        // yes
-    }
-}
 
-static PageEntry *resPageTable() {
-    PageEntryPool *cur = ptPool, *prev = NULL;
-    while (cur->next) {
-        prev = cur;
-        cur = cur->next;
-    }
-    // If pool is empty allocate phys mem to add new pages to the pool
-    /**
-     * reserve 5 pages, one for mapping the new pages
-     * and two others in case of needing a new pdp (1 GiB entries)
-     * and a new pd (2MiB entries / what we need)
-     * + 2 cause safety
-     */
-    if (prev == NULL) {
-        if (cur->count < 5) {
-            kprintf("Not enough page table to create new pages\n");
-            cli();
-            while (1) hlt();
-        } else if (cur->count == 5) {
-            refillPageTable();
-        }
-    } else if (cur->count == 0) {
-        // use the pool as a page :)
-        // (size of a pool = size of page entry = 4096)
-    }
+//     for (uint16_t i = 0; i < (2<<20)/4096; i++) {
+//         // yes
+//     }
+// }
 
+static PhysAddr resPageTable() {
     return ptPool->pool[--(ptPool->count)];
 }
 
@@ -364,7 +333,7 @@ bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uin
     for (uint16_t i = 0; i < 500; i++) {
         idx[curDepth] = i;
         if (!table[i].present) { // WARNING: This suppose the ptPool always have at least 1 page
-            table[i].whole = (uint64_t)(((uintptr_t)ptPool->pool[--(ptPool->count)] & PTE_ADDR) | PTE_P | PTE_RW);
+            table[i].whole = (uint64_t)(((uintptr_t)resPageTable() & PTE_ADDR) | PTE_P | PTE_RW);
         } else if (table[i].pageSize) continue;
         if (_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
             *out = ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
