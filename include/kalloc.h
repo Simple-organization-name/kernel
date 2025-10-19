@@ -18,7 +18,9 @@
 #define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
 
 // Memory bitmap
-#define memoryBitmap_va 0xFFFFFF7FBFE00000
+#define memoryBitmap_va 0xFFFFFF003FE00000
+#define tempPT_va       0xFFFFFF003FC00000
+#define TEMP_PT(i)      ((PageEntry *)(RECURSIVE_BASE | (510UL << 39) | (0 << 30) | (510UL << 21) | ((uint64_t)i << 12)))
 
 #define MEM_4K      0
 #define MEM_32K     1
@@ -101,9 +103,10 @@ typedef union _MemBitmap {
     };
 } MemBitmap;
 
-#define PT_POOL_SIZE 4096/sizeof(PageEntry *) - 2
+#define PT_POOL_SIZE 4096/sizeof(PageEntry *) - 3
 typedef struct _PageTablePool {
     uint64_t                count;
+    struct _PageTablePool   *prev;
     struct _PageTablePool   *next;
     PhysAddr                pool[PT_POOL_SIZE];
 } PageEntryPool;

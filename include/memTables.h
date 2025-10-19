@@ -39,6 +39,4 @@ typedef union _PageEntry {
 #define PTE_NX  (1ULL<<63)  // not exec
 #define PTE_ADDR (0x000FFFFFFFFFF000)
 
-
-
 #endif

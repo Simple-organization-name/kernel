@@ -9,6 +9,7 @@
 #include "kterm.h"
 
 static PageEntryPool *ptPool = NULL;
+// static PageEntryPool *ptPoolTop = NULL;
 
 __attribute_maybe_unused__
 void *memset(void *dest, int val, size_t count) {
@@ -130,11 +131,12 @@ inline static void initPages(PhysAddr bitmapBase) {
     ptPool = (PageEntryPool *)BMP_PAGE_TABLE_START(memoryBitmap_va);
     *ptPool = (PageEntryPool) {
         .count = 0,
+        .prev = NULL,
         .next = NULL,
         .pool = {0},
     };
-    for (ptPool->count = 0; ptPool->count < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); ptPool->count++)
-        ptPool->pool[ptPool->count] = (PhysAddr)(bitmapBase + BMP_SIZE + (ptPool->count+ 1)*4096);
+    for (; ptPool->count < BMP_PAGE_TABLE_COUNT(memoryBitmap_va)-1; ptPool->count++)
+        ptPool->pool[ptPool->count] = (PhysAddr)(bitmapBase + BMP_SIZE + (ptPool->count + 1)*4096);
 }
 
 __attribute_no_vectorize__
@@ -180,8 +182,12 @@ void initPhysMem(EfiMemMap *physMemMap) {
     validMemory[where].start = bitmapBase + (2<<20);
     validMemory[where].size -= totalSize;
 
-    ((PageEntry *)PD(510, 510))[511].whole = ((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX;
+    ((PageEntry *)PD(510, 0))[511].whole = (uint64_t)(((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX);
     invlpg(memoryBitmap_va);
+
+    PhysAddr physTempPT = resPhysMemory(MEM_4K, 1);
+    ((PageEntry *)PD(510, 0))[510].whole = (uint64_t)(((uintptr_t)physTempPT & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX);
+    invlpg(tempPT_va);
 
     initMemoryBitmap(validMemory, validMemoryCount);
     initPages(bitmapBase);
@@ -285,6 +291,11 @@ PhysAddr resPhysMemory(uint8_t size, uint64_t count) {
 // }
 
 static PhysAddr resPageTable() {
+    if (ptPool->count == 0) {
+        kprintf("No more page table\n");
+        cli();
+        while (1) hlt();
+    }
     return ptPool->pool[--(ptPool->count)];
 }
 
@@ -308,7 +319,7 @@ bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uin
                 ((PageEntry *)PT(idx[0], idx[1], idx[2]))[idx[3]].whole = (uint64_t) ((phys & PTE_ADDR) | PTE_P | flags);
                 break;
         }
-        return true;
+        return true; // mapped page successfully
     }
 
     PageEntry *table;
@@ -333,10 +344,22 @@ bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uin
     for (uint16_t i = 0; i < 500; i++) {
         idx[curDepth] = i;
         if (!table[i].present) { // WARNING: This suppose the ptPool always have at least 1 page
-            table[i].whole = (uint64_t)(((uintptr_t)resPageTable() & PTE_ADDR) | PTE_P | PTE_RW);
+            PhysAddr newPagePhys = resPageTable();
+
+            kprintf("Cleaning new page...");
+            // First set the new page table as part of writable memory and not a table
+            ((PageEntry *)tempPT_va)[0].whole = (uint16_t)(((uintptr_t)(newPagePhys | PTE_ADDR)) | PTE_P | PTE_RW);
+            invlpg((uint64_t)TEMP_PT(0));
+            CLEAR_PT(TEMP_PT(0));
+            // Remove the writable memory
+            ((PageEntry *)tempPT_va)[0].present = 0;
+            invlpg((uint64_t)TEMP_PT(0));
+            kprintf(" Done\n");
+
+            table[i].whole = ((uint64_t)newPagePhys& PTE_ADDR) | PTE_P | PTE_RW;
         } else if (table[i].pageSize) continue;
         if (_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
-            *out = ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
+            *out = RECURSIVE_BASE | ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
             return true;
         }
     }

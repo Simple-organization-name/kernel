@@ -21,12 +21,13 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
 
     initPhysMem(bootInfo->memMap);
-    // printMemBitmap();
+    printMemBitmap();
 
-    // PhysAddr test = resPhysMemory(MEM_4K, 1);
-    // char *ptr = NULL;
-    // if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
-    //     kprintf("failed to map test\n");
+    PhysAddr test = resPhysMemory(MEM_4K, 1);
+    char *ptr = NULL;
+    if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
+        kprintf("failed to map test\n");
+
     // for (uint64_t i = 0; i < (2<<11); i++) {
     //     kprintf("%d ", i);
     //     ptr[i] = i;
