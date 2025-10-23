@@ -17,6 +17,7 @@ KERNEL_ASMFLAGS = -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror -
 KERNEL			= kernel
 
 OVMF_PATH 		= OVMF.fd
+EMUL_ARGS		= -net none -d int 2> stderr.log
 
 KERNEL_SOURCES_ASM = $(wildcard src/kernel/*.asm)
 KERNEL_OBJECTS_ASM = $(patsubst src/kernel/%.asm,build/kernel/%.o,$(KERNEL_SOURCES_ASM))
@@ -61,7 +62,7 @@ clean:
 
 emul:
 	@echo Starting emulation...
-	@qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) -net none -d int 2> stderr.log
+	@qemu-system-x86_64 -drive format=raw,file=fat:rw:iso/ -bios $(OVMF_PATH) $(EMUL_ARGS)
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade

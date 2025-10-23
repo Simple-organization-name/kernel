@@ -346,20 +346,21 @@ bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uin
         if (!table[i].present) { // WARNING: This suppose the ptPool always have at least 1 page
             PhysAddr newPagePhys = resPageTable();
 
-            kprintf("Cleaning new page...");
+            kputs("Cleaning new page...\n");
             // First set the new page table as part of writable memory and not a table
-            ((PageEntry *)tempPT_va)[0].whole = (uint16_t)(((uintptr_t)(newPagePhys | PTE_ADDR)) | PTE_P | PTE_RW);
+            PT(510, 0, 510)[0].whole = (uint64_t)(((uintptr_t)(newPagePhys & PTE_ADDR)) | PTE_P | PTE_RW);
+            kputs("Temporarily mapped table memory\n");
             invlpg((uint64_t)TEMP_PT(0));
-            CLEAR_PT(TEMP_PT(0));
+            CLEAR_PT((PageEntry *)TEMP_PT(0));
             // Remove the writable memory
-            ((PageEntry *)tempPT_va)[0].present = 0;
+            PT(510, 0, 510)[0].present = 0;
             invlpg((uint64_t)TEMP_PT(0));
-            kprintf(" Done\n");
+            kprintf("Done\n");
 
             table[i].whole = ((uint64_t)newPagePhys& PTE_ADDR) | PTE_P | PTE_RW;
         } else if (table[i].pageSize) continue;
         if (_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
-            *out = RECURSIVE_BASE | ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
+            *out = ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
             return true;
         }
     }

@@ -13,14 +13,14 @@
 
 // Standard recursive page table mapping formulas
 #define PML4()      ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
-#define PDPT(i)     ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((i) << 12)))
-#define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((i) << 21) | ((j) << 12)))
-#define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((i) << 30) | ((j) << 21) | ((k) << 12)))
+#define PDPT(i)     ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((uint64_t)(i) << 12)))
+#define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (((uint64_t)i) << 21) | ((uint64_t)(j) << 12)))
+#define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((uint64_t)(i) << 30) | ((uint64_t)(j) << 21) | ((uint64_t)(k) << 12)))
 
 // Memory bitmap
 #define memoryBitmap_va 0xFFFFFF003FE00000
 #define tempPT_va       0xFFFFFF003FC00000
-#define TEMP_PT(i)      ((PageEntry *)(RECURSIVE_BASE | (510UL << 39) | (0 << 30) | (510UL << 21) | ((uint64_t)i << 12)))
+#define TEMP_PT(i)  ((void *)(RECURSIVE_BASE | (510UL << 39) | (0UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
 
 #define MEM_4K      0
 #define MEM_32K     1

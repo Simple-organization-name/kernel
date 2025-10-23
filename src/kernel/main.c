@@ -23,6 +23,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     printMemBitmap();
 
+    kputs("Testing map function...\n");
     PhysAddr test = resPhysMemory(MEM_4K, 1);
     char *ptr = NULL;
     if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
