@@ -11,117 +11,138 @@
 static PageEntryPool *ptPool = NULL;
 // static PageEntryPool *ptPoolTop = NULL;
 
-__attribute_maybe_unused__
-void *memset(void *dest, int val, size_t count) {
+__attribute_maybe_unused__ void *memset(void *dest, int val, size_t count)
+{
     for (size_t i = 0; i < count; i++)
         ((uint8_t *)dest)[i] = val;
     return dest;
 }
 
-inline uint64_t bmpGetOffset(uint8_t level) {
-    if (level > 5) return 0;
+inline uint64_t bmpGetOffset(uint8_t level)
+{
+    if (level > 5)
+        return 0;
     uint64_t offset = 0;
     for (uint8_t i = 0; i < level; i++)
         offset += BMP_SIZE_OF(i);
     return offset;
 }
 
-PhysAddr vaToPa(VirtAddr va, PageType type) {
+PhysAddr vaToPa(VirtAddr va, PageType type)
+{
     uint16_t pml4_idx = (va >> 39) & 0x1FF;
     uint16_t pdpt_idx = (va >> 30) & 0x1FF;
     uint16_t pd_idx = (va >> 21) & 0x1FF;
     uint16_t pt_idx = (va >> 12) & 0x1FF;
-    
+
     PageEntry entry;
-    switch (type) {
-        case PTE_PDP: {
-            entry = ((PageEntry *)PDPT(pml4_idx))[pdpt_idx];
-            if (!entry.present) return (PhysAddr)-1;
-            // 1 GiB page offset
-            uint64_t offset = va & ((1ULL << 30) - 1);
-            return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-        }
-        case PTE_PD: {
-            entry = ((PageEntry *)PD(pml4_idx, pdpt_idx))[pd_idx];
-            if (!entry.present) return (PhysAddr)-1;
-            if (entry.pageSize) {
-                // 2 MiB page offset
-                uint64_t offset = va & ((1ULL << 21) - 1);
-                return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-            } else {
-                // not a large PD entry — return base (address of next-level table)
-                return (PhysAddr)(entry.whole & PTE_ADDR);
-            }
-        }
-        case PTE_PT: {
-            entry = ((PageEntry *)PT(pml4_idx, pdpt_idx, pd_idx))[pt_idx];
-            if (!entry.present) return (PhysAddr)-1;
-            // 4 KiB page offset
-            uint64_t offset = va & ((1ULL << 12) - 1);
-            return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-        }
-        default:
+    switch (type)
+    {
+    case PTE_PDP:
+    {
+        entry = ((PageEntry *)PDPT(pml4_idx))[pdpt_idx];
+        if (!entry.present)
             return (PhysAddr)-1;
+        // 1 GiB page offset
+        uint64_t offset = va & ((1ULL << 30) - 1);
+        return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
+    }
+    case PTE_PD:
+    {
+        entry = ((PageEntry *)PD(pml4_idx, pdpt_idx))[pd_idx];
+        if (!entry.present)
+            return (PhysAddr)-1;
+        if (entry.pageSize)
+        {
+            // 2 MiB page offset
+            uint64_t offset = va & ((1ULL << 21) - 1);
+            return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
+        }
+        else
+        {
+            // not a large PD entry — return base (address of next-level table)
+            return (PhysAddr)(entry.whole & PTE_ADDR);
+        }
+    }
+    case PTE_PT:
+    {
+        entry = ((PageEntry *)PT(pml4_idx, pdpt_idx, pd_idx))[pt_idx];
+        if (!entry.present)
+            return (PhysAddr)-1;
+        // 4 KiB page offset
+        uint64_t offset = va & ((1ULL << 12) - 1);
+        return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
+    }
+    default:
+        return (PhysAddr)-1;
     }
 }
 
-inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory) {
+inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory)
+{
     uint8_t validMemoryCount = 0;
 
-    for (uint8_t i = 0; i < physMemoryMap->count; i++) {
+    for (uint8_t i = 0; i < physMemoryMap->count; i++)
+    {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemoryMap->map + physMemoryMap->descSize * i);
-        switch (desc->Type) {
-            case EfiLoaderCode:
-            case EfiLoaderData:
-            case EfiBootServicesCode:
-            case EfiBootServicesData:
-            case EfiConventionalMemory:
-                if (validMemoryCount > 0 &&
-                    validMemory[validMemoryCount - 1].start +
-                    validMemory[validMemoryCount - 1].size ==
+        switch (desc->Type)
+        {
+        case EfiLoaderCode:
+        case EfiLoaderData:
+        case EfiBootServicesCode:
+        case EfiBootServicesData:
+        case EfiConventionalMemory:
+            if (validMemoryCount > 0 &&
+                validMemory[validMemoryCount - 1].start +
+                        validMemory[validMemoryCount - 1].size ==
                     desc->PhysicalStart)
-                {
-                    validMemory[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
-                }
-                else
-                {
-                    validMemory[validMemoryCount].start = desc->PhysicalStart;
-                    validMemory[validMemoryCount].size = desc->NumberOfPages * 4096;
-                    validMemoryCount++;
-                }
-                break;
-            default:
-                break;
+            {
+                validMemory[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
+            }
+            else
+            {
+                validMemory[validMemoryCount].start = desc->PhysicalStart;
+                validMemory[validMemoryCount].size = desc->NumberOfPages * 4096;
+                validMemoryCount++;
+            }
+            break;
+        default:
+            break;
         }
     }
 
     return validMemoryCount;
 }
 
-inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemoryCount) {
+inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemoryCount)
+{
     // Set all memory to invalid
     MemBitmap *memBitmap = (MemBitmap *)memoryBitmap_va;
     for (size_t i = 0; i < BMP_SIZE; i++)
         memBitmap->whole[i].value = 255U;
 
     // For every valid range set the corresponding bit
-    for (uint16_t i = 0; i < validMemoryCount; i++) {
+    for (uint16_t i = 0; i < validMemoryCount; i++)
+    {
         uint64_t start = validMemory[i].start / 4096;
         uint64_t pageCount = validMemory[i].size / 4096;
         for (uint64_t j = 0; j < pageCount; j++)
-            memBitmap->level0[(start + j)/8].value &= ~(1<<(j%8));
+            memBitmap->level0[(start + j) / 8].value &= ~(1 << (j % 8));
     }
 
     // Cascade level
-    for (uint64_t i = 0; i < 5; i++) {
-        for (uint64_t j = 0; j < BMP_SIZE_OF(i); j++) {
+    for (uint64_t i = 0; i < 5; i++)
+    {
+        for (uint64_t j = 0; j < BMP_SIZE_OF(i); j++)
+        {
             if (memBitmap->whole[bmpGetOffset(i) + j].value != 255U)
-                memBitmap->whole[bmpGetOffset(i+1) + j/8].value &= ~(1<<(j%8));
+                memBitmap->whole[bmpGetOffset(i + 1) + j / 8].value &= ~(1 << (j % 8));
         }
     }
 }
 
-inline static void initPages(PhysAddr bitmapBase) {
+inline static void initPages(PhysAddr bitmapBase)
+{
     // Clear page tables available after memory bitmap
     PageEntry *pageTable = (PageEntry *)BMP_PAGE_TABLE_START(memoryBitmap_va);
     for (uint64_t i = 0; i < BMP_PAGE_TABLE_COUNT(memoryBitmap_va); i++)
@@ -129,45 +150,51 @@ inline static void initPages(PhysAddr bitmapBase) {
 
     // Create the first pool of page tables
     ptPool = (PageEntryPool *)BMP_PAGE_TABLE_START(memoryBitmap_va);
-    *ptPool = (PageEntryPool) {
+    *ptPool = (PageEntryPool){
         .count = 0,
         .prev = NULL,
         .next = NULL,
         .pool = {0},
     };
-    for (; ptPool->count < BMP_PAGE_TABLE_COUNT(memoryBitmap_va)-1; ptPool->count++)
-        ptPool->pool[ptPool->count] = (PhysAddr)(bitmapBase + BMP_SIZE + (ptPool->count + 1)*4096);
+    for (; ptPool->count < BMP_PAGE_TABLE_COUNT(memoryBitmap_va) - 1; ptPool->count++)
+        ptPool->pool[ptPool->count] = (PhysAddr)(bitmapBase + BMP_SIZE + (ptPool->count + 1) * 4096);
 }
 
-__attribute_no_vectorize__
-void initPhysMem(EfiMemMap *physMemMap) {
+__attribute_no_vectorize__ void initPhysMem(EfiMemMap *physMemMap)
+{
     MemoryRange validMemory[256] = {0};
     uint8_t validMemoryCount = getValidMemRanges(physMemMap, validMemory);
 
-    #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
+#define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
     int16_t where = -1;
     uint64_t totalSize = 0;
     PhysAddr bitmapBase = 0;
-    for (uint8_t i = 0; i < validMemoryCount; i++) {
+    for (uint8_t i = 0; i < validMemoryCount; i++)
+    {
         bitmapBase = align(validMemory[i].start);
-        totalSize = bitmapBase - validMemory[i].start + (2<<20);
-        if (validMemory[i].size >= totalSize) {
+        totalSize = bitmapBase - validMemory[i].start + (2 << 20);
+        if (validMemory[i].size >= totalSize)
+        {
             where = i;
             break;
         }
     }
-    #undef align
+#undef align
 
-    if (where == -1) {
+    if (where == -1)
+    {
         kprintf("Could not find enough contiguous memory for memory bitmap\n");
         cli();
-        while (1) hlt();
+        while (1)
+            hlt();
     }
 
     // If there's memory available before the start of the memory mapping made by the alignment
-    if (bitmapBase != validMemory[where].start) {
+    if (bitmapBase != validMemory[where].start)
+    {
         // Shift all MemoryRange
-        for (uint8_t i = validMemoryCount - 1; i >= where; i--) {
+        for (uint8_t i = validMemoryCount - 1; i >= where; i--)
+        {
             MemoryRange tmp = validMemory[i];
             validMemory[i + 1].size = tmp.size;
             validMemory[i + 1].start = tmp.start;
@@ -179,7 +206,7 @@ void initPhysMem(EfiMemMap *physMemMap) {
         where++;
         // Second part (right below) is after the MemBitmap
     }
-    validMemory[where].start = bitmapBase + (2<<20);
+    validMemory[where].start = bitmapBase + (2 << 20);
     validMemory[where].size -= totalSize;
 
     ((PageEntry *)PD(510, 0))[511].whole = (uint64_t)(((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX);
@@ -193,50 +220,68 @@ void initPhysMem(EfiMemMap *physMemMap) {
     initPages(bitmapBase);
 }
 
-void printMemBitmapLevel(uint8_t n) {
+void printMemBitmapLevel(uint8_t n)
+{
     MemBitmap *bitmap = (MemBitmap *)(memoryBitmap_va);
     uint64_t count = 0;
     uint8_t sucBit = bitmap->whole[bmpGetOffset(n)].bit1;
-    for (uint64_t i = 0; i < BMP_SIZE_OF(n); i++) {
-        for (uint8_t j = 0; j < 8; j++) {
+    for (uint64_t i = 0; i < BMP_SIZE_OF(n); i++)
+    {
+        for (uint8_t j = 0; j < 8; j++)
+        {
             register uint8_t bit = bitmap->whole[bmpGetOffset(n) + i].value & (1 << j);
             bit >>= j;
-            if (bit != sucBit) {
+            if (bit != sucBit)
+            {
                 kprintf("%Dx%c ", count, sucBit ? 'O' : 'F');
                 count = 1;
                 sucBit = bit;
-            } else count++;
+            }
+            else
+                count++;
         }
     }
 }
 
-void printMemBitmap() {
-    for (uint8_t n = 0; n < 6; n++) {
+void printMemBitmap()
+{
+    for (uint8_t n = 0; n < 6; n++)
+    {
         printMemBitmapLevel(n);
         knewline();
     }
 }
-    
-inline void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6]) {
-    if (level > 5) return;
+
+inline void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6])
+{
+    if (level > 5)
+        return;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
-    for (uint8_t i = level; i < 5; i++) {
-        bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i]/BMP_JUMP].value == UINT8_MAX);
-        if (targetState ? filled : !filled) {
-            uint8_t targetBit = idx[i+1]%BMP_JUMP;
-            bitmap->whole[bmpGetOffset(i+1) + idx[i+1]/BMP_JUMP].value ^= 1<<(targetBit);
-        } else return;
+    for (uint8_t i = level; i < 5; i++)
+    {
+        bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i] / BMP_JUMP].value == UINT8_MAX);
+        if (targetState ? filled : !filled)
+        {
+            uint8_t targetBit = idx[i + 1] % BMP_JUMP;
+            bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value ^= 1 << (targetBit);
+        }
+        else
+            return;
     }
 }
 
-inline bool checkMem(uint8_t curLevel, uint64_t index) {
+inline bool checkMem(uint8_t curLevel, uint64_t index)
+{
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
-    for (uint8_t i = curLevel - 1; i < 5; i--) {
+    for (uint8_t i = curLevel - 1; i < 5; i--)
+    {
         uint64_t levelOffset = bmpGetOffset(i);
-        uint64_t thingsToCheck = (1<<(BMP_JUMP_POW2 * (curLevel-i)));
-        for (uint64_t uwu = 0; uwu < thingsToCheck; uwu++) {
-            if (bitmap->whole[levelOffset + index * BMP_SIZE_OF(i) / BMP_SIZE_OF(curLevel) + uwu].value != 0) {
+        uint64_t thingsToCheck = (1 << (BMP_JUMP_POW2 * (curLevel - i)));
+        for (uint64_t uwu = 0; uwu < thingsToCheck; uwu++)
+        {
+            if (bitmap->whole[levelOffset + index * BMP_SIZE_OF(i) / BMP_SIZE_OF(curLevel) + uwu].value != 0)
+            {
                 return false;
             }
         }
@@ -244,30 +289,40 @@ inline bool checkMem(uint8_t curLevel, uint64_t index) {
     return true;
 }
 
-static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, uint64_t idx[6]) {
-    if (size > 5) return -1;
+static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, uint64_t idx[6])
+{
+    if (size > 5)
+        return -1;
     MemBitmap *bitmap = (MemBitmap *)memoryBitmap_va;
 
     uint64_t i = curLevel != 5 ? idx[curLevel + 1] * 8 : 0;
-    for (; i < BMP_SIZE_OF(curLevel) * BMP_JUMP; i++) {
-        if (!(bitmap->whole[bmpGetOffset(curLevel) + i/BMP_JUMP].value & (1<<(i%BMP_JUMP)))) {
+    for (; i < BMP_SIZE_OF(curLevel) * BMP_JUMP; i++)
+    {
+        if (!(bitmap->whole[bmpGetOffset(curLevel) + i / BMP_JUMP].value & (1 << (i % BMP_JUMP))))
+        {
             idx[curLevel] = i;
             PhysAddr addr = i * BMP_MEM_SIZE_OF(curLevel);
-            if (size == curLevel) {
+            if (size == curLevel)
+            {
                 uint8_t valid = 0;
                 for (uint8_t j = 0; j < count; j++)
                     if (curLevel == 0 || checkMem(curLevel, idx[curLevel] + j))
                         ++valid;
-                if (valid == count) {
-                    for (uint8_t j = 0; j < count; j++) {
-                        bitmap->whole[bmpGetOffset(curLevel) + (i + j)/BMP_JUMP].value |= (1<<((i + j)%BMP_JUMP));
+                if (valid == count)
+                {
+                    for (uint8_t j = 0; j < count; j++)
+                    {
+                        bitmap->whole[bmpGetOffset(curLevel) + (i + j) / BMP_JUMP].value |= (1 << ((i + j) % BMP_JUMP));
                         rippleBitFlip(1, curLevel, idx);
                     }
                     return addr;
                 }
-            } else {
+            }
+            else
+            {
                 PhysAddr addr = _resPhysMemory(size, count, curLevel - 1, idx);
-                if (addr != -1UL) return addr;
+                if (addr != -1UL)
+                    return addr;
             }
         }
     }
@@ -275,91 +330,111 @@ static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, u
 }
 
 __attribute_no_vectorize__
-PhysAddr resPhysMemory(uint8_t size, uint64_t count) {
+    PhysAddr
+    resPhysMemory(uint8_t size, uint64_t count)
+{
     uint64_t idx[6];
-    for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
+    for (uint8_t i = 0; i < 6; i++)
+        idx[i] = 0;
     return _resPhysMemory(size, count, 5, idx);
 }
 
 // inline void refillPageTable() {
 //     PhysAddr addr = resPhysMemory(MEM_2M, 1);
 
-
 //     for (uint16_t i = 0; i < (2<<20)/4096; i++) {
 //         // yes
 //     }
 // }
 
-static PhysAddr resPageTable() {
-    if (ptPool->count == 0) {
+static PhysAddr resPageTable()
+{
+    if (ptPool->count == 0)
+    {
         kprintf("No more page table\n");
         cli();
-        while (1) hlt();
+        while (1)
+            hlt();
     }
     return ptPool->pool[--(ptPool->count)];
 }
 
-VirtAddr allocVirtMemory(uint8_t size, uint64_t count) {
+VirtAddr allocVirtMemory(uint8_t size, uint64_t count)
+{
     PhysAddr memory = resPhysMemory(size, count);
 
-    (void)memory; (void)size; (void)count;
+    (void)memory;
+    (void)size;
+    (void)count;
     return 0;
 }
 
-bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint16_t idx[4], uint8_t curDepth) {
-    if ((uint8_t)(curDepth-1) == target) {
-        switch (target) {
-            case PTE_PDP:
-                ((PageEntry *)PDPT(idx[0]))[idx[1]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
-                break;
-            case PTE_PD:
-                ((PageEntry *)PD(idx[0], idx[1]))[idx[2]].whole = (uint64_t) ((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
-                break;
-            case PTE_PT:
-                ((PageEntry *)PT(idx[0], idx[1], idx[2]))[idx[3]].whole = (uint64_t) ((phys & PTE_ADDR) | PTE_P | flags);
-                break;
+bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint16_t idx[4], uint8_t curDepth)
+{
+    if ((uint8_t)(curDepth - 1) == target)
+    {
+        switch (target)
+        {
+        case PTE_PDP:
+            ((PageEntry *)PDPT(idx[0]))[idx[1]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
+            break;
+        case PTE_PD:
+            ((PageEntry *)PD(idx[0], idx[1]))[idx[2]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
+            break;
+        case PTE_PT:
+            ((PageEntry *)PT(idx[0], idx[1], idx[2]))[idx[3]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | flags);
+            break;
         }
         return true; // mapped page successfully
     }
 
     PageEntry *table;
-    switch (curDepth) {
-        case 0: // Searching for entry in pml4
-            table = PML4();
-            break;
-        case 1: // ... for entry in pdp
-            table = PDPT(idx[0]);
-            break;
-        case 2: // ... for entry in pd
-            table = PD(idx[0], idx[1]);
-            break;
-        case 3: // ... for entry in pt
-            table = PT(idx[0], idx[1], idx[2]);
-            break;
-        default:
-            kprintf("Invalid depth to map page\n");
-            cli();
-            while (1) hlt();
+    switch (curDepth)
+    {
+    case 0: // Searching for entry in pml4
+        table = PML4();
+        break;
+    case 1: // ... for entry in pdp
+        table = PDPT(idx[0]);
+        break;
+    case 2: // ... for entry in pd
+        table = PD(idx[0], idx[1]);
+        break;
+    case 3: // ... for entry in pt
+        table = PT(idx[0], idx[1], idx[2]);
+        break;
+    default:
+        kprintf("Invalid depth to map page\n");
+        cli();
+        while (1)
+            hlt();
     }
-    for (uint16_t i = 0; i < 500; i++) {
+    for (uint16_t i = 0; i < 500; i++)
+    {
         idx[curDepth] = i;
-        if (!table[i].present) { // WARNING: This suppose the ptPool always have at least 1 page
+        if (!table[i].present)
+        { // WARNING: This suppose the ptPool always have at least 1 page
             PhysAddr newPagePhys = resPageTable();
 
             kputs("Cleaning new page...\n");
             // First set the new page table as part of writable memory and not a table
-            PT(510, 0, 510)[0].whole = (uint64_t)(((uintptr_t)(newPagePhys & PTE_ADDR)) | PTE_P | PTE_RW);
+            PT(510, 0, 510)[0].whole = (uint64_t)(((uintptr_t)(newPagePhys & PTE_ADDR)) | PTE_P | PTE_RW | PTE_NX);
             kputs("Temporarily mapped table memory\n");
             invlpg((uint64_t)TEMP_PT(0));
             CLEAR_PT((PageEntry *)TEMP_PT(0));
+            kputc('a');
             // Remove the writable memory
-            PT(510, 0, 510)[0].present = 0;
+            PT(510, 0, 510)
+            [0].present = 0;
             invlpg((uint64_t)TEMP_PT(0));
             kprintf("Done\n");
 
-            table[i].whole = ((uint64_t)newPagePhys& PTE_ADDR) | PTE_P | PTE_RW;
-        } else if (table[i].pageSize) continue;
-        if (_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
+            table[i].whole = ((uint64_t)newPagePhys & PTE_ADDR) | PTE_P | PTE_RW;
+        }
+        else if (table[i].pageSize)
+            continue;
+        if (_mapPage(out, phys, target, flags, idx, curDepth + 1))
+        {
             *out = ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
             return true;
         }
@@ -368,21 +443,26 @@ bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uin
     return false;
 }
 
-bool mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
+bool mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags)
+{
     // PML4 idx, PDPT idx, PD idx, PT idx
     uint16_t idx[4] = {0};
     return _mapPage(out, addr, type, flags, idx, 0);
 }
 
-bool unmapPage(VirtAddr virtual) {
+bool unmapPage(VirtAddr virtual)
+{
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     PageEntry *entry = ((PageEntry *)PML4()) + pml4_index;
-    if (!entry->present) return 0;
+    if (!entry->present)
+        return 0;
 
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
     entry = ((PageEntry *)PDPT(pml4_index)) + pdpt_index;
-    if (!entry->present) return 0;
-    if (entry->pageSize) {
+    if (!entry->present)
+        return 0;
+    if (entry->pageSize)
+    {
         entry->whole = 0;
         invlpg(virtual);
         return 1;
@@ -390,8 +470,10 @@ bool unmapPage(VirtAddr virtual) {
 
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
     entry = ((PageEntry *)PD(pml4_index, pdpt_index)) + pd_index;
-    if (!entry->present) return 0;
-    if (entry->pageSize) {
+    if (!entry->present)
+        return 0;
+    if (entry->pageSize)
+    {
         entry->whole = 0;
         invlpg(virtual);
         return 1;
@@ -399,36 +481,47 @@ bool unmapPage(VirtAddr virtual) {
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
     entry = ((PageEntry *)PT(pml4_index, pdpt_index, pd_index)) + pt_index;
-    if (!entry->present) return 0;
+    if (!entry->present)
+        return 0;
     entry->whole = 0;
     invlpg(virtual);
     return 1;
 }
 
-PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
+PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel)
+{
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     PageEntry entry = ((PageEntry *)PML4())[pml4_index];
-    if (!entry.present) return 0;
+    if (!entry.present)
+        return 0;
 
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
     entry = ((PageEntry *)PDPT(pml4_index))[pdpt_index];
-    if (!entry.present) return 0;
-    if (entry.pageSize) {
-        if (pageLevel) *pageLevel = 3;
+    if (!entry.present)
+        return 0;
+    if (entry.pageSize)
+    {
+        if (pageLevel)
+            *pageLevel = 3;
         return entry.whole & PTE_ADDR;
     }
 
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
     entry = ((PageEntry *)PD(pml4_index, pdpt_index))[pd_index];
-    if (!entry.present) return 0;
-    if (entry.pageSize) {
-        if (pageLevel) *pageLevel = 2;
+    if (!entry.present)
+        return 0;
+    if (entry.pageSize)
+    {
+        if (pageLevel)
+            *pageLevel = 2;
         return entry.whole & PTE_ADDR;
     }
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
     entry = ((PageEntry *)PT(pml4_index, pdpt_index, pd_index))[pt_index];
-    if (!entry.present) return 0;
-    if (pageLevel) *pageLevel = 1;
+    if (!entry.present)
+        return 0;
+    if (pageLevel)
+        *pageLevel = 1;
     return entry.whole & PTE_ADDR; // pt is always 4KiB so it doesn't have the pageSize flag
 }

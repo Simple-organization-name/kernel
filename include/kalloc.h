@@ -20,7 +20,7 @@
 // Memory bitmap
 #define memoryBitmap_va 0xFFFFFF003FE00000
 #define tempPT_va       0xFFFFFF003FC00000
-#define TEMP_PT(i)  ((void *)(RECURSIVE_BASE | (510UL << 39) | (0UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
+#define TEMP_PT(i)      ((void *)(RECURSIVE_BASE | (510UL << 39) | (0UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
 
 #define MEM_4K      0
 #define MEM_32K     1

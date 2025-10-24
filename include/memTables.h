@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define CLEAR_PT(PT) for (uint32_t i = 0; i < 512; i++) (PT)[i].whole = 0
+#define CLEAR_PT(PT) for (uint32_t _ = 0; _ < 512; _++) (PT)[_].whole = 0
 
 // to manipulate one field by one
 typedef union _PageEntry {
