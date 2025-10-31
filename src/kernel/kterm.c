@@ -25,8 +25,7 @@ static Bmft     *font;
 static uint16_t scale;
 
 // Put a pixel at a real position
-void kputpixel(uint32_t color, uint16_t x, uint16_t y)
-{
+void kputpixel(uint32_t color, uint16_t x, uint16_t y) {
     cursor.screen[y * (cursor.s_pitch) + x] = color;
 }
 
