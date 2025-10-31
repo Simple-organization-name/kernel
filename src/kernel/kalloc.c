@@ -34,13 +34,14 @@ PhysAddr vaToPa(VirtAddr va, PageType type) {
 
     PageEntry entry;
     switch (type) {
-        case PTE_PDP:
+        case PTE_PDP: {
             entry = ((PageEntry *)PDPT(pml4_idx))[pdpt_idx];
             if (!entry.present) return (PhysAddr)-1;
             // 1 GiB page offset
             uint64_t offset = va & ((1ULL << 30) - 1);
             return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-        case PTE_PD:
+        }
+        case PTE_PD: {
             entry = ((PageEntry *)PD(pml4_idx, pdpt_idx))[pd_idx];
             if (!entry.present) return (PhysAddr)-1;
             if (entry.pageSize) {
@@ -52,12 +53,14 @@ PhysAddr vaToPa(VirtAddr va, PageType type) {
                 // not a large PD entry — return base (address of next-level table)
                 return (PhysAddr)(entry.whole & PTE_ADDR);
             }
-        case PTE_PT:
+        }
+        case PTE_PT: {
             entry = ((PageEntry *)PT(pml4_idx, pdpt_idx, pd_idx))[pt_idx];
             if (!entry.present) return (PhysAddr)-1;
             // 4 KiB page offset
             uint64_t offset = va & ((1ULL << 12) - 1);
             return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
+        }
         default:
             return (PhysAddr)-1;
     }
@@ -182,15 +185,17 @@ void initPhysMem(EfiMemMap *physMemMap) {
     ((PageEntry *)PD(510, 0))[511].whole = (uint64_t)(((uintptr_t)bitmapBase & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX);
     invlpg(memoryBitmap_va);
 
-    PhysAddr physTempPT = resPhysMemory(MEM_4K, 1);
-    ((PageEntry *)PD(510, 0))[510].whole = (uint64_t)(((uintptr_t)physTempPT & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX);
-    invlpg(tempPT_va);
-
     initMemoryBitmap(validMemory, validMemoryCount);
     initPages(bitmapBase);
+
+    PhysAddr physTempPT = resPhysMemory(MEM_4K, 1);
+    kprintf("Phys temp PT: 0x%X\n", physTempPT);
+    ((PageEntry *)PD(510, 0))[510].whole = (uint64_t)(((uintptr_t)physTempPT & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX);
+    invlpg(tempPT_va);
 }
 
 void printMemBitmapLevel(uint8_t n) {
+    kprintf("Memory bitmap: level %u\n", n);
     MemBitmap *bitmap = (MemBitmap *)(memoryBitmap_va);
     uint64_t count = 0;
     uint8_t sucBit = bitmap->whole[bmpGetOffset(n)].bit1;
@@ -354,7 +359,7 @@ bool _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uin
             kputs("Temporarily mapped table memory\n");
             invlpg((uint64_t)TEMP_PT(0));
             kputc('a');
-            CLEAR_PT((PageEntry *)(TEMP_PT(0)));
+            CLEAR_PT((PageEntry *)TEMP_PT(0));
             kputc('a');
             // Remove the writable memory
             PT(510, 0, 510)[0].present = 0;

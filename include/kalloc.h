@@ -8,6 +8,8 @@
 #include "boot.h"
 #include "memTables.h"
 
+#define KERNEL_CANONICAL 0xFFFF000000000000UL
+
 #define RECURSIVE_BASE 0xFFFFFF8000000000UL
 #define RECURSIVE_SLOT 511UL
 
@@ -20,7 +22,7 @@
 // Memory bitmap
 #define memoryBitmap_va 0xFFFFFF003FE00000
 #define tempPT_va       0xFFFFFF003FC00000
-#define TEMP_PT(i)      ((void *)(RECURSIVE_BASE | (510UL << 39) | (0UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
+#define TEMP_PT(i)      ((void *)(KERNEL_CANONICAL | (510UL << 39) | (510UL << 21) | ((uint64_t)(i) << 12)))
 
 #define MEM_4K      0
 #define MEM_32K     1

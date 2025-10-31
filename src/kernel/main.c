@@ -25,16 +25,17 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
     kputs("Testing map function...\n");
     PhysAddr test = resPhysMemory(MEM_4K, 1);
+    kprintf("Test phys: 0x%X\n", test);
     char *ptr = NULL;
     if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
         kprintf("failed to map test\n");
 
-    // for (uint64_t i = 0; i < (2<<11); i++) {
-    //     kprintf("%d ", i);
-    //     ptr[i] = i;
-    // }
-    // for (uint64_t i = 0; i < (2<<11); i++)
-    //     kprintf("%d ", ptr[i]);
+    for (uint64_t i = 0; i < (2<<11); i++) {
+        // kprintf("%d ", i);
+        ptr[i] = i;
+    }
+    for (uint64_t i = 0; i < (2<<11); i++)
+        kprintf("%d ", ptr[i]);
 
     kputs("Hello from SOS kernel !\n");
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
