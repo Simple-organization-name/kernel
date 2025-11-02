@@ -6,18 +6,17 @@
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
+    init_interrupts();
+
     if (kterminit(bootInfo, 1, 0)) {
         cli();
         while (1) hlt();
     }
-
     kfillscreen(0xFF000000);
-
-    init_interrupts();
 
     PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
     kprintf("Kernel at 0x%X\n", kernelPhysAddr);
-    PhysAddr fbPhysAddr = getMapping(0xFFFFFF0000000000, NULL);
+    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
     kprintf("Framebuffer at 0x%X\n", fbPhysAddr);
 
     initPhysMem(bootInfo->memMap);
@@ -29,13 +28,14 @@ _Noreturn void kmain(BootInfo* bootInfo)
     char *ptr = NULL;
     if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
         kprintf("failed to map test\n");
+    else kprintf("Test at 0x%lx (virt)\n", ptr);
 
     for (uint64_t i = 0; i < (2<<11); i++) {
         // kprintf("%d ", i);
         ptr[i] = i;
     }
-    for (uint64_t i = 0; i < (2<<11); i++)
-        kprintf("%d ", ptr[i]);
+    // for (uint64_t i = 0; i < (2<<11); i++)
+    //     kprintf("%d ", ptr[i]);
 
     kputs("Hello from SOS kernel !\n");
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");

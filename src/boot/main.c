@@ -25,7 +25,7 @@
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
 #define kernel_va       0xFFFFFF7F80000000
-#define framebuffer_va  0xFFFFFF0000000000
+#define framebuffer_va  0xFFFFFF7F40000000
 
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
@@ -724,7 +724,7 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
 
     CLEAR_PT(pdp_high);
-    pdp_high[0].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
+    pdp_high[509].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
     CLEAR_PT(pd_framebuffer);
     for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
         pd_framebuffer[i].whole = ((framebuffer.addr + (i<<21)) & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;

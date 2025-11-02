@@ -20,9 +20,9 @@
 #define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((uint64_t)(i) << 30) | ((uint64_t)(j) << 21) | ((uint64_t)(k) << 12)))
 
 // Memory bitmap
-#define memoryBitmap_va 0xFFFFFF003FE00000
-#define tempPT_va       0xFFFFFF003FC00000
-#define TEMP_PT(i)      ((void *)(KERNEL_CANONICAL | (510UL << 39) | (510UL << 21) | ((uint64_t)(i) << 12)))
+#define VA_MEM_BMP  0xFFFFFF7F7FE00000
+#define VA_TEMP_PT  0xFFFFFF7F7FC00000
+#define TEMP_PT(i)  ((void *)(KERNEL_CANONICAL | (510UL << 39) | (509UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
 
 #define MEM_4K      0
 #define MEM_32K     1
@@ -39,10 +39,6 @@
 #define BMP_SIZE            (uint64_t)(BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4) + BMP_SIZE_OF(5))
 // Size of a page at level N
 #define BMP_MEM_SIZE_OF(N)  (uint64_t)(((uint8_t)(N) < 6) ? 2<<(11 + 3*(uint8_t)(N)) : 0)
-
-#define BMP_PAGE_TABLE_START(BMP_VA)    (((uint64_t)(BMP_VA) + BMP_SIZE + 0xFFF) & ~0xFFF)
-#define BMP_PAGE_TABLE_END(BMP_VA)      (((uint64_t)(BMP_VA) + (2<<20) - 1) & ~0xFFF)
-#define BMP_PAGE_TABLE_COUNT(BMP_VA)    ((BMP_PAGE_TABLE_END((uint64_t)(BMP_VA)) - BMP_PAGE_TABLE_START((uint64_t)(BMP_VA)))/4096)
 
 // Address types
 #define PHYSICAL
@@ -105,27 +101,27 @@ typedef union _MemBitmap {
     };
 } MemBitmap;
 
-#define PT_POOL_SIZE 4096/sizeof(PageEntry *) - 3
-typedef struct _PageTablePool {
-    uint64_t                count;
-    struct _PageTablePool   *prev;
-    struct _PageTablePool   *next;
-    PhysAddr                pool[PT_POOL_SIZE];
-} PageEntryPool;
+typedef int (*MapFunc)(VirtAddr *, PhysAddr, PageType, uint64_t);
 
 void *memset(void *dest, int val, size_t count);
 
 PhysAddr vaToPa(VirtAddr va, PageType type);
 
 void initPhysMem(EfiMemMap *physMemMap);
+PhysAddr resPhysMemory(uint8_t size, uint64_t count);
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
-PhysAddr resPhysMemory(uint8_t size, uint64_t count);
 
-VirtAddr allocVirtMemory(uint8_t size, uint64_t count);
+// Kernel mapping
+int kmapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
 
-bool mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
-bool unmapPage(VirtAddr virtual);
+// General mapping
+int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
+
+int unmapPage(VirtAddr virtual);
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
+
+// Allocation
+//  yes
 
 #endif
