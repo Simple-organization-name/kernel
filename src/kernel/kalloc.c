@@ -23,14 +23,14 @@ inline uint64_t bmpGetOffset(uint8_t level) {
     return offset;
 }
 
-PhysAddr vaToPa(VirtAddr va, PageType type) {
+PhysAddr vaToPa(VirtAddr va, PageType level) {
     uint16_t pml4_idx = (va >> 39) & 0x1FF;
     uint16_t pdpt_idx = (va >> 30) & 0x1FF;
     uint16_t pd_idx = (va >> 21) & 0x1FF;
     uint16_t pt_idx = (va >> 12) & 0x1FF;
 
     PageEntry entry;
-    switch (type) {
+    switch (level) {
         case PTE_PDP: {
             entry = ((PageEntry *)PDPT(pml4_idx))[pdpt_idx];
             if (!entry.present) return (PhysAddr)-1;
@@ -203,7 +203,7 @@ inline static void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6
 
     for (uint8_t i = level; i < 5; i++) {
         bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i] / BMP_JUMP].value == UINT8_MAX);
-        if (targetState ? filled : !filled) {
+        if (targetState == filled) {
             uint8_t targetBit = idx[i + 1] % BMP_JUMP;
             bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value ^= 1 << (targetBit);
         } else return;
@@ -259,6 +259,12 @@ PhysAddr resPhysMemory(uint8_t size, uint64_t count) {
     uint64_t idx[6];
     for (uint8_t i = 0; i < 6; i++) idx[i] = 0;
     return _resPhysMemory(size, count, 5, idx);
+}
+
+__attribute_maybe_unused__
+void freePhysMemory(PhysAddr ptr, uint8_t size) {
+    (void)ptr;
+    (void)size;
 }
 
 static void clearPT(PhysAddr phys) {
