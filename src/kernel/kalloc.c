@@ -197,13 +197,13 @@ void printMemBitmap() {
     }
 }
 
-inline static void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6]) {
+inline static void rippleSetBit(uint8_t level, uint64_t idx[6]) {
     if (level > 5) return;
     MemBitmap *bitmap = (MemBitmap *)VA_MEM_BMP;
 
     for (uint8_t i = level; i < 5; i++) {
         bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i] / BMP_JUMP].value == UINT8_MAX);
-        if (targetState == filled) {
+        if (filled) {
             uint8_t targetBit = idx[i + 1] % BMP_JUMP;
             bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value ^= 1 << (targetBit);
         } else return;
@@ -241,7 +241,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, u
                 if (valid == count) {
                     for (uint8_t j = 0; j < count; j++) {
                         bitmap->whole[bmpGetOffset(curLevel) + (i + j) / BMP_JUMP].value |= (1 << ((i + j) % BMP_JUMP));
-                        rippleBitFlip(1, curLevel, idx);
+                        rippleSetBit(curLevel, idx);
                     }
                     return addr;
                 }
