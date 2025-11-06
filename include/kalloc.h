@@ -109,6 +109,7 @@ PhysAddr vaToPa(VirtAddr va, PageType type);
 
 void initPhysMem(EfiMemMap *physMemMap);
 PhysAddr resPhysMemory(uint8_t size, uint64_t count);
+void freePhysMemory(PhysAddr ptr, uint8_t level);
 void printMemBitmapLevel(uint8_t n);
 void printMemBitmap();
 

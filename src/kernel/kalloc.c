@@ -167,7 +167,7 @@ void initPhysMem(EfiMemMap *physMemMap) {
     initMemoryBitmap(validMemory, validMemoryCount);
 
     PhysAddr physTempPT = (bitmapBase + BMP_SIZE + 0xFFF) & ~0xFFF;
-    kprintf("Phys temp PT: 0x%X\n", physTempPT);
+    // kprintf("Phys temp PT: 0x%X\n", physTempPT);
     ((PageEntry *)PD(510, 509))[510].whole = (uint64_t)(((uintptr_t)physTempPT & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX);
     invlpg(VA_TEMP_PT);
 }
@@ -205,7 +205,8 @@ inline static void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6
         bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i] / BMP_JUMP].value == UINT8_MAX);
         if (targetState == filled) {
             uint8_t targetBit = idx[i + 1] % BMP_JUMP;
-            bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value ^= 1 << (targetBit);
+            uint8_t *byte = &bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value;
+            *byte = (*byte & ~(1 << targetBit)) | (targetState << targetBit);
         } else return;
     }
 }
@@ -261,10 +262,15 @@ PhysAddr resPhysMemory(uint8_t size, uint64_t count) {
     return _resPhysMemory(size, count, 5, idx);
 }
 
-__attribute_maybe_unused__
-void freePhysMemory(PhysAddr ptr, uint8_t size) {
-    (void)ptr;
-    (void)size;
+void freePhysMemory(PhysAddr ptr, uint8_t level) {
+    uint64_t idx[6] = {0};
+    idx[0] = ptr >> 12;
+    for (uint8_t i = 1; i < 6; i++)
+        idx[i] = idx[i-1]/BMP_JUMP;
+
+    MemBitmap *bitmap = (MemBitmap *)VA_MEM_BMP;
+    bitmap->whole[bmpGetOffset(level) + idx[level]/BMP_JUMP].value &= ~(1<<idx[level]%BMP_JUMP);
+    rippleBitFlip(0, level, idx);
 }
 
 static void clearPT(PhysAddr phys) {
