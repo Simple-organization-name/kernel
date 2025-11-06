@@ -139,8 +139,7 @@ void initPhysMem(EfiMemMap *physMemMap) {
 
     if (where == -1) {
         kprintf("Could not find enough contiguous memory for memory bitmap\n");
-        cli();
-        while (1) hlt();
+        CRIT_HLT();
     }
 
     // If there's memory available before the start of the memory mapping made by the alignment
@@ -313,9 +312,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
             break;
         default:
             kprintf("Invalid depth to map page\n");
-            cli();
-            while (1)
-                hlt();
+            CRIT_HLT();
     }
     for (uint16_t i = 0; i < 500; i++) {
         if (!table[i].present) {

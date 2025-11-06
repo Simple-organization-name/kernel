@@ -35,6 +35,8 @@ inline static void cli()
     __asm__ volatile ("cli");
 }
 
+#define CRIT_HLT() cli(); while(1) hlt();
+
 inline static void sti()
 {
     __asm__ volatile ("sti");
