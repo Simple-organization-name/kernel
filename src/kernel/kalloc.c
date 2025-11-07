@@ -34,7 +34,7 @@ static uint64_t bmpGetOffset[6];
 // }
 
 inline static void bmpCacheOffset() {
-    for (uint8_t level = 0; level < 5; level++) {
+    for (uint8_t level = 0; level < 6; level++) {
         uint64_t offset = 0;
         for (uint8_t i = 0; i < level; i++)
             offset += BMP_SIZE_OF(i);
@@ -294,7 +294,7 @@ void freePhysMemory(PhysAddr ptr, uint8_t level) {
     }
 
     MemBitmap *bitmap = (MemBitmap *)VA_MEM_BMP;
-    bitmap->whole[bmpGetOffset[(level) + idx[level]/BMP_JUMP]].value &= ~(1<<idx[level]%BMP_JUMP);
+    bitmap->whole[bmpGetOffset[(level)] + idx[level]/BMP_JUMP].value &= ~(1<<idx[level]%BMP_JUMP);
     rippleBitFlip(0, level, idx);
 }
 
