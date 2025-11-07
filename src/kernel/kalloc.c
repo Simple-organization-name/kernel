@@ -15,12 +15,18 @@ void *memset(void *dest, int val, size_t count) {
     return dest;
 }
 
-inline uint64_t bmpGetOffset(uint8_t level) {
-    if (level > 5) return 0;
-    uint64_t offset = 0;
-    for (uint8_t i = 0; i < level; i++)
-        offset += BMP_SIZE_OF(i);
-    return offset;
+int bmpGetOffset[6];
+
+inline uint64_t bmpCacheOffsets() {
+    for (int level = 0; level < 6; level++)
+    {
+        if (level > 5) return 0;
+        uint64_t offset = 0;
+        for (uint8_t i = 0; i < level; i++)
+            offset += BMP_SIZE_OF(i);
+        return offset;
+    }
+    
 }
 
 PhysAddr vaToPa(VirtAddr va, PageType level) {
@@ -110,16 +116,25 @@ inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemo
     }
 
     // Cascade level
-    for (uint64_t i = 0; i < 5; i++) {
+    for (uint64_t i = 0; i < 4; i++) {
         for (uint64_t j = 0; j < BMP_SIZE_OF(i); j++) {
-            if (memBitmap->whole[bmpGetOffset(i) + j].value != 255U)
-                memBitmap->whole[bmpGetOffset(i + 1) + j / 8].value &= ~(1 << (j % 8));
+            if (memBitmap->whole[bmpGetOffset[i] + j].value != 255U)
+                memBitmap->whole[bmpGetOffset[i + 1] + j / 8].value &= ~(1 << (j % 8));
         }
     }
 }
 
+uint64_t bmpOffset[6];
+
 __attribute_no_vectorize__
 void initPhysMem(EfiMemMap *physMemMap) {
+
+    for (int i = 0; i < 6; i++)
+    {
+        /* code */
+    }
+    
+
     MemoryRange validMemory[256] = {0};
     uint8_t validMemoryCount = getValidMemRanges(physMemMap, validMemory);
 
@@ -172,13 +187,17 @@ void initPhysMem(EfiMemMap *physMemMap) {
 }
 
 void printMemBitmapLevel(uint8_t n) {
+    if (n > 5) {
+        kprintf("Fuck you no print for you\n");
+        return;
+    }
     kprintf("Memory bitmap: level %u\n", n);
     MemBitmap *bitmap = (MemBitmap *)(VA_MEM_BMP);
     uint64_t count = 0;
-    uint8_t sucBit = bitmap->whole[bmpGetOffset(n)].bit1;
+    uint8_t sucBit = bitmap->whole[bmpGetOffset[n]].bit1;
     for (uint64_t i = 0; i < BMP_SIZE_OF(n); i++) {
         for (uint8_t j = 0; j < 8; j++) {
-            register uint8_t bit = bitmap->whole[bmpGetOffset(n) + i].value & (1 << j);
+            register uint8_t bit = bitmap->whole[bmpGetOffset[n] + i].value & (1 << j);
             bit >>= j;
             if (bit != sucBit) {
                 kprintf("%Dx%c ", count, sucBit ? 'O' : 'F');
@@ -200,11 +219,11 @@ inline static void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6
     if (level > 5) return;
     MemBitmap *bitmap = (MemBitmap *)VA_MEM_BMP;
 
-    for (uint8_t i = level; i < 5; i++) {
-        bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i] / BMP_JUMP].value == UINT8_MAX);
+    for (uint8_t i = level; i < 4; i++) {
+        bool filled = (bitmap->whole[bmpGetOffset[i] + idx[i] / BMP_JUMP].value == UINT8_MAX);
         if (targetState == filled) {
             uint8_t targetBit = idx[i + 1] % BMP_JUMP;
-            uint8_t *byte = &bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value;
+            uint8_t *byte = &bitmap->whole[bmpGetOffset[i + 1] + idx[i + 1] / BMP_JUMP].value;
             *byte = (*byte & ~(1 << targetBit)) | (targetState << targetBit);
         } else return;
     }
@@ -213,7 +232,7 @@ inline static void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6
 static bool checkMem(uint8_t curLevel, uint64_t index) {
     MemBitmap *bitmap = (MemBitmap *)VA_MEM_BMP;
     for (uint8_t i = curLevel - 1; i < 5; i--) {
-        uint64_t levelOffset = bmpGetOffset(i);
+        uint64_t levelOffset = bmpGetOffset[i];
         uint64_t thingsToCheck = (1 << (BMP_JUMP_POW2 * (curLevel - i)));
         for (uint64_t uwu = 0; uwu < thingsToCheck; uwu++) {
             if (bitmap->whole[levelOffset + index * BMP_SIZE_OF(i) / BMP_SIZE_OF(curLevel) + uwu].value != 0) {
@@ -230,7 +249,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, u
 
     uint64_t i = curLevel != 5 ? idx[curLevel + 1] * 8 : 0;
     for (; i < BMP_SIZE_OF(curLevel) * BMP_JUMP; i++) {
-        if (!(bitmap->whole[bmpGetOffset(curLevel) + i / BMP_JUMP].value & (1 << (i % BMP_JUMP)))) {
+        if (!(bitmap->whole[bmpGetOffset[curLevel] + i / BMP_JUMP].value & (1 << (i % BMP_JUMP)))) {
             idx[curLevel] = i;
             PhysAddr addr = i * BMP_MEM_SIZE_OF(curLevel);
             if (size == curLevel) {
@@ -240,7 +259,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, u
                         ++valid;
                 if (valid == count) {
                     for (uint8_t j = 0; j < count; j++) {
-                        bitmap->whole[bmpGetOffset(curLevel) + (i + j) / BMP_JUMP].value |= (1 << ((i + j) % BMP_JUMP));
+                        bitmap->whole[bmpGetOffset[curLevel] + (i + j) / BMP_JUMP].value |= (1 << ((i + j) % BMP_JUMP));
                         rippleBitFlip(1, curLevel, idx);
                     }
                     return addr;
@@ -268,7 +287,7 @@ void freePhysMemory(PhysAddr ptr, uint8_t level) {
         idx[i] = idx[i-1]/BMP_JUMP;
 
     MemBitmap *bitmap = (MemBitmap *)VA_MEM_BMP;
-    bitmap->whole[bmpGetOffset(level) + idx[level]/BMP_JUMP].value &= ~(1<<idx[level]%BMP_JUMP);
+    bitmap->whole[bmpGetOffset[level] + idx[level]/BMP_JUMP].value &= ~(1<<idx[level]%BMP_JUMP);
     rippleBitFlip(0, level, idx);
 }
 
