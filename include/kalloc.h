@@ -34,7 +34,7 @@
 #define BMP_JUMP_POW2       3
 #define BMP_JUMP            (1<<BMP_JUMP_POW2)
 // Size of a bitmap level
-#define BMP_SIZE_OF(N)      (uint64_t)(((uint8_t)(N) < 6) ? 2<<(19-(BMP_JUMP_POW2*(uint8_t)(N))) : 0)
+#define BMP_SIZE_OF(N)      (uint64_t)(2<<(19-(BMP_JUMP_POW2*(uint8_t)(N))))
 // Size of the whole bitmap
 #define BMP_SIZE            (uint64_t)(BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4) + BMP_SIZE_OF(5))
 // Size of a page at level N
