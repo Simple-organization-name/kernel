@@ -204,7 +204,7 @@ inline static void rippleBitFlip(bool targetState, uint8_t level, uint64_t idx[6
         bool filled = (bitmap->whole[bmpGetOffset(i) + idx[i] / BMP_JUMP].value == UINT8_MAX);
         if (targetState == filled) {
             uint8_t targetBit = idx[i + 1] % BMP_JUMP;
-            uint8_t *byte = &bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value;
+            register uint8_t *byte = &bitmap->whole[bmpGetOffset(i + 1) + idx[i + 1] / BMP_JUMP].value;
             *byte = (*byte & ~(1 << targetBit)) | (targetState << targetBit);
         } else return;
     }
@@ -293,7 +293,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
                 ((PageEntry *)PT(idx[0], idx[1], idx[2]))[idx[3]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | flags);
                 break;
         }
-        return true; // mapped page successfully
+        return 0; // mapped page successfully
     }
 
     PageEntry *table;
@@ -316,18 +316,18 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
     }
     for (uint16_t i = 0; i < 500; i++) {
         if (!table[i].present) {
-            PhysAddr newPagePhys = resPhysMemory(MEM_4K, 1);
+            PhysAddr newPagePhys = resPhysMemory(BMP_MEM_4K, 1);
             clearPT(newPagePhys);
             table[i].whole = ((uint64_t)newPagePhys & PTE_ADDR) | PTE_P | PTE_RW;
         } else if (table[i].pageSize) continue;
         idx[curDepth] = i;
         if (_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
             *out = ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
-            return 1;
+            return 0;
         }
     }
     idx[curDepth] = 0;
-    return 0;
+    return -1;
 }
 
 int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
@@ -343,38 +343,52 @@ int kmapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
     return result;
 }
 
+void *kallocPage(uint8_t size) {
+    PhysAddr phys = resPhysMemory((size == MEM_2M ? 3 : 0), 1);
+    if (phys == -1UL) return NULL;
+
+    VirtAddr virt;
+    if (kmapPage(&virt, phys, size, 0UL)) return NULL;
+    return (void *)virt;
+}
+
+void kfreePage(void *ptr) {
+    uint8_t level;
+    PhysAddr phys = getMapping((VirtAddr)ptr, &level);
+}
+
 int unmapPage(VirtAddr virtual) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     PageEntry *entry = ((PageEntry *)PML4()) + pml4_index;
-    if (!entry->present) return 0;
+    if (!entry->present) return 1;
 
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
     entry = ((PageEntry *)PDPT(pml4_index)) + pdpt_index;
-    if (!entry->present) return 0;
+    if (!entry->present) return 1;
     if (entry->pageSize) {
         entry->whole = 0;
         invlpg(virtual);
-        return 1;
+        return 0;
     }
 
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
     entry = ((PageEntry *)PD(pml4_index, pdpt_index)) + pd_index;
-    if (!entry->present) return 0;
+    if (!entry->present) return 1;
     if (entry->pageSize) {
         entry->whole = 0;
         invlpg(virtual);
-        return 1;
+        return 0;
     }
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
     entry = ((PageEntry *)PT(pml4_index, pdpt_index, pd_index)) + pt_index;
-    if (!entry->present) return 0;
+    if (!entry->present) return 1;
     entry->whole = 0;
     invlpg(virtual);
-    return 1;
+    return 0;
 }
 
-PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
+int getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     PageEntry entry = ((PageEntry *)PML4())[pml4_index];
     if (!entry.present) return 0;

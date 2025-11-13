@@ -20,16 +20,16 @@
 #define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((uint64_t)(i) << 30) | ((uint64_t)(j) << 21) | ((uint64_t)(k) << 12)))
 
 // Memory bitmap
-#define VA_MEM_BMP  0xFFFFFF7F7FE00000
-#define VA_TEMP_PT  0xFFFFFF7F7FC00000
+#define VA_MEM_BMP  0xFFFFFF7F7FE00000UL
+#define VA_TEMP_PT  0xFFFFFF7F7FC00000UL
 #define TEMP_PT(i)  ((void *)(KERNEL_CANONICAL | (510UL << 39) | (509UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
 
-#define MEM_4K      0
-#define MEM_32K     1
-#define MEM_256K    2
-#define MEM_2M      3
-#define MEM_16M     4
-#define MEM_128M    5
+#define BMP_MEM_4K      0U
+#define BMP_MEM_32K     1U
+#define BMP_MEM_256K    2U
+#define BMP_MEM_2M      3U
+#define BMP_MEM_16M     4U
+#define BMP_MEM_128M    5U
 
 #define BMP_JUMP_POW2       3
 #define BMP_JUMP            (1<<BMP_JUMP_POW2)
@@ -51,6 +51,9 @@ typedef enum _PageType {
     PTE_PD,     // PageDirectory:           2MiB
     PTE_PT,     // PageTable:               4kiB
 } PageType;
+
+#define MEM_4K 2U
+#define MEM_2M 1U
 
 typedef enum {
     EfiReservedMemoryType,
@@ -115,6 +118,8 @@ void printMemBitmap();
 
 // Kernel mapping
 int kmapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
+void *kallocPage(uint8_t size);
+void kfreePage(void *ptr);
 
 // General mapping
 int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);

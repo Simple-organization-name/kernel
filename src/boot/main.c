@@ -14,9 +14,9 @@
 #undef EFI_FILE_MODE_READ
 #undef EFI_FILE_MODE_WRITE
 #undef EFI_FILE_MODE_CREATE
-#define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001ULL
-#define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
-#define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
+#define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001UL
+#define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003UL
+#define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003UL
 
 #define EFI_CALL_ERROR if (EFI_ERROR(status))
 #define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); while(1); }
@@ -24,12 +24,12 @@
 #define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
 #define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
-#define kernel_va       0xFFFFFF7F80000000
-#define framebuffer_va  0xFFFFFF7F40000000
+#define kernel_va       0xFFFFFF7F80000000UL
+#define framebuffer_va  0xFFFFFF7F40000000UL
 
 // Global variables passed to kernel
 Framebuffer framebuffer = {0};
-EfiMemMap      memmap      = {0};
+EfiMemMap   memmap      = {0};
 FileArray   files       = {0};
 
 // UEFI preboot functions and global variables
