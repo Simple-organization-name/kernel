@@ -20,7 +20,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kprintf("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
     initPhysMem(bootInfo->memMap);
-    // printMemBitmap();
+    printMemBitmap();
 
     PhysAddr test[100];
     kprintf("Reserving (phys mem) 100 pages of size 4K\n");
