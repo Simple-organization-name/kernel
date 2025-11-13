@@ -47,13 +47,14 @@ typedef uint64_t PhysAddr;
 typedef uint64_t VirtAddr;
 
 typedef enum _PageType {
+    PTE_PML4,
     PTE_PDP,    // PageDirectoryPointer:    1GiB
     PTE_PD,     // PageDirectory:           2MiB
     PTE_PT,     // PageTable:               4kiB
 } PageType;
 
-#define MEM_4K 2U
-#define MEM_2M 1U
+#define MEM_4K ((uint8_t)PTE_PT)
+#define MEM_2M ((uint8_t)PTE_PD)
 
 typedef enum {
     EfiReservedMemoryType,
@@ -104,11 +105,7 @@ typedef union _MemBitmap {
     };
 } MemBitmap;
 
-typedef int (*MapFunc)(VirtAddr *, PhysAddr, PageType, uint64_t);
-
 void *memset(void *dest, int val, size_t count);
-
-PhysAddr vaToPa(VirtAddr va, PageType type);
 
 void initPhysMem(EfiMemMap *physMemMap);
 PhysAddr resPhysMemory(uint8_t size, uint64_t count);

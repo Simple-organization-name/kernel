@@ -22,18 +22,21 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     printMemBitmap();
 
-    PhysAddr test[100];
-    kprintf("Reserving (phys mem) 100 pages of size 4K\n");
-    for (uint8_t i = 0; i < 100; i++) {
-        test[i] = resPhysMemory(BMP_MEM_4K, 1);
-    }
-    kprintf("Bitmap before free:\n");
-    printMemBitmap();
-    for (uint8_t i = 0; i < 100; i++) {
-        freePhysMemory(test[i], BMP_MEM_4K);
-    }
-    kprintf("Bitmap after free:\n");
-    printMemBitmap();
+    kputs("\nBefore alloc:\n");
+    printMemBitmapLevel(0);
+    char *test = (char *)kallocPage(MEM_4K);
+    kprintf("0x%X", test);
+    kputs("After alloc:\n");
+    printMemBitmapLevel(0);
+    uint8_t i = 0;
+    // for (char c = 'a'; c <= 'z'; c++) {
+    //     test[i++] = c;
+    // }
+    test[i] = 0;
+    kputs(test);
+    kfreePage(test);
+    kputs("After free:\n");
+    printMemBitmapLevel(0);
 
     // kputs("Testing map function...\n");
     // PhysAddr test = resPhysMemory(BMP_MEM_4K, 1);

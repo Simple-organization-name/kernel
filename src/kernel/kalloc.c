@@ -15,15 +15,14 @@ void *memset(void *dest, int val, size_t count) {
     return dest;
 }
 
-static uint64_t bmpGetOffset[6];
-//  = {
-//     0,
-//     BMP_SIZE_OF(0),
-//     BMP_SIZE_OF(0) + BMP_SIZE_OF(1),
-//     BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2),
-//     BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3),
-//     BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4)
-// };
+static uint64_t bmpGetOffset[6] = {
+    0,
+    BMP_SIZE_OF(0),
+    BMP_SIZE_OF(0) + BMP_SIZE_OF(1),
+    BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2),
+    BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3),
+    BMP_SIZE_OF(0) + BMP_SIZE_OF(1) + BMP_SIZE_OF(2) + BMP_SIZE_OF(3) + BMP_SIZE_OF(4)
+};
 
 // inline uint64_t bmpGetOffset(uint8_t level) {
 //     if (level > 5) kprintf("Invalid level\n");
@@ -33,54 +32,14 @@ static uint64_t bmpGetOffset[6];
 //     return offset;
 // }
 
-inline static void bmpCacheOffset() {
-    for (uint8_t level = 0; level < 6; level++) {
-        uint64_t offset = 0;
-        for (uint8_t i = 0; i < level; i++)
-            offset += BMP_SIZE_OF(i);
-        bmpGetOffset[level] = offset;
-    }
-}
-
-PhysAddr vaToPa(VirtAddr va, PageType level) {
-    uint16_t pml4_idx = (va >> 39) & 0x1FF;
-    uint16_t pdpt_idx = (va >> 30) & 0x1FF;
-    uint16_t pd_idx = (va >> 21) & 0x1FF;
-    uint16_t pt_idx = (va >> 12) & 0x1FF;
-
-    PageEntry entry;
-    switch (level) {
-        case PTE_PDP: {
-            entry = ((PageEntry *)PDPT(pml4_idx))[pdpt_idx];
-            if (!entry.present) return (PhysAddr)-1;
-            // 1 GiB page offset
-            uint64_t offset = va & ((1ULL << 30) - 1);
-            return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-        }
-        case PTE_PD: {
-            entry = ((PageEntry *)PD(pml4_idx, pdpt_idx))[pd_idx];
-            if (!entry.present) return (PhysAddr)-1;
-            if (entry.pageSize) {
-                // 2 MiB page offset
-                uint64_t offset = va & ((1ULL << 21) - 1);
-                return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-            }
-            else {
-                // not a large PD entry — return base (address of next-level table)
-                return (PhysAddr)(entry.whole & PTE_ADDR);
-            }
-        }
-        case PTE_PT: {
-            entry = ((PageEntry *)PT(pml4_idx, pdpt_idx, pd_idx))[pt_idx];
-            if (!entry.present) return (PhysAddr)-1;
-            // 4 KiB page offset
-            uint64_t offset = va & ((1ULL << 12) - 1);
-            return (PhysAddr)((entry.whole & PTE_ADDR) | offset);
-        }
-        default:
-            return (PhysAddr)-1;
-    }
-}
+// inline static void bmpCacheOffset() {
+//     for (uint8_t level = 0; level < 6; level++) {
+//         uint64_t offset = 0;
+//         for (uint8_t i = 0; i < level; i++)
+//             offset += BMP_SIZE_OF(i);
+//         bmpGetOffset[level] = offset;
+//     }
+// }
 
 inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory) {
     uint8_t validMemoryCount = 0;
@@ -142,7 +101,7 @@ void initPhysMem(EfiMemMap *physMemMap) {
     MemoryRange validMemory[256] = {0};
     uint8_t validMemoryCount = getValidMemRanges(physMemMap, validMemory);
 
-    bmpCacheOffset();
+    // bmpCacheOffset();
 
     #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
     int16_t where = -1;
@@ -307,8 +266,11 @@ static void clearPT(PhysAddr phys) {
 }
 
 int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint16_t idx[4], uint8_t curDepth) {
-    if ((uint8_t)(curDepth - 1) == target) {
+    if (curDepth == (uint8_t)target) {
         switch (target) {
+            case PTE_PML4:
+                kputs("[Error] Invalid level for page mapping\n");
+                return 1;
             case PTE_PDP:
                 ((PageEntry *)PDPT(idx[0]))[idx[1]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
                 break;
@@ -324,16 +286,16 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
 
     PageEntry *table;
     switch (curDepth) {
-        case 0: // Searching for entry in pml4
+        case PTE_PML4: // Searching for entry in pml4
             table = PML4();
             break;
-        case 1: // ... for entry in pdp
+        case PTE_PDP: // ... for entry in pdp
             table = PDPT(idx[0]);
             break;
-        case 2: // ... for entry in pd
+        case PTE_PD: // ... for entry in pd
             table = PD(idx[0], idx[1]);
             break;
-        case 3: // ... for entry in pt
+        case PTE_PT: // ... for entry in pt
             table = PT(idx[0], idx[1], idx[2]);
             break;
         default:
@@ -353,7 +315,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
         }
     }
     idx[curDepth] = 0;
-    return -1;
+    return 1;
 }
 
 int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
@@ -370,7 +332,7 @@ int kmapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
 }
 
 void *kallocPage(uint8_t size) {
-    PhysAddr phys = resPhysMemory((size == MEM_2M ? 3 : 0), 1);
+    PhysAddr phys = resPhysMemory((size == MEM_2M ? BMP_MEM_2M : BMP_MEM_4K), 1);
     if (phys == -1UL) return NULL;
 
     VirtAddr virt;
@@ -381,6 +343,11 @@ void *kallocPage(uint8_t size) {
 void kfreePage(void *ptr) {
     uint8_t level;
     PhysAddr phys = getMapping((VirtAddr)ptr, &level);
+    if (phys == -1UL) {
+        kputs("[ERROR] Failed to free page: invalid mapping\n");
+        return;
+    }
+    freePhysMemory(phys, level);
 }
 
 int unmapPage(VirtAddr virtual) {
@@ -423,7 +390,7 @@ PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     entry = ((PageEntry *)PDPT(pml4_index))[pdpt_index];
     if (!entry.present) return -1;
     if (entry.pageSize) {
-        if (pageLevel) *pageLevel = 3;
+        if (pageLevel) *pageLevel = PTE_PDP;
         return entry.whole & PTE_ADDR;
     }
 
@@ -431,13 +398,13 @@ PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     entry = ((PageEntry *)PD(pml4_index, pdpt_index))[pd_index];
     if (!entry.present) return -1;
     if (entry.pageSize) {
-        if (pageLevel) *pageLevel = 2;
+        if (pageLevel) *pageLevel = PTE_PD;
         return entry.whole & PTE_ADDR;
     }
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
     entry = ((PageEntry *)PT(pml4_index, pdpt_index, pd_index))[pt_index];
     if (!entry.present) return -1;
-    if (pageLevel) *pageLevel = 1;
+    if (pageLevel) *pageLevel = PTE_PT;
     return entry.whole & PTE_ADDR; // pt is always 4KiB so it doesn't have the pageSize flag
 }
