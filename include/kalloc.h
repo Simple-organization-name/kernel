@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "boot.h"
+#include "boot/bootInfo.h"
 #include "memTables.h"
 
 #define KERNEL_CANONICAL 0xFFFF000000000000UL

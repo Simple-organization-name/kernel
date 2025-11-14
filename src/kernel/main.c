@@ -1,4 +1,4 @@
-#include "boot.h"
+#include "boot/bootInfo.h"
 #include "idt.h"
 #include "kterm.h"
 #include "asm.h"

@@ -1,5 +1,5 @@
-#ifndef __BOOT_H__
-#define __BOOT_H__
+#ifndef __BOOT_INFO_H__
+#define __BOOT_INFO_H__
 
 #include <stdint.h>
 
@@ -56,4 +56,4 @@ typedef struct _BootInfo {
 } BootInfo;
 
 
-#endif //__BOOT_H__
+#endif //__BOOT_INFO_H__

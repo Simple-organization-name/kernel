@@ -4,7 +4,7 @@
 #include <stdarg.h>
 
 #include "kterm.h"
-#include "boot.h"
+#include "boot/bootInfo.h"
 #include "bmft.h"
 
 static struct cursor {

@@ -1,12 +1,7 @@
-#ifdef __UINT64_C
-#   undef __UINT64_C
-#   undef __INT64_C
-#endif
-
 #include "asm.h"
 
-#include "boot.h"
-#include "efi/efi.h"
+#include "boot/bootInfo.h"
+#include "boot/efi/efi.h"
 #include "elf.h"
 #include "memTables.h"
 
@@ -21,16 +16,15 @@
 #define EFI_CALL_ERROR if (EFI_ERROR(status))
 #define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); while(1); }
 
-#define _EfiPrint(msg) systemTable->ConOut->OutputString(systemTable->ConOut, msg)
-#define statusToString(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
+#define STATUS_TO_STRING(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
-#define kernel_va       0xFFFFFF7F80000000UL
-#define framebuffer_va  0xFFFFFF7F40000000UL
+#define KERNEL_VA       0xFFFFFF7F80000000UL
+#define FRAMEBUFFER_VA  0xFFFFFF7F40000000UL
 
 // Global variables passed to kernel
-Framebuffer framebuffer = {0};
-EfiMemMap   memmap      = {0};
-FileArray   files       = {0};
+static Framebuffer framebuffer = {0};
+static EfiMemMap   memmap      = {0};
+static FileArray   files       = {0};
 
 // UEFI preboot functions and global variables
 // declared as static to be specific to this file
@@ -58,7 +52,6 @@ static EFI_STATUS   makePageTables(uint64_t kernel_pa, uint64_t kernel_size, Pag
 static EFI_STATUS   loadTrampoline(OUT void (**trampoline)(PageEntry*, BootInfo*, void (*)(BootInfo*)), OUT BootInfo** bootInfoPasteLocation);
 static void         pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo);
 static EFI_STATUS   openFiles(IN CHAR16* configPath, OUT FileArray* files);
-
 
 /**
  * \brief UEFI entry point
@@ -226,7 +219,7 @@ static inline void EfiPrintError(EFI_STATUS status, CHAR16 *msg) {
     EfiPrint(u"Error: ");
     EfiPrint(msg);
     CHAR16 buffer[21];
-    if (statusToString(status, buffer, 21) == EFI_SUCCESS) {
+    if (STATUS_TO_STRING(status, buffer, 21) == EFI_SUCCESS) {
         EfiPrint(u" (");
         EfiPrint(buffer);
         EfiPrint(u")\r\n");
@@ -501,7 +494,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
             // [TODO] check if this can safely be assumed to be "nothing to do here" or is "whoops"
             if (!rela || !rela_sz || !rela_ent) break;
 
-            UINT64 const slide = kernel_va - ps_base_min;
+            UINT64 const slide = KERNEL_VA - ps_base_min;
 
             UINTN const reloc_count = rela_sz / rela_ent;
             for (UINTN i = 0; i < reloc_count; i++)
@@ -516,7 +509,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
     }
 
     // returning info about loaded image; pointers were checked at top of function
-    *entry = ehdr->e_entry + kernel_va - ps_base_min;
+    *entry = ehdr->e_entry + KERNEL_VA - ps_base_min;
     *kernel_pa = load_base;
     *imageSize = ps_top_max - ps_base_min;
 
@@ -788,7 +781,7 @@ static void pasteBootInfo(BootInfo* bootInfoPasteLocation, BootInfo* bootInfo)
     };
     loc += sizeof(BootInfo);
     *(Framebuffer*)loc = *bootInfo->frameBuffer;
-    ((Framebuffer*)loc)->addr = framebuffer_va;
+    ((Framebuffer*)loc)->addr = FRAMEBUFFER_VA;
     loc += sizeof(Framebuffer);
     *(EfiMemMap*)loc = *bootInfo->memMap;
     ((EfiMemMap*)loc)->map = (MemoryDescriptor*)(loc + sizeof(EfiMemMap));
