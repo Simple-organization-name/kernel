@@ -4,6 +4,8 @@
 #include "asm.h"
 #include "kalloc.h"
 
+#include <PCI.h>
+
 _Noreturn void kmain(BootInfo* bootInfo)
 {
     init_interrupts();
@@ -22,21 +24,21 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     printMemBitmap();
 
-    kputs("\nBefore alloc:\n");
-    printMemBitmapLevel(0);
-    char *test = (char *)kallocPage(MEM_4K);
-    kprintf("0x%X", test);
-    kputs("After alloc:\n");
-    printMemBitmapLevel(0);
-    uint8_t i = 0;
+    // kputs("\nBefore alloc:\n");
+    // printMemBitmapLevel(0);
+    // char *test = (char *)kallocPage(MEM_4K);
+    // kprintf("0x%X", test);
+    // kputs("After alloc:\n");
+    // printMemBitmapLevel(0);
+    // uint8_t i = 0;
     // for (char c = 'a'; c <= 'z'; c++) {
     //     test[i++] = c;
     // }
-    test[i] = 0;
-    kputs(test);
-    kfreePage(test);
-    kputs("After free:\n");
-    printMemBitmapLevel(0);
+    // test[i] = 0;
+    // kputs(test);
+    // kfreePage(test);
+    // kputs("After free:\n");
+    // printMemBitmapLevel(0);
 
     // kputs("Testing map function...\n");
     // PhysAddr test = resPhysMemory(BMP_MEM_4K, 1);
@@ -54,6 +56,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
     //     kprintf("%d ", ptr[i]);
 
     kputs("Hello from SOS kernel !\n");
+    
+    printAllPCI();
+
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 
     while (1) hlt();
