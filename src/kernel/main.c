@@ -23,26 +23,10 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     printMemBitmap();
 
-    // kputs("Testing map function...\n");
-    // PhysAddr test = resPhysMemory(BMP_MEM_4K, 1);
-    // kprintf("Test phys: 0x%X\n", test);
-    // printMemBitmapLevel(0);
-    // char *ptr = NULL;
-    // if (kmapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
-    //     kprintf("failed to map test\n");
-    // else kprintf("Test at 0x%lx (virt)\n", ptr);
-
-    // for (uint64_t i = 0; i < (2<<11); i++) {
-    //     // kprintf("%d ", i);
-    //     ptr[i] = i;
-    // }
-    // for (uint64_t i = 0; i < (2<<11); i++)
-    //     kprintf("%d ", ptr[i]);
-
     kputs("\nBefore alloc:\n");
     printMemBitmapLevel(0);
     char *test = (char *)kallocPage(MEM_4K);
-    kprintf("0x%X", test);
+    kprintf("Test using kallocPage at 0x%X\n", test);
     kputs("After alloc:\n");
     printMemBitmapLevel(0);
     uint8_t i = 0;
