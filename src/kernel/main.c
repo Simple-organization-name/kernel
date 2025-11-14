@@ -23,12 +23,8 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     printMemBitmap();
 
-    kputs("\nBefore alloc:\n");
-    printMemBitmapLevel(0);
     char *test = (char *)kallocPage(MEM_4K);
     kprintf("Test using kallocPage at 0x%X\n", test);
-    kputs("After alloc:\n");
-    printMemBitmapLevel(0);
     uint8_t i = 0;
     for (char c = 'a'; c <= 'z'; c++) {
         test[i++] = c;
@@ -36,10 +32,8 @@ _Noreturn void kmain(BootInfo* bootInfo)
     test[i] = 0;
     kputs(test);
     kfreePage(test);
-    kputs("After free:\n");
-    printMemBitmapLevel(0);
 
-    kputs("Hello from SOS kernel !\n");
+    kputs("\nHello from SOS kernel !\n");
     
     // printAllPCI();
 
