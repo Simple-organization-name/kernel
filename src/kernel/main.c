@@ -3,8 +3,7 @@
 #include "kterm.h"
 #include "asm.h"
 #include "kalloc.h"
-
-#include <PCI.h>
+#include "PCI.h"
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -24,27 +23,12 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initPhysMem(bootInfo->memMap);
     printMemBitmap();
 
-    // kputs("\nBefore alloc:\n");
-    // printMemBitmapLevel(0);
-    // char *test = (char *)kallocPage(MEM_4K);
-    // kprintf("0x%X", test);
-    // kputs("After alloc:\n");
-    // printMemBitmapLevel(0);
-    // uint8_t i = 0;
-    // for (char c = 'a'; c <= 'z'; c++) {
-    //     test[i++] = c;
-    // }
-    // test[i] = 0;
-    // kputs(test);
-    // kfreePage(test);
-    // kputs("After free:\n");
-    // printMemBitmapLevel(0);
-
     // kputs("Testing map function...\n");
     // PhysAddr test = resPhysMemory(BMP_MEM_4K, 1);
     // kprintf("Test phys: 0x%X\n", test);
+    // printMemBitmapLevel(0);
     // char *ptr = NULL;
-    // if (!mapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
+    // if (kmapPage((VirtAddr *)&ptr, test, PTE_PT, (uint64_t)PTE_RW))
     //     kprintf("failed to map test\n");
     // else kprintf("Test at 0x%lx (virt)\n", ptr);
 
@@ -55,9 +39,25 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // for (uint64_t i = 0; i < (2<<11); i++)
     //     kprintf("%d ", ptr[i]);
 
+    kputs("\nBefore alloc:\n");
+    printMemBitmapLevel(0);
+    char *test = (char *)kallocPage(MEM_4K);
+    kprintf("0x%X", test);
+    kputs("After alloc:\n");
+    printMemBitmapLevel(0);
+    uint8_t i = 0;
+    for (char c = 'a'; c <= 'z'; c++) {
+        test[i++] = c;
+    }
+    test[i] = 0;
+    kputs(test);
+    kfreePage(test);
+    kputs("After free:\n");
+    printMemBitmapLevel(0);
+
     kputs("Hello from SOS kernel !\n");
     
-    printAllPCI();
+    // printAllPCI();
 
     // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
 
