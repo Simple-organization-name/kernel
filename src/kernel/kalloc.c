@@ -83,10 +83,13 @@ inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemo
     for (uint16_t i = 0; i < validMemoryCount; i++) {
         uint64_t start = validMemory[i].start / 4096;
         uint64_t pageCount = validMemory[i].size / 4096;
-        for (uint64_t j = 0; j < pageCount; j++)
+        for (uint64_t j = 0; j < pageCount; j++) {
+            if ((start + j)/8 >= BMP_SIZE_OF(0)) goto cascade;
             memBitmap->level0[(start + j) / 8].value &= ~(1 << (j % 8));
+        }
     }
 
+cascade:
     // Cascade level
     for (uint64_t i = 0; i < 5; i++) {
         for (uint64_t j = 0; j < BMP_SIZE_OF(i); j++) {
@@ -229,6 +232,7 @@ static PhysAddr _resPhysMemory(uint8_t size, uint64_t count, uint8_t curLevel, u
                     }
                     return addr;
                 }
+                i += valid;
             } else {
                 PhysAddr addr = _resPhysMemory(size, count, curLevel - 1, idx);
                 if (addr != -1UL) return addr;
@@ -271,7 +275,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
         switch (target) {
             case PTE_PML4:
                 kputs("[ERROR][_mapPage] Invalid level for page mapping\n");
-                return 1;
+                return 0;
             case PTE_PDP:
                 ((PageEntry *)PDPT(idx[0]))[idx[1]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
                 break;
@@ -282,7 +286,8 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
                 ((PageEntry *)PT(idx[0], idx[1], idx[2]))[idx[3]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | flags);
                 break;
         }
-        return 0; // mapped page successfully
+        kprintf("Mapped page at %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
+        return 1; // mapped page successfully
     }
 
     PageEntry *table;
@@ -303,20 +308,20 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
             kprintf("[ERROR][_mapPage] Invalid level to map page\n");
             CRIT_HLT();
     }
-    for (uint16_t i = 0; i < 500; i++) {
+    for (uint16_t i = 0; i < (curDepth == PTE_PML4 ? 510 : 511); i++) {
         if (!table[i].present) {
             PhysAddr newPagePhys = resPhysMemory(BMP_MEM_4K, 1);
             clearPT(newPagePhys);
             table[i].whole = ((uint64_t)newPagePhys & PTE_ADDR) | PTE_P | PTE_RW;
         } else if (table[i].pageSize) continue;
         idx[curDepth] = i;
-        if (!_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
+        if (_mapPage(out, phys, target, flags, idx, curDepth + 1)) {
             *out = ((uint64_t)idx[0] << 39) | ((uint64_t)idx[1] << 30) | ((uint64_t)idx[2] << 21) | ((uint64_t)idx[3] << 12);
-            return 0; // found an empty slot
+            return 1; // found an empty slot
         }
     }
     idx[curDepth] = 0;
-    return 1; // failed to map
+    return 0; // failed to map
 }
 
 int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
@@ -333,12 +338,12 @@ int kmapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags) {
 }
 
 void *kallocPage(uint8_t size) {
-    register uint8_t physLevel = (size == MEM_2M ? BMP_MEM_2M : BMP_MEM_4K);
+    uint8_t physLevel = (size == MEM_2M ? BMP_MEM_2M : BMP_MEM_4K);
     PhysAddr phys = resPhysMemory(physLevel, 1);
     if (phys == -1UL) return NULL;
 
     VirtAddr virt;
-    if (kmapPage(&virt, phys, size, 0UL)) {
+    if (!kmapPage(&virt, phys, size, 0UL)) {
         freePhysMemory(phys, physLevel);
         return NULL;
     }
