@@ -35,9 +35,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
     kputs("\nHello from SOS kernel !\n");
     
-    // printAllPCI();
-
-    // kputs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890,?;.:/!*$&~\"#'{}()[]-|`_\\^@+=<>\n");
+    printAllPCI();
 
     while (1) hlt();
 }
