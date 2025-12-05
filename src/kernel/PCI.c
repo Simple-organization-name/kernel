@@ -30,3 +30,8 @@ void printAllPCI()
     }
 }
 
+int getDeviceConfig(uint32_t configAddress, uint8_t base, uint8_t size, void *dest)
+{
+    (void)configAddress; (void)base; (void)size; (void)dest;
+    return 0;
+}

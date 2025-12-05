@@ -163,6 +163,7 @@ void kputc(unsigned char chr)
             setcursorx(cursor.x + 4 * cursor.width);
             break;
         case '\b':  // backspace
+            if (cursor.x == 0) break;
             setcursorx(cursor.x - cursor.width);
             for (uint32_t i = 0; i < cursor.width; i++)
             for (uint32_t j = 0; j < cursor.height; j++)
@@ -191,7 +192,7 @@ void kputc(unsigned char chr)
                     break;
                 }
             }
-            if (pixel) kvputpixel(0xFFFFFFFF, cursor.vx + x, cursor.vy + y);
+            kvputpixel(pixel ? 0xFFFFFFFF : 0, cursor.vx + x, cursor.vy + y);
         }
         setcursorx(cursor.x + cursor.width);
     }
