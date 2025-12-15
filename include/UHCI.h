@@ -26,7 +26,7 @@ typedef uint32_t UHCI_Pointer;
 #define UHCI_POINTER_PTR        (0xFFFFFFF0)
 typedef UHCI_Pointer* UHCI_FrameList;
 
-typedef struct _uhci_td {
+typedef struct __attribute__((aligned(16))) _uhci_td {
     UHCI_Pointer linkPointer;
     union {
         uint32_t whole;

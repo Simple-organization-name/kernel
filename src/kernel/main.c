@@ -4,6 +4,7 @@
 #include "asm.h"
 #include "kalloc.h"
 #include "PCI.h"
+#include <UHCI.h>
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -36,6 +37,8 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kputs("\nHello from SOS kernel !\n");
     
     printAllPCI();
+
+    init_UHCI();
 
     while (1) hlt();
 }
