@@ -1,5 +1,5 @@
-#ifndef __KALLOC_H__
-#define __KALLOC_H__
+#ifndef __BITMAP_H__
+#define __BITMAP_H__
 
 #include <stddef.h>
 #include <stdint.h>
@@ -123,8 +123,5 @@ int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
 
 int unmapPage(VirtAddr virtual);
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
-
-// Allocation
-//  yes
 
 #endif

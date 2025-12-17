@@ -5,7 +5,7 @@
 #include "asm.h"
 #include "attribute.h"
 #include "memTables.h"
-#include "kalloc.h"
+#include "bitmapalloc.h"
 #include "kterm.h"
 
 __attribute_maybe_unused__
