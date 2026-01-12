@@ -178,8 +178,20 @@ void interrupt_handler(interrupt_frame_t* context)
         return;
 
     case 0x21:  // PS/2 keyboard IRQ
-        uint8_t chr = inb(0x60);
-        if (!(chr & 0x80)) kputc(chr);
+        uint8_t bytes = 1;
+        uint8_t chr[3];
+        chr[0] = inb(0x60);
+        if (chr[0] == 0xE0) {
+            bytes = 2;
+            chr[1] = inb(0x60);
+        } else if (chr[1] == 0xE1) {
+            bytes = 3;
+            chr[1] = inb(0x60);
+            chr[2] = inb(0x60);
+        }
+        
+        
+        
         return;
     
     default:
