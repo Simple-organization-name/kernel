@@ -25,7 +25,7 @@ static uint64_t bmpGetOffset[6] = {
 };
 
 // inline uint64_t bmpGetOffset(uint8_t level) {
-//     if (level > 5) kprintf("Invalid level\n");
+//     if (level > 5) // kprintf("Invalid level\n");
 //     uint64_t offset = 0;
 //     for (uint8_t i = 0; i < level; i++)
 //         offset += BMP_SIZE_OF(i);
@@ -121,7 +121,7 @@ void initPhysMem(EfiMemMap *physMemMap) {
     #undef align
 
     if (where == -1) {
-        kprintf("Could not find enough contiguous memory for memory bitmap\n");
+        // kprintf("Could not find enough contiguous memory for memory bitmap\n");
         CRIT_HLT();
     }
 
@@ -149,17 +149,17 @@ void initPhysMem(EfiMemMap *physMemMap) {
     initMemoryBitmap(validMemory, validMemoryCount);
 
     PhysAddr physTempPT = (bitmapBase + BMP_SIZE + 0xFFF) & ~0xFFF;
-    // kprintf("Phys temp PT: 0x%X\n", physTempPT);
+    // // kprintf("Phys temp PT: 0x%X\n", physTempPT);
     ((PageEntry *)PD(510, 509))[510].whole = (uint64_t)(((uintptr_t)physTempPT & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX);
     invlpg(VA_TEMP_PT);
 }
 
 void printMemBitmapLevel(uint8_t n) {
     if (n > 5) {
-        kprintf("Invalid level\n");
+        // kprintf("Invalid level\n");
         return;
     }
-    kprintf("Memory bitmap: level %u\n", n);
+    // kprintf("Memory bitmap: level %u\n", n);
     MemBitmap *bitmap = (MemBitmap *)(VA_MEM_BMP);
     uint64_t count = 0;
     uint8_t sucBit = bitmap->whole[bmpGetOffset[(n)]].bit1;
@@ -168,7 +168,7 @@ void printMemBitmapLevel(uint8_t n) {
             register uint8_t bit = bitmap->whole[bmpGetOffset[(n)] + i].value & (1 << j);
             bit >>= j;
             if (bit != sucBit) {
-                kprintf("%Dx%c ", count, sucBit ? 'O' : 'F');
+                // kprintf("%Dx%c ", count, sucBit ? 'O' : 'F');
                 count = 1;
                 sucBit = bit;
             } else count++;
@@ -270,7 +270,7 @@ static void clearPT(PhysAddr phys) {
 }
 
 int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint16_t idx[4], uint8_t curDepth) {
-    kprintf("target: %u, curDepth: %u, idx: %u %u %u %u\n", target, curDepth, idx[0], idx[1], idx[2], idx[3]);
+    // kprintf("target: %u, curDepth: %u, idx: %u %u %u %u\n", target, curDepth, idx[0], idx[1], idx[2], idx[3]);
     if ((uint8_t)curDepth == (uint8_t)target) {
         switch (target) {
             case PTE_PML4:
@@ -286,7 +286,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
                 ((PageEntry *)PT(idx[0], idx[1], idx[2]))[idx[3]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | flags);
                 break;
         }
-        kprintf("Mapped page at %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
+        // kprintf("Mapped page at %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
         return 1; // mapped page successfully
     }
 
@@ -305,7 +305,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
             table = PT(idx[0], idx[1], idx[2]);
             break;
         default:
-            kprintf("[ERROR][_mapPage] Invalid level to map page\n");
+            // kprintf("[ERROR][_mapPage] Invalid level to map page\n");
             CRIT_HLT();
     }
     for (uint16_t i = 0; i < (curDepth == PTE_PML4 ? 510 : 511); i++) {

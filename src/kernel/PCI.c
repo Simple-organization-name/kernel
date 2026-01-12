@@ -45,6 +45,8 @@ int PCI_findOfType(int class, int subclass, int progif, int max, PCI_CommonDevic
     for (int device_slot = 0; device_slot < 32; device_slot++)
     for (int func = 0; func < 8; func++)
     {   
+        pci_address_t dev_addr = PCI_CONSTRUCT_CONFIG_ADDRESS(bus, device_slot, func, 0);
+        (void) dev_addr;
         ((uint32_t *)&tmp)[2] = pci_readConfigRegister(bus, device_slot, func, 8);
         if (
             (tmp.class_code == class || class < 0) &&
@@ -60,5 +62,6 @@ int PCI_findOfType(int class, int subclass, int progif, int max, PCI_CommonDevic
             }
         }
     }
+
     return matched;
 }

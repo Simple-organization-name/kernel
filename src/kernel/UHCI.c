@@ -10,8 +10,6 @@
 
 static UHCI_FrameList frameList;
 
-typedef char nothing[0];
-
 void init_UHCI()
 {
     PCI_CommonDeviceHeader* buf = (PCI_CommonDeviceHeader *)kallocPage(MEM_4K);
@@ -32,6 +30,4 @@ void init_UHCI()
         kprintf("I see you got %d UHCI devices there but i'm only gonna do one init :)\n", matched);
     }
 
-    
-    
 }

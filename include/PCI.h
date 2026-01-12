@@ -29,6 +29,10 @@ typedef struct _pci_dev_hdr {
     uint8_t     bist;
 } PCI_CommonDeviceHeader;
 
+typedef uint32_t pci_address_t;
+
+
+
 void printAllPCI();
 
 int getDeviceConfig(uint32_t configAddress, uint8_t base, uint8_t size, void* dest);
