@@ -35,3 +35,30 @@ int getDeviceConfig(uint32_t configAddress, uint8_t base, uint8_t size, void *de
     (void)configAddress; (void)base; (void)size; (void)dest;
     return 0;
 }
+
+int PCI_findOfType(int class, int subclass, int progif, int max, PCI_CommonDeviceHeader *buf)
+{
+    if (!buf) return -1;
+    int matched = 0;
+    PCI_CommonDeviceHeader tmp;
+    for (int bus = 0; bus < 256; bus++)
+    for (int device_slot = 0; device_slot < 32; device_slot++)
+    for (int func = 0; func < 8; func++)
+    {   
+        ((uint32_t *)&tmp)[2] = pci_readConfigRegister(bus, device_slot, func, 8);
+        if (
+            (tmp.class_code == class || class < 0) &&
+            (tmp.class_code == class || subclass < 0) &&
+            (tmp.class_code == class || progif < 0)
+        ) {
+            matched++;
+            if (matched <= max) {
+                ((uint32_t *)&tmp)[0] = pci_readConfigRegister(bus, device_slot, func, 0);
+                ((uint32_t *)&tmp)[1] = pci_readConfigRegister(bus, device_slot, func, 4);
+                ((uint32_t *)&tmp)[3] = pci_readConfigRegister(bus, device_slot, func, 12);
+                buf[matched - 1] = tmp;
+            }
+        }
+    }
+    return matched;
+}
