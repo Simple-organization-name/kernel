@@ -179,7 +179,7 @@ void interrupt_handler(interrupt_frame_t* context)
 
     case 0x21:  // PS/2 keyboard IRQ
         uint8_t bytes = 1;
-        uint8_t chr[3];
+        uint8_t chr[3] = {0};
         chr[0] = inb(0x60);
         if (chr[0] == 0xE0) {
             bytes = 2;
@@ -189,7 +189,8 @@ void interrupt_handler(interrupt_frame_t* context)
             chr[1] = inb(0x60);
             chr[2] = inb(0x60);
         }
-        
+        (void)bytes;
+        (void)chr;
         
         
         return;
