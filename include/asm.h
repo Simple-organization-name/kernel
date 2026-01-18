@@ -73,10 +73,24 @@ inline static void invlpg(uint64_t addr)
     );
 }
 
-inline static void lzcnt(uint64_t n) {
+inline static uint64_t bsr64(uint64_t n) {
+    uint64_t ret;
     __asm__ volatile (
-        ""
-    )
-} 
+        "bsrq %1, %0"
+        : "=r"(ret)
+        : "rm"(n)
+    );
+    return ret;
+}
+
+inline static uint64_t lzcnt64(uint64_t n) {
+    uint64_t ret;
+    __asm__ volatile (
+        "lzcntq %1, %0"
+        : "=r"(ret)
+        : "rm"(n)
+    );
+    return ret;
+}
 
 #endif

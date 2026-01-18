@@ -7,17 +7,7 @@
 
 #include "boot/bootInfo.h"
 #include "memTables.h"
-
-#define KERNEL_CANONICAL 0xFFFF000000000000UL
-
-#define RECURSIVE_BASE 0xFFFFFF8000000000UL
-#define RECURSIVE_SLOT 511UL
-
-// Standard recursive page table mapping formulas
-#define PML4()      ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
-#define PDPT(i)     ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((uint64_t)(i) << 12)))
-#define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (((uint64_t)i) << 21) | ((uint64_t)(j) << 12)))
-#define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((uint64_t)(i) << 30) | ((uint64_t)(j) << 21) | ((uint64_t)(k) << 12)))
+#include "kmemory.h"
 
 // Memory bitmap
 #define VA_MEM_BMP  0xFFFFFF7F7FE00000UL
@@ -40,44 +30,8 @@
 // Size of a page at level N
 #define BMP_MEM_SIZE_OF(N)  (uint64_t)(((uint8_t)(N) < 6) ? 2<<(11 + 3*(uint8_t)(N)) : 0)
 
-// Address types
-#define PHYSICAL
-#define VIRTUAL
-typedef uint64_t PhysAddr;
-typedef uint64_t VirtAddr;
-
-typedef enum _PageType {
-    PTE_PML4,
-    PTE_PDP,    // PageDirectoryPointer:    1GiB
-    PTE_PD,     // PageDirectory:           2MiB
-    PTE_PT,     // PageTable:               4kiB
-} PageType;
-
 #define MEM_4K ((uint8_t)PTE_PT)
 #define MEM_2M ((uint8_t)PTE_PD)
-
-typedef enum {
-    EfiReservedMemoryType,
-    EfiLoaderCode,
-    EfiLoaderData,
-    EfiBootServicesCode,
-    EfiBootServicesData,
-    EfiRuntimeServicesCode,
-    EfiRuntimeServicesData,
-    EfiConventionalMemory,
-    EfiUnusableMemory,
-    EfiACPIReclaimMemory,
-    EfiACPIMemoryNVS,
-    EfiMemoryMappedIO,
-    EfiMemoryMappedIOPortSpace,
-    EfiPalCode,
-    EfiMaxMemoryType
-} PhysicalMemoryType;
-
-typedef struct _MemoryRange {
-    PhysAddr    start;
-    size_t      size;
-} MemoryRange;
 
 typedef union _BitmapValue {
     uint8_t value;
@@ -105,8 +59,6 @@ typedef union _MemBitmap {
     };
 } MemBitmap;
 
-void *memset(void *dest, int val, size_t count);
-
 void initPhysMem(EfiMemMap *physMemMap);
 PhysAddr resPhysMemory(uint8_t size, uint64_t count);
 void freePhysMemory(PhysAddr ptr, uint8_t level);
@@ -117,11 +69,5 @@ void printMemBitmap();
 int kmapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
 void *kallocPage(uint8_t size);
 void kfreePage(void *ptr);
-
-// General mapping
-int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
-
-int unmapPage(VirtAddr virtual);
-PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 
 #endif

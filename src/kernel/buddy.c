@@ -1,13 +1,10 @@
 #include "buddy.h"
+#include "asm.h"
+#include "kterm.h"
+#include "attribute.h"
+#include "kmemory.h"
 
-__attribute_maybe_unused__
-void *memset(void *dest, int val, size_t count) {
-    for (size_t i = 0; i < count; i++)
-        ((uint8_t *)dest)[i] = val;
-    return dest;
-}
-
-inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, PhysMemRange *validMemory) {
+inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory) {
     uint8_t validMemoryCount = 0;
 
     for (uint8_t i = 0; i < physMemoryMap->count; i++) {
@@ -40,13 +37,14 @@ inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, PhysMemRange *
     return validMemoryCount;
 }
 
+__attribute_no_vectorize__
 void initBuddy(EfiMemMap *physMemMap) {
-    PhysMemRange validMemory[256];
+    MemoryRange validMemory[256];
     uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
-    for (int i = 0; i < validCount; i++) {
-        PhysMemRange range = validMemory[i];
-        
-    }
+    // for (int i = 0; i < validCount; i++) {
+        MemoryRange range = validMemory[0];
+        kprintf("%X: %U, %U\n", range.start, range.size, bsr64(range.size));
+    // }
+    (void)validCount;
 }
-
 
