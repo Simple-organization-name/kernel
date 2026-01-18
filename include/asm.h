@@ -73,4 +73,10 @@ inline static void invlpg(uint64_t addr)
     );
 }
 
+inline static void lzcnt(uint64_t n) {
+    __asm__ volatile (
+        ""
+    )
+} 
+
 #endif

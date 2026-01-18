@@ -57,5 +57,26 @@ typedef struct _PhysMemRange {
     size_t      size;
 } PhysMemRange;
 
+typedef struct _Buddy {
+    PhysAddr        start;
+    size_t          size;
+    struct _Buddy   *next;
+} Buddy;
+
+typedef union BuddyInfo {
+    uint8_t     whole;
+    struct {
+    uint8_t     free: 1;
+    };
+} BuddyInfo;
+
+typedef struct _BuddyInfo {
+    BuddyInfo       *info[BUDDY_MAX_ORDER];
+} BuddyInfo;
+
+typedef struct _BuddyArray {
+    Buddy           *array[BUDDY_MAX_ORDER];
+    BuddyInfo;
+} BuddyArray, FreeBuddyArray;
 
 #endif

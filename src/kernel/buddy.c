@@ -41,10 +41,12 @@ inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, PhysMemRange *
 }
 
 void initBuddy(EfiMemMap *physMemMap) {
-    PhysMemRange validMemory[256] = {0};
-    uint8_t validMemoryRange = getValidMemRanges(physMemMap, validMemory);
-
-    
+    PhysMemRange validMemory[256];
+    uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
+    for (int i = 0; i < validCount; i++) {
+        PhysMemRange range = validMemory[i];
+        
+    }
 }
 
 
