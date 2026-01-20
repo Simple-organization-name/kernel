@@ -8,29 +8,52 @@
 
 #define PCI_CONSTRUCT_CONFIG_ADDRESS(bus, device, function, regoff) \
     (1U << 31) | \
-    ((bus & 0xFF) << 16) | \
-    ((device & 0x1F) << 11) | \
-    ((function & 0x7) << 8) | \
-    (regoff & 0xFC)
+    (((bus) & 0xFF) << 16) | \
+    (((device) & 0x1F) << 11) | \
+    (((function) & 0x7) << 8) | \
+    ((regoff) & 0xFC)
 
-struct _pci_common_header {
-    uint16_t    vendor_id;      // 0xFFFF is invalid, look at pcisig/member-companies to get a list
-    uint16_t    device_id;      // id allocated by vendor so idk
-    uint16_t    command;        // they said idk but sending a 0 disconnects it
-    uint16_t    status;         // PCI bus events
-    uint8_t     revision_id;    // allocated by the vendor per device so idk
-    const uint8_t prog_if;        // 
-    const uint8_t subclass;
-    const uint8_t class_code;
+
+typedef struct _pci_dev_hdr {
+    uint16_t    vendor_id;
+    uint16_t    device_id;
+    uint16_t    command;
+    uint16_t    status;
+    uint8_t     revision_id;
+    uint8_t     prog_if;
+    uint8_t     subclass;
+    uint8_t     class_code;
     uint8_t     cache_line_size;
     uint8_t     latency_timer;
     uint8_t     header_type;
     uint8_t     bist;
-};
+} PCI_CommonDeviceHeader;
 
-void printAllPCI();
+typedef struct _pci_dev {
+    uint16_t vendorID, deviceID;
+    uint8_t bus, device, function;
+    uint8_t class, subclass, prog_if;
+    uint8_t revisionID;
+} PciDevice;
 
-int getDeviceConfig(uint32_t configAddress, uint8_t base, uint8_t size, void* dest);
+uint32_t PCI_readConfigRegister(uint8_t bus, uint8_t slot, uint8_t func, uint8_t reg);
+
+void PCI_printAll();
+
+/**
+ * @brief Enumerate PCI devices of a certain type.
+ * @param class Desired device class. Negative for any.
+ * @param subclass Desired device subclass. Negative for any.
+ * @param progif Desired programming interface type. Negative for any.
+ * @param max Maximum number of devices to be fetched.
+ * @param buf Buffer to write matching devices to.
+ * @returns The number of devices matched, or -1 if `buf == NULL`
+ * 
+ * If `buf` is `NULL`, 0 shall be returned.
+ * If `ret <= max`, all PCI devices were scanned.
+ * If `ret > max`, only `max` devices were written and caller shall re-scan to fetch the others.
+ */
+int PCI_findOfType(int class, int subclass, int progif, int max, PciDevice* buf);
 
 #define PCI_CLASS_UNCLASSIFIED                          0x0
 #define PCI_CLASS_MASS_STORAGE_CONTROLLER               0x1
