@@ -12,4 +12,6 @@ void init_UHCI()
 {
     UHCI_FrameList frameList = (UHCI_FrameList)kallocPage(MEM_4K);
     (void)frameList;
+    UHCI_TransferDescriptor td;
+    (void)td;
 }

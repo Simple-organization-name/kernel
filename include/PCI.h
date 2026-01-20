@@ -8,10 +8,10 @@
 
 #define PCI_CONSTRUCT_CONFIG_ADDRESS(bus, device, function, regoff) \
     (1U << 31) | \
-    ((bus & 0xFF) << 16) | \
-    ((device & 0x1F) << 11) | \
-    ((function & 0x7) << 8) | \
-    (regoff & 0xFC)
+    (((bus) & 0xFF) << 16) | \
+    (((device) & 0x1F) << 11) | \
+    (((function) & 0x7) << 8) | \
+    ((regoff) & 0xFC)
 
 
 typedef struct _pci_dev_hdr {
@@ -29,9 +29,16 @@ typedef struct _pci_dev_hdr {
     uint8_t     bist;
 } PCI_CommonDeviceHeader;
 
-void printAllPCI();
+typedef struct _pci_dev {
+    uint16_t vendorID, deviceID;
+    uint8_t bus, device, function;
+    uint8_t class, subclass, prog_if;
+    uint8_t revisionID;
+} PciDevice;
 
-int getDeviceConfig(uint32_t configAddress, uint8_t base, uint8_t size, void* dest);
+uint32_t PCI_readConfigRegister(uint8_t bus, uint8_t slot, uint8_t func, uint8_t reg);
+
+void PCI_printAll();
 
 /**
  * @brief Enumerate PCI devices of a certain type.
@@ -46,7 +53,7 @@ int getDeviceConfig(uint32_t configAddress, uint8_t base, uint8_t size, void* de
  * If `ret <= max`, all PCI devices were scanned.
  * If `ret > max`, only `max` devices were written and caller shall re-scan to fetch the others.
  */
-int PCI_findOfType(int class, int subclass, int progif, int max, PCI_CommonDeviceHeader* buf);
+int PCI_findOfType(int class, int subclass, int progif, int max, PciDevice* buf);
 
 #define PCI_CLASS_UNCLASSIFIED                          0x0
 #define PCI_CLASS_MASS_STORAGE_CONTROLLER               0x1
