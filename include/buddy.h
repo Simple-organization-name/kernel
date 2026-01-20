@@ -11,28 +11,23 @@
 
 #define BUDDY_MAX_ORDER 10
 
+#define BUDDY_SIZE(level) ((1 << (level)) * (1 << 12))
+
 typedef struct _Buddy {
     PhysAddr        start;
-    size_t          size;
     struct _Buddy   *next;
 } Buddy;
 
-typedef union BuddyInfo {
-    uint8_t     whole;
-    struct {
-    uint8_t     free: 1;
-    };
-} BuddyInfo;
-
-typedef struct _BuddyInfoArray {
-    BuddyInfo       *info[BUDDY_MAX_ORDER];
-} BuddyInfoArray;
-
 typedef struct _BuddyArray {
-    Buddy           *array[BUDDY_MAX_ORDER];
-} BuddyArray, FreeBuddyArray;
+    Buddy           *mem;
+    uint64_t        *map; // 
+} BuddyLevel;
+
+typedef struct {
+    BuddyLevel      levels[BUDDY_MAX_ORDER];
+    Buddy           *usable;
+} BuddyTable;
 
 void initBuddy(EfiMemMap *physMemMap);
 
 #endif
-
