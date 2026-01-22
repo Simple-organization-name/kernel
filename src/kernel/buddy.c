@@ -40,7 +40,7 @@ inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *v
 }
 
 void buddyFree(BuddyTable *table, PhysAddr addr, int level) {
-    // do stuff
+    
 
 }
 
@@ -60,6 +60,7 @@ PhysAddr buddyAlloc(BuddyTable *table, int level) {
     for (cur_level = level; !levels[level].mem; cur_level++); // find nearest usable buddy iykyk
     while (cur_level != level) {
         
+        level--;
     }
 
     
@@ -109,8 +110,8 @@ void initBuddy(EfiMemMap *physMemMap) {
     validMemory[where].size -= totalSize;
 
     ((PageEntry *)PD(510, 509))[511].whole = (uint64_t)(((uintptr_t)memoryChunk & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX);
-    Buddy *buf = PT(510, 509, 511);
-    invlpg(buf);
+    Buddy *buf = (Buddy *)0xFFFFFF7F7FE00000UL; // Corresponding to the memory mapped to 510, 509, 511, 0
+    invlpg((uint64_t)buf);
 
     // Linked list init for the usable buddies :)
     uint64_t count = (1 << 20) / sizeof(Buddy);
@@ -121,10 +122,5 @@ void initBuddy(EfiMemMap *physMemMap) {
     buf[count - 1].next = NULL;
     buddyTable.usable = buf;
 
-    for (int i = 0; i < validCount; i++) {
-        uint64_t nbOfPages = validMemory[i].size / (1 << 12);
-    }
-
-    buddyAlloc(&buddyTable, 0);    
 }
 
