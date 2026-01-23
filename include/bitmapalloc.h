@@ -11,7 +11,6 @@
 
 // Memory bitmap
 #define VA_MEM_BMP  0xFFFFFF7F7FE00000UL
-#define VA_TEMP_PT  0xFFFFFF7F7FC00000UL
 #define TEMP_PT(i)  ((void *)(KERNEL_CANONICAL | (510UL << 39) | (509UL << 30) | (510UL << 21) | ((uint64_t)(i) << 12)))
 
 #define BMP_MEM_4K      0U

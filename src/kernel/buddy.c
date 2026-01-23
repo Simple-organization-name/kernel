@@ -151,8 +151,8 @@ void initBuddy(EfiMemMap *physMemMap) {
     validMemory[where].size -= totalSize;
 
     ((PageEntry *)PD(510, 509))[511].whole = (uint64_t)(((uintptr_t)memoryChunk & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX);
-    Buddy *buf = PT(510, 509, 511);
-    invlpg(buf);
+    Buddy *buf = (Buddy *)VIRT_ADDR(510, 509, 511, 0);
+    invlpg((uint64_t)buf);
 
     // Linked list init for the usable buddies :)
     uint64_t count = (1 << 20) / sizeof(Buddy);
