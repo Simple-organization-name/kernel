@@ -18,6 +18,8 @@
 #define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (((uint64_t)i) << 21) | ((uint64_t)(j) << 12)))
 #define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((uint64_t)(i) << 30) | ((uint64_t)(j) << 21) | ((uint64_t)(k) << 12)))
 
+#define VIRT_ADDR(pml4, pdpt, pd, pt) (((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12))
+
 // Address types
 #define PHYSICAL
 #define VIRTUAL
@@ -57,7 +59,6 @@ typedef struct _MemoryRange {
 void *memset(void *dest, int val, size_t count);
 
 // Mapping
-int mapPage(VirtAddr *out, PhysAddr addr, PageType type, uint64_t flags);
 int unmapPage(VirtAddr virtual);
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 

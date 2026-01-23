@@ -110,7 +110,7 @@ void initBuddy(EfiMemMap *physMemMap) {
     validMemory[where].size -= totalSize;
 
     ((PageEntry *)PD(510, 509))[511].whole = (uint64_t)(((uintptr_t)memoryChunk & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_NX);
-    Buddy *buf = (Buddy *)0xFFFFFF7F7FE00000UL; // Corresponding to the memory mapped to 510, 509, 511, 0
+    Buddy *buf = (Buddy *)VIRT_ADDR(510, 509, 511, 0);
     invlpg((uint64_t)buf);
 
     // Linked list init for the usable buddies :)
@@ -121,6 +121,5 @@ void initBuddy(EfiMemMap *physMemMap) {
     }
     buf[count - 1].next = NULL;
     buddyTable.usable = buf;
-
 }
 
