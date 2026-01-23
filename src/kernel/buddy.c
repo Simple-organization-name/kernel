@@ -64,17 +64,8 @@ Buddy *grabUsableBuddy(BuddyTable *src) {
 }
 
 PhysAddr buddyAlloc(BuddyTable *table, unsigned level) {
-    // also do stuff
     BuddyLevel* levels = table->levels;
-    // if (levels[level].mem) {
-    //     Buddy *tmp = levels[level].mem;
-    //     levels[level].mem = levels[level].mem->next;
-    //     tmp->next = table->usable_buddies;
-    //     table->usable_buddies = tmp;
-    //     return tmp->start;
-    // } else  {
 
-    // }
     unsigned curLevel;
     for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].mem; curLevel++); // find nearest usable buddy iykyk
     if (curLevel == BUDDY_MAX_ORDER) {
@@ -85,10 +76,12 @@ PhysAddr buddyAlloc(BuddyTable *table, unsigned level) {
     while (curLevel != level) {
         buddyTransfer(&levels[curLevel].mem, &levels[curLevel-1].mem);
         Buddy *tmp = grabUsableBuddy(table);
-        tmp->next = levels[curLevel - 1];
+        tmp->next = levels[curLevel - 1].mem;
+        levels[curLevel - 1].mem = tmp;
     }
-    
-    return 0;
+    // we are sure that we've got memory and grabUsableBuddy handles 
+    // ooms on its own so we can assume levels[level].mem != NULL
+    return buddyTransfer(&levels[level].mem, &table->usable);
 }
 
 void buddyFree(BuddyTable *table, PhysAddr addr, int level) {
