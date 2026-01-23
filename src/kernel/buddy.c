@@ -39,12 +39,31 @@ inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *v
     return validMemoryCount;
 }
 
-void buddyFree(BuddyTable *table, PhysAddr addr, int level) {
-    // do stuff
-
+PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
+    if (!src || !*src) return 1;
+    Buddy *tmp = *src;
+    *src = (*src)->next;
+    tmp->next = *dest;
+    *dest = tmp;
+    return 0;
 }
 
-PhysAddr buddyAlloc(BuddyTable *table, int level) {
+// THOU SHALL NOT FAIL
+Buddy *grabUsableBuddy(BuddyTable *src) {
+    if (!src->usable) {
+        kprintf("\n[FATAL] Out of usable buddies; behavior not finished");
+        CRIT_HLT();
+        // PhysAddr tmp[BUDDY_MAX_ORDER];
+        // unsigned level = 0;
+        // while (level < BUDDY_MAX_ORDER && src->levels[level].mem) level++;
+    }
+    Buddy *out = src->usable;
+    src->usable = src->usable->next;
+    out->next = NULL;
+    return out;
+}
+
+PhysAddr buddyAlloc(BuddyTable *table, unsigned level) {
     // also do stuff
     BuddyLevel* levels = table->levels;
     // if (levels[level].mem) {
@@ -56,19 +75,42 @@ PhysAddr buddyAlloc(BuddyTable *table, int level) {
     // } else  {
 
     // }
-    int cur_level;
-    for (cur_level = level; !levels[level].mem; cur_level++); // find nearest usable buddy iykyk
-    while (cur_level != level) {
-        
+    unsigned curLevel;
+    for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].mem; curLevel++); // find nearest usable buddy iykyk
+    if (curLevel == BUDDY_MAX_ORDER) {
+        kprintf("[FATAL] OOM :p");
+        CRIT_HLT();
     }
-
+    PhysAddr addr = levels[curLevel].mem;
+    while (curLevel != level) {
+        buddyTransfer(&levels[curLevel].mem, &levels[curLevel-1].mem);
+        Buddy *tmp = grabUsableBuddy(table);
+        tmp->next = levels[curLevel - 1];
+    }
     
     return 0;
 }
 
+void buddyFree(BuddyTable *table, PhysAddr addr, int level) {
+    Buddy *new = grabUsableBuddy(table);
+    new->start = addr;
+
+    uint8_t buddyState = BUDDY_STATE(table, level, addr);
+    if (buddyState) {
+        // merge
+    }
+
+    Buddy *buddy = table->levels[level].mem;
+    if (!buddy) {
+        table->levels[level].mem = ;
+    }
+    for (; buddy->next && buddy->start < addr; buddy = buddy->next);
+    
+}
+
 __attribute_no_vectorize__
 void initBuddy(EfiMemMap *physMemMap) {
-    MemoryRange validMemory[256];
+    MemoryRange validMemory[256];     
     uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
 
     #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
@@ -123,8 +165,7 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     for (int i = 0; i < validCount; i++) {
         uint64_t nbOfPages = validMemory[i].size / (1 << 12);
-    }
 
-    buddyAlloc(&buddyTable, 0);    
+    }
 }
 
