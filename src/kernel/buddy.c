@@ -4,7 +4,7 @@
 #include "attribute.h"
 #include "kmemory.h"
 
-static BuddyTable buddyTable;
+static BuddyTable buddyTable = {0};
 
 inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange (*validMemory)[256]) {
     uint8_t validMemoryCount = 0;
@@ -82,14 +82,32 @@ PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
     return buddyTransfer(&levels[level].list, &table->usable);
 }
 
+inline static Buddy *getAssociatedBuddy(BuddyTable *table, PhysAddr addr, uint8_t level) {
+    register PhysAddr nextLevelAlignedAddr = ALIGN(addr, 1 << (level + 1 + 12));
+    Buddy **buddy = &table->levels[level].list;
+    for (; *buddy; buddy = &(*buddy)->next) {
+        if (ALIGN((*buddy)->start, 1 << (level + 1 + 12)) == nextLevelAlignedAddr) {
+            break;
+        }
+    }
+    if (!*buddy) {
+        PRINT_ERR("Buddy is gone...");
+        CRIT_HLT();
+    }
+    Buddy *ret = *buddy;
+    *buddy = (*buddy)->next;
+    return ret;
+}
+
 void buddyFree(BuddyTable *table, PhysAddr addr, uint8_t level) {
+    addr = ALIGN(addr, 1 << (level + 12)); // just in case
     Buddy *new;
 
     uint8_t buddyState = BUDDY_STATE(table, level, addr);
     if (buddyState) {
-        new = NULL;
-        PRINT_ERR("Merge not implemented yet");
-        CRIT_HLT();
+        new = getAssociatedBuddy(table, addr, level);
+        level++;
+        new->start = ALIGN(addr, 1 << (level + 12)); // Align to the next level
     } else {
         new = grabUsableBuddy(table);
         new->start = addr;
@@ -140,10 +158,10 @@ void initBuddy(EfiMemMap *physMemMap) {
         }
 
         // Segment target in 2 parts
-        // First part is the part before the MemBitmap
+        // First part is the part before the needed chunk
         validMemory[where].size = memoryChunk - validMemory[where].start;
         where++;
-        // Second part (right below) is after the MemBitmap
+        // Second part (right below) is after the needed chunk
     }
     validMemory[where].start = memoryChunk + (2 << 20);
     validMemory[where].size -= totalSize;
