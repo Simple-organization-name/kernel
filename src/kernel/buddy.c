@@ -6,7 +6,7 @@
 
 static BuddyTable buddyTable;
 
-inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory) {
+inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange (*validMemory)[256]) {
     uint8_t validMemoryCount = 0;
 
     for (uint8_t i = 0; i < physMemoryMap->count; i++) {
@@ -18,16 +18,16 @@ inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *v
             case EfiBootServicesData:
             case EfiConventionalMemory:
                 if (validMemoryCount > 0 &&
-                    validMemory[validMemoryCount - 1].start +
-                    validMemory[validMemoryCount - 1].size ==
+                    (*validMemory)[validMemoryCount - 1].start +
+                    (*validMemory)[validMemoryCount - 1].size ==
                     desc->PhysicalStart)
                 {
-                    validMemory[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
+                    (*validMemory)[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
                 }
                 else
                 {
-                    validMemory[validMemoryCount].start = desc->PhysicalStart;
-                    validMemory[validMemoryCount].size = desc->NumberOfPages * 4096;
+                    (*validMemory)[validMemoryCount].start = desc->PhysicalStart;
+                    (*validMemory)[validMemoryCount].size = desc->NumberOfPages * 4096;
                     validMemoryCount++;
                 }
                 break;
@@ -51,11 +51,10 @@ PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
 // THOU SHALL NOT FAIL
 Buddy *grabUsableBuddy(BuddyTable *src) {
     if (!src->usable) {
-        kprintf("\n[FATAL] Out of usable buddies; behavior not finished");
         CRIT_HLT();
         // PhysAddr tmp[BUDDY_MAX_ORDER];
         // unsigned level = 0;
-        // while (level < BUDDY_MAX_ORDER && src->levels[level].mem) level++;
+        // while (level < BUDDY_MAX_ORDER && src->levels[level].list) level++;
     }
     Buddy *out = src->usable;
     src->usable = src->usable->next;
@@ -63,62 +62,68 @@ Buddy *grabUsableBuddy(BuddyTable *src) {
     return out;
 }
 
-PhysAddr buddyAlloc(BuddyTable *table, unsigned level) {
+PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
     BuddyLevel* levels = table->levels;
 
-    unsigned curLevel;
-    for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].mem; curLevel++); // find nearest usable buddy iykyk
+    uint8_t curLevel;
+    for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
     if (curLevel == BUDDY_MAX_ORDER) {
-        kprintf("[FATAL] OOM :p");
+        PRINT_ERR("[FATAL] OOM :p");
         CRIT_HLT();
     }
-    PhysAddr addr = levels[curLevel].mem;
     while (curLevel != level) {
-        buddyTransfer(&levels[curLevel].mem, &levels[curLevel-1].mem);
+        buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
         Buddy *tmp = grabUsableBuddy(table);
-        tmp->next = levels[curLevel - 1].mem;
-        levels[curLevel - 1].mem = tmp;
+        tmp->next = levels[curLevel - 1].list;
+        levels[curLevel - 1].list = tmp;
     }
     // we are sure that we've got memory and grabUsableBuddy handles 
-    // ooms on its own so we can assume levels[level].mem != NULL
-    return buddyTransfer(&levels[level].mem, &table->usable);
+    // ooms on its own so we can assume levels[level].list != NULL
+    return buddyTransfer(&levels[level].list, &table->usable);
 }
 
-void buddyFree(BuddyTable *table, PhysAddr addr, int level) {
-    Buddy *new = grabUsableBuddy(table);
-    new->start = addr;
+void buddyFree(BuddyTable *table, PhysAddr addr, uint8_t level) {
+    Buddy *new;
 
     uint8_t buddyState = BUDDY_STATE(table, level, addr);
     if (buddyState) {
-        // merge
+        new = NULL;
+        PRINT_ERR("Merge not implemented yet");
+        CRIT_HLT();
+    } else {
+        new = grabUsableBuddy(table);
+        new->start = addr;
     }
 
-    Buddy *buddy = table->levels[level].mem;
-    if (!buddy) {
-        table->levels[level].mem = ;
-    }
-    for (; buddy->next && buddy->start < addr; buddy = buddy->next);
-    
+    // Insert buddy
+    Buddy *buddy = table->levels[level].list;
+    Buddy **pbuddy = &buddy;
+    // Skip buddies until it is the right pos to insert the new buddy
+    for (; *pbuddy && (*pbuddy)->next && (*pbuddy)->next->start < new->start ;
+        pbuddy = &(*pbuddy)->next);
+
+    // Insert the new one
+    Buddy *tmp = *pbuddy;
+    *pbuddy = new;
+    new->next = tmp;
 }
 
 __attribute_no_vectorize__
 void initBuddy(EfiMemMap *physMemMap) {
-    MemoryRange validMemory[256];     
-    uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
+    MemoryRange validMemory[256];
+    uint8_t validCount = getValidMemRanges(physMemMap, &validMemory);
 
-    #define align(addr) (((uint64_t)(addr) + 0x1FFFFF) & ~0x1FFFFF)
     int16_t where = -1;
     uint64_t totalSize = 0;
     PhysAddr memoryChunk = 0;
     for (uint8_t i = 0; i < validCount; i++) {
-        memoryChunk = align(validMemory[i].start);
+        memoryChunk = ALIGN(validMemory[i].start, 1<<21);
         totalSize = memoryChunk - validMemory[i].start + (2 << 20);
         if (validMemory[i].size >= totalSize) {
             where = i;
             break;
         }
     }
-    #undef align
 
     if (where == -1) {
         kprintf("Could not find enough contiguous memory for memory bitmap\n");
@@ -156,9 +161,9 @@ void initBuddy(EfiMemMap *physMemMap) {
     buf[count - 1].next = NULL;
     buddyTable.usable = buf;
 
-    for (int i = 0; i < validCount; i++) {
-        uint64_t nbOfPages = validMemory[i].size / (1 << 12);
-
-    }
+    // for (int i = 0; i < validCount; i++) {
+    //     uint64_t nbOfPages = validMemory[i].size / (1 << 12);
+    //     (void)nbOfPages;
+    // }
 }
 

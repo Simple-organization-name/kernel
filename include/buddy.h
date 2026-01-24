@@ -22,8 +22,8 @@ typedef struct _Buddy {
 } Buddy;
 
 typedef struct _BuddyArray {
-    Buddy           *mem;
-    uint64_t        *map; // 
+    Buddy           *list;
+    uint64_t        *map;
 } BuddyLevel;
 
 typedef struct _BuddyTable {
