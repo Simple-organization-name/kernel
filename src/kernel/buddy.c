@@ -51,10 +51,12 @@ PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
 }
 
 inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysAddr addr) {
-    PhysAddr nextLevelAlignedAddr = ALIGN(addr, 1 << (level + 1 + 12));
+    PhysAddr nextLevelAlignedAddr = addr >> (level + 12 + 1);
     Buddy **buddy = &table->levels[level].list;
     for (; *buddy; buddy = &(*buddy)->next) {
-        if (ALIGN((*buddy)->start, 1 << (level + 1 + 12)) == nextLevelAlignedAddr) {
+        PhysAddr current = addr >> (level + 12 + 1);
+        // kprintf("Cur: 0x%X, target: 0x%X\n", current, nextLevelAlignedAddr);
+        if (current == nextLevelAlignedAddr) {
             break;
         }
     }
@@ -75,20 +77,24 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
 void buddyFree(BuddyTable *table, uint8_t level, PhysAddr addr) {
     addr = ALIGN(addr, 1 << (level + 12)); // just in case
     Buddy *new;
-
+    uint8_t done = 0;
     uint8_t buddyState = BUDDY_STATE(table, level, addr);
-    if (buddyState && level != BUDDY_MAX_ORDER) {
-        
-    } else {
-        new = grabUsableBuddy(table);
-        kprintf("new buddy: 0x%X\n", new);
-        new->start = addr;
-        BUDDY_TOGGLE_BIT(table, level, addr);
-    }
+    while (!done) {
+        if (buddyState && level != BUDDY_MAX_ORDER) {
+            new = grabAssociatedBuddy(table, level, addr);
+            level++;
+            new->start = ALIGN(addr, 1 << (level + 12)); // Align to the next level
+        } else {
+            new = grabUsableBuddy(table);
+            new->start = addr;
+            done = 1;
+        }
 
-    // Insert buddy
-    new->next = table->levels[level].list;
-    table->levels[level].list = new;
+        // Insert new
+        new->next = table->levels[level].list;
+        table->levels[level].list = new;
+        BUDDY_SET_BIT(table, level, addr);
+    }
 }
 
 void initBuddy(EfiMemMap *physMemMap) {

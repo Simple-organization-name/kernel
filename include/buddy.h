@@ -14,6 +14,8 @@
 #define BUDDY_SIZE(level)                       ((1 << (level)) * (1 << 12))
 #define BUDDY_PAIR_ID(level, addr)              (addr >> (level + 12 + 1))
 #define BUDDY_STATE(table, level, addr)         (table->levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &  (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_SET_BIT(table, level, addr)       (table->levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] |= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_REMOVE_BIT(table, level, addr)    (table->levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &= ~(1 << (BUDDY_PAIR_ID(level, addr) % 64)))
 #define BUDDY_TOGGLE_BIT(table, level, addr)    (table->levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] ^= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
 
 typedef struct _Buddy {
