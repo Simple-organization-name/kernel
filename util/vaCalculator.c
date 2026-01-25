@@ -16,7 +16,10 @@ void print_va_breakdown(uint64_t va) {
 
 void print_va(uint16_t pml4_idx, uint16_t pdpt_idx, uint16_t pd_idx, uint16_t pt_idx) {
     uint64_t va = ((uint64_t)pml4_idx << 39) | ((uint64_t)pdpt_idx << 30) | ((uint64_t)pd_idx << 21) | ((uint64_t)pt_idx << 12);
-    printf("VA: 0xFFFF%lX\n", va);
+    if (va & (1 << 47)) {
+        va |= 0xFFFF000000000000;
+    }
+    printf("VA: 0x%lX\n", va);
 }
 
 int main(int argc, char *argv[]) {
