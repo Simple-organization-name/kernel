@@ -46,6 +46,17 @@ uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange (*validMemory)[]
     return validMemoryCount;
 }
 
+uint64_t getTotalRAM(EfiMemMap *physMemMap) {
+    uint64_t max = 0;
+    for (uint64_t i = 0; i < physMemMap->count; i++) {
+        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        if (desc->PhysicalStart + desc->NumberOfPages * 4096 > max) {
+            max = desc->PhysicalStart + desc->NumberOfPages * 4096;
+        }
+    }
+    return max;
+}
+
 __attribute_no_vectorize__
 PhysAddr _getPhysMemoryFromMemRanges(MemoryRange (*validMemory)[], uint8_t validCount, size_t size) {
     int16_t where = -1;
@@ -61,7 +72,7 @@ PhysAddr _getPhysMemoryFromMemRanges(MemoryRange (*validMemory)[], uint8_t valid
     }
 
     if (where == -1) {
-        PRINT_ERR("Could not find enough contiguous memory for memory bitmap\n");
+        PRINT_ERR("Could not find enough contiguous memory\n");
         return -1UL;
     }
 
@@ -86,6 +97,13 @@ PhysAddr _getPhysMemoryFromMemRanges(MemoryRange (*validMemory)[], uint8_t valid
     return memoryChunk;
 }
 
+void clearPageTable(PhysAddr addr) {
+    ((PageEntry *)PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_P | PTE_NX | PTE_RW);
+    invlpg((uint64_t)VA(510, 508, 511, 0));
+    memset(VA(510, 508, 511, 0), 0, sizeof(PageEntry));
+    ((PageEntry *)PT(510, 508, 511))[0].whole = 0;
+    invlpg((uint64_t)VA(510, 508, 511, 0));
+}
 
 int unmapPage(VirtAddr virtual) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;

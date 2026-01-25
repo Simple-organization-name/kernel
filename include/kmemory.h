@@ -23,9 +23,11 @@
 
 // Get the canonical address from the mapping
 #define VA(pml4, pdpt, pd, pt) ( \
-    ((uint64_t)pml4 << 39) & (1UL<<47) ? \
-    KERNEL_CANONICAL | ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) : \
-    ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) \
+    (void *) ( \
+        ((uint64_t)pml4 << 39) & (1UL<<47) ? \
+        KERNEL_CANONICAL | ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) : \
+        ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) \
+    ) \
 )
 
 // Address types
@@ -68,9 +70,11 @@ void *memset(void *dest, int val, size_t count);
 
 // Memory init
 uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange (*validMemory)[]);
+uint64_t getTotalRAM(EfiMemMap *physMemMap);
 PhysAddr _getPhysMemoryFromMemRanges(MemoryRange (*validMemory)[], uint8_t validCount, size_t size);
 
 // Mapping
+void clearPageTable(PhysAddr addr);
 int unmapPage(VirtAddr virtual);
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 

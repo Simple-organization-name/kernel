@@ -2,7 +2,7 @@
 
 ## Special Mappings
 
-| Name          | Falgs                   | Page size/type | PML4 | PDPT | PD  | PT | Page | Note                                     |
+| Name          | Flags                   | Page size/type | PML4 | PDPT | PD  | PT | Page | Note                                     |
 |---------------|-------------------------|----------------|------|------|-----|----|------|------------------------------------------|
 | pdp_low       | PTE_P / PTE_RW          | PDPT           | 0    |      |     |    |      |                                          |
 | pdp_high      | PTE_P / PTE_RW          | PDPT           | 510  |      |     |    |      |                                          |
