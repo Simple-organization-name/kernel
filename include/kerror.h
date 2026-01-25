@@ -3,6 +3,7 @@
 
 #include "kterm.h"
 
-#define PRINT_ERR(format, ...) kprintf("[ERROR] " format, ##__VA_ARGS__)
+#define PRINT_ERR(format, ...)  kprintf("[ ERROR ][%s] " format, __func__, ##__VA_ARGS__)
+#define PRINT_WARN(format, ...) kprintf("[WARNING][%s] " format, __func__, ##__VA_ARGS__)
 
 #endif

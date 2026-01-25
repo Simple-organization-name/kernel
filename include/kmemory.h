@@ -1,15 +1,14 @@
-#ifndef __MEMORY_H__
-#define __MEMORY_H__
+#ifndef __KMEMORY_H__
+#define __KMEMORY_H__
 
 #include <stdint.h>
 #include <stddef.h>
 
 #include "memTables.h"
+#include "boot/bootInfo.h"
 
 // Align address to `align` alignment
-#define ALIGN(addr, align) (((uint64_t)addr + ((uint64_t)align)-1UL) & ~(((uint64_t)align)-1UL))
-
-#define VA_TEMP_PT          0xFFFFFF7F7FC00000UL
+#define ALIGN(addr, align) (((uint64_t)(addr) + ((uint64_t)(align)) - 1UL) & ~(((uint64_t)(align)) - 1UL))
 
 #define RECURSIVE_BASE      0xFFFFFF8000000000UL
 #define RECURSIVE_SLOT      511UL
@@ -23,7 +22,7 @@
 #define KERNEL_CANONICAL    0xFFFF000000000000UL
 
 // Get the canonical address from the mapping
-#define VIRT_ADDR(pml4, pdpt, pd, pt) ( \
+#define VA(pml4, pdpt, pd, pt) ( \
     ((uint64_t)pml4 << 39) & (1UL<<47) ? \
     KERNEL_CANONICAL | ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) : \
     ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) \
@@ -66,6 +65,10 @@ typedef struct _MemoryRange {
 } MemoryRange;
 
 void *memset(void *dest, int val, size_t count);
+
+// Memory init
+uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange (*validMemory)[]);
+PhysAddr _getPhysMemoryFromMemRanges(MemoryRange (*validMemory)[], uint8_t validCount, size_t size);
 
 // Mapping
 int unmapPage(VirtAddr virtual);

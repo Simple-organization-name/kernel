@@ -9,9 +9,9 @@
 #undef EFI_FILE_MODE_READ
 #undef EFI_FILE_MODE_WRITE
 #undef EFI_FILE_MODE_CREATE
-#define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001UL
-#define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003UL
-#define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003UL
+#define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001ULL
+#define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
+#define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
 #define EFI_CALL_ERROR if (EFI_ERROR(status))
 #define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); while(1); }
@@ -694,7 +694,7 @@ static void exitBootServices() {
 
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageEntry** OUT pml4_) {
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 5, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 7, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
@@ -704,26 +704,31 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     PageEntry* pdp_high         = (PageEntry*)(pageAddress + 2*4096);
     PageEntry* pd_kernel        = (PageEntry*)(pageAddress + 3*4096);
     PageEntry* pd_framebuffer   = (PageEntry*)(pageAddress + 4*4096);
+    PageEntry* pd_memManagement = (PageEntry*)(pageAddress + 5*4096);
+    PageEntry* pt_temp          = (PageEntry*)(pageAddress + 6*4096);
 
     CLEAR_PT(pml4);
+    CLEAR_PT(pdp_low);
+    CLEAR_PT(pdp_high);
+    CLEAR_PT(pd_kernel);
+    CLEAR_PT(pd_framebuffer);
+    CLEAR_PT(pd_memManagement);
+    CLEAR_PT(pt_temp);
+
     // delegate low 512GiB VA mapping to the pdp_low table
     pml4[0].whole = (uint64_t)((uintptr_t)pdp_low & PTE_ADDR) | PTE_P | PTE_RW;
     pml4[510].whole = (uint64_t)((uintptr_t)pdp_high & PTE_ADDR) | PTE_P | PTE_RW;
     // make pml4 point to itself to recursively map all page tables
     pml4[511].whole = (uint64_t)((uintptr_t)pml4 & PTE_ADDR) | PTE_P | PTE_RW;
 
-    CLEAR_PT(pdp_low);
     // this maps all of lower 1GiB by identity
-    pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
+    pdp_low[0].whole = MAKE_PAGE_ENTRY(0, PTE_P | PTE_RW | PTE_PS);
 
-    CLEAR_PT(pdp_high);
     pdp_high[509].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
-    CLEAR_PT(pd_framebuffer);
-    for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
-        pd_framebuffer[i].whole = ((framebuffer.addr + (i<<21)) & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
+    for (uint16_t i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
+        pd_framebuffer[i].whole = MAKE_PAGE_ENTRY(framebuffer.addr + (i<<21), PTE_P | PTE_RW | PTE_PS | PTE_PCD);
 
-    pdp_high[510].whole = (uint64_t)((uintptr_t)pd_kernel & PTE_ADDR) | PTE_P | PTE_RW | PTE_G;
-    CLEAR_PT(pd_kernel);
+    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_P | PTE_RW | PTE_G);
 
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
@@ -732,7 +737,10 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     }
 
     for (uint16_t i = 0; i < (kernel_size + (1<<21) - 1) >> 21; i++)
-        pd_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
+        pd_kernel[i].whole = MAKE_PAGE_ENTRY(kernel_pa + (i<<21), PTE_P | PTE_RW | PTE_PS);
+
+    pdp_high[508].whole = MAKE_PAGE_ENTRY(pd_memManagement, PTE_P | PTE_RW | PTE_NX);
+    pd_memManagement[511].whole = MAKE_PAGE_ENTRY(pt_temp, PTE_P | PTE_RW | PTE_NX);
 
     *pml4_ = pml4;
 

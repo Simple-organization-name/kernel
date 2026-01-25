@@ -35,39 +35,6 @@ static uint64_t bmpGetOffset[6] = {
 //     }
 // }
 
-inline static uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory) {
-    uint8_t validMemoryCount = 0;
-
-    for (uint8_t i = 0; i < physMemoryMap->count; i++) {
-        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemoryMap->map + physMemoryMap->descSize * i);
-        switch (desc->Type) {
-            case EfiLoaderCode:
-            case EfiLoaderData:
-            case EfiBootServicesCode:
-            case EfiBootServicesData:
-            case EfiConventionalMemory:
-                if (validMemoryCount > 0 &&
-                    validMemory[validMemoryCount - 1].start +
-                    validMemory[validMemoryCount - 1].size ==
-                    desc->PhysicalStart)
-                {
-                    validMemory[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
-                }
-                else
-                {
-                    validMemory[validMemoryCount].start = desc->PhysicalStart;
-                    validMemory[validMemoryCount].size = desc->NumberOfPages * 4096;
-                    validMemoryCount++;
-                }
-                break;
-            default:
-                break;
-        }
-    }
-
-    return validMemoryCount;
-}
-
 inline static void initMemoryBitmap(MemoryRange *validMemory, uint16_t validMemoryCount) {
     // Set all memory to invalid
     MemBitmap *memBitmap = (MemBitmap *)VA_MEM_BMP;
@@ -95,8 +62,8 @@ cascade:
 
 __attribute_no_vectorize__
 void initPhysMem(EfiMemMap *physMemMap) {
-    MemoryRange validMemory[256] = {0};
-    uint8_t validMemoryCount = getValidMemRanges(physMemMap, validMemory);
+    MemoryRange validMemory[256];
+    uint8_t validMemoryCount = getValidMemRanges(physMemMap, &validMemory);
 
     // bmpCacheOffset();
 
@@ -115,7 +82,7 @@ void initPhysMem(EfiMemMap *physMemMap) {
     #undef align
 
     if (where == -1) {
-        kprintf("Could not find enough contiguous memory for memory bitmap\n");
+        PRINT_ERR("Could not find enough contiguous memory for memory bitmap\n");
         CRIT_HLT();
     }
 
@@ -141,19 +108,14 @@ void initPhysMem(EfiMemMap *physMemMap) {
     invlpg(VA_MEM_BMP);
 
     initMemoryBitmap(validMemory, validMemoryCount);
-
-    PhysAddr physTempPT = (bitmapBase + BMP_SIZE + 0xFFF) & ~0xFFF;
-    // kprintf("Phys temp PT: 0x%X\n", physTempPT);
-    ((PageEntry *)PD(510, 509))[510].whole = (uint64_t)(((uintptr_t)physTempPT & PTE_ADDR) | PTE_P | PTE_RW | PTE_NX);
-    invlpg(VA_TEMP_PT);
 }
 
 void printMemBitmapLevel(uint8_t n) {
     if (n > 5) {
-        kprintf("Invalid level\n");
+        PRINT_WARN("Invalid level\n");
         return;
     }
-    kprintf("Memory bitmap: level %u\n", n);
+    // kprintf("Memory bitmap: level %u\n", n);
     MemBitmap *bitmap = (MemBitmap *)(VA_MEM_BMP);
     uint64_t count = 0;
     uint8_t sucBit = bitmap->whole[bmpGetOffset[(n)]].bit1;
@@ -268,7 +230,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
     if ((uint8_t)curDepth == (uint8_t)target) {
         switch (target) {
             case PTE_PML4:
-                kputs("[ERROR][_mapPage] Invalid level for page mapping\n");
+                PRINT_ERR("Invalid level for page mapping\n");
                 return 0;
             case PTE_PDP:
                 ((PageEntry *)PDPT(idx[0]))[idx[1]].whole = (uint64_t)((phys & PTE_ADDR) | PTE_P | PTE_PS | flags);
@@ -299,7 +261,7 @@ int _mapPage(VirtAddr *out, PhysAddr phys, PageType target, uint64_t flags, uint
             table = PT(idx[0], idx[1], idx[2]);
             break;
         default:
-            kprintf("[ERROR][_mapPage] Invalid level to map page\n");
+            PRINT_ERR("Invalid level to map page\n");
             CRIT_HLT();
     }
     for (uint16_t i = 0; i < (curDepth == PTE_PML4 ? 510 : 511); i++) {
@@ -348,7 +310,7 @@ void kfreePage(void *ptr) {
     uint8_t ptLevel;
     PhysAddr phys = getMapping((VirtAddr)ptr, &ptLevel);
     if (phys == -1UL) {
-        kputs("[ERROR][kfreePage] Failed to free page: invalid mapping\n");
+        PRINT_ERR("Failed to free page: invalid mapping\n");
         return;
     }
     freePhysMemory(phys, ptLevel == MEM_2M ? BMP_MEM_2M : BMP_MEM_4K);
