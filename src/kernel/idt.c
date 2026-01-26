@@ -155,7 +155,7 @@ void interrupt_handler(interrupt_frame_t* context)
         kputs("Execution will be frozen to prevent an automatic reboot.\n");
         cli();
         while (1) hlt();
-    
+
     case 0x0D:  // general protection fault
         kprintf("A general protection fault was triggered at RIP=0x%x.\n", context->rip);
         if (context->err_code != 0) {

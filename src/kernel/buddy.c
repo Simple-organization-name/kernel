@@ -98,7 +98,7 @@ void buddyFree(BuddyTable *table, uint8_t level, PhysAddr addr) {
 }
 
 void initBuddy(EfiMemMap *physMemMap) {
-    PhysAddr totalRAM = getTotalRAM(physMemMap);
+    uint64_t totalRAM = getTotalRAM(physMemMap);
     buddyTable.totalRAM = totalRAM;
 
     MemoryRange validMemory[256];
@@ -119,14 +119,19 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     // Init buddy map for each levels
     uint16_t pdIdx = 1, ptIdx = 0;
+    size_t totalMapSize = 0;
+    kprintf("totalRAM: %X\n", totalRAM);
     for (uint8_t level = 0; level < BUDDY_MAX_ORDER; level++) {
-        uint64_t needed = totalRAM >> (level + 12 + 6 + 1); // >> level + 6 cause uint64_t + 1 because 1 bit needed for 2 buddies
+        uint64_t neededPages = totalRAM >> (level + 12 + 1); // >> level + 12 cause a page is 4096B + 1 because 1 bit needed for 2 buddies
+        kprintf("level: %X, neededPages: %X\n", level, neededPages);
         // Map the memory chunk as PT entries (4KiB pages)
-        for (uint64_t i = 0; i < (needed / (1<<12)); i++) {
+        for (uint64_t i = 0; i < neededPages; i++) {
             // Need to create a new PT
-            if (!ptIdx) {
+            if (ptIdx == 0) {
                 if (pdIdx < 510) {
+                    kputs("Create new pt\n");
                     PhysAddr physPage = _getPhysMemoryFromMemRanges(&validMemory, validCount, 1 << 12);
+                    totalMapSize += 1 << 12;
                     clearPageTable(physPage);
                     ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_P | PTE_RW | PTE_NX );
                 } else {
@@ -134,8 +139,9 @@ void initBuddy(EfiMemMap *physMemMap) {
                     CRIT_HLT();
                 }
             }
-            
+
             PhysAddr page = _getPhysMemoryFromMemRanges(&validMemory, validCount, 1 << 12);
+            totalMapSize += 1 << 12;
             ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = 
                 MAKE_PAGE_ENTRY(page + 4096 * i + (1<<21) * (pdIdx - 1), PTE_P | PTE_RW | PTE_NX);
 
@@ -147,6 +153,8 @@ void initBuddy(EfiMemMap *physMemMap) {
             if (ptIdx > 511) { ptIdx = 0; pdIdx++; }
         }
     }
+
+    kprintf("Buddy table map total size: %X\n", totalMapSize);
 
     for (int i = 0; i < validCount; i++) {
         uint64_t nbOfPages = validMemory[i].size / (1 << 12);
