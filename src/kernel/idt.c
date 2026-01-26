@@ -174,6 +174,23 @@ void interrupt_handler(interrupt_frame_t* context)
         kprintf("\nPage fault at address 0x%X, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
         kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
         kprintf("Caused at RIP=0x%X, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
+        kputs("\n  ---==== REGISTERS ====---\n");
+        kprintf("RAX = 0x%X | RBX = 0x%X\n", context->registers.rax, context->registers.rbx);
+        kprintf("RCX = 0x%X | RDX = 0x%X\n", context->registers.rcx, context->registers.rdx);
+        kprintf("RDI = 0x%X | RSI = 0x%X\n", context->registers.rdi, context->registers.rsi);
+        kprintf("R8 = 0x%X | R9 = 0x%X\n", context->registers.r8, context->registers.r9);
+        kprintf("R10 = 0x%X | R11 = 0x%X\n", context->registers.r10, context->registers.r11);
+        kprintf("R12 = 0x%X | R13 = 0x%X\n", context->registers.r12, context->registers.r13);
+        kprintf("R14 = 0x%X | R15 = 0x%X\n", context->registers.r14, context->registers.r15);
+        kputs("\n  ---==== CODE DUMP ====---\n");
+        if (context->err_code & 32) {
+            kputs("Error due to code fetch; will not fetch code\n");
+        } else {
+            for (unsigned i = 0; i < 20; i++) {
+                kprintf("%x ", ((uint8_t *)context->rip)[i]);
+            }
+        }
+        
         hlt();
         return;
 

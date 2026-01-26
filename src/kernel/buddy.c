@@ -40,13 +40,21 @@ PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
         CRIT_HLT();
     }
     while (curLevel != level) {
+        // insert big one as its first half one level down
+        uint64_t addr = levels[curLevel].list->start;
+        BUDDY_TOGGLE_BIT(table, curLevel, addr);
         buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
+        
+        // insert its second half
         Buddy *tmp = grabUsableBuddy(table);
         tmp->next = levels[curLevel - 1].list;
         levels[curLevel - 1].list = tmp;
+        tmp->start = addr + (1 << ((curLevel - 1) + 12));
+        curLevel--;
     }
     // we are sure that we've got memory and grabUsableBuddy handles 
     // ooms on its own so we can assume levels[level].list != NULL
+    BUDDY_TOGGLE_BIT(table, level, levels[level].list->start);
     return buddyTransfer(&levels[level].list, &table->usable);
 }
 
@@ -78,33 +86,49 @@ void buddyFree(BuddyTable *table, uint8_t level, PhysAddr addr) {
     addr = ALIGN(addr, 1 << (level + 12)); // just in case
     Buddy *new;
     uint8_t done = 0;
-    uint8_t buddyState = BUDDY_STATE(table, level, addr);
     while (!done) {
+        // read pair state, then either we insert (0 -> 1) or we merge (1 -> 0) so we can just flip
+        uint8_t buddyState = BUDDY_STATE(table, level, addr);
+        BUDDY_TOGGLE_BIT(table, level, addr);
+
+        // if we have to merge
         if (buddyState && level != BUDDY_MAX_ORDER) {
+            // grab and discard taddr's buddy
             new = grabAssociatedBuddy(table, level, addr);
+            new->next = table->usable;
+            table->usable = new;
+            
+            // set addr to the pair's address and raise level
+            addr = ALIGN(addr, 1 << (level + 12)); // Align to the next level
             level++;
-            new->start = ALIGN(addr, 1 << (level + 12)); // Align to the next level
-        } else {
+        }
+        // if we have to insert
+        else {
             new = grabUsableBuddy(table);
             new->start = addr;
+
+            // Insert new
+            new->next = table->levels[level].list;
+            table->levels[level].list = new;
+
             done = 1;
         }
-
-        // Insert new
-        new->next = table->levels[level].list;
-        table->levels[level].list = new;
-        BUDDY_SET_BIT(table, level, addr);
     }
 }
 
 void initBuddy(EfiMemMap *physMemMap) {
     uint64_t totalRAM = getTotalRAM(physMemMap);
     buddyTable.totalRAM = totalRAM;
+    kprintf("Total RAM: %U\n", totalRAM);
+    if (totalRAM >= (1UL<<40)) {
+        PRINT_ERR("HOW MUCH RAM DO YOU HAVE ??????\n");
+        CRIT_HLT();
+    }
 
     MemoryRange validMemory[256];
     uint8_t validCount = getValidMemRanges(physMemMap, &validMemory);
 
-    PhysAddr memoryChunk = _getPhysMemoryFromMemRanges(&validMemory, validCount, 1<<21);
+    PhysAddr memoryChunk = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1<<21);
     ((PageEntry *)PD(510, 508))[0].whole = MAKE_PAGE_ENTRY(memoryChunk, PTE_P | PTE_RW | PTE_PS | PTE_NX);
     Buddy *buf = (Buddy *)VA(510, 508, 0, 0);
     invlpg((uint64_t)buf);
@@ -119,31 +143,38 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     // Init buddy map for each levels
     uint16_t pdIdx = 1, ptIdx = 0;
-    size_t totalMapSize = 0;
-    kprintf("totalRAM: %X\n", totalRAM);
     for (uint8_t level = 0; level < BUDDY_MAX_ORDER; level++) {
-        uint64_t neededPages = totalRAM >> (level + 12 + 1); // >> level + 12 cause a page is 4096B + 1 because 1 bit needed for 2 buddies
-        kprintf("level: %X, neededPages: %X\n", level, neededPages);
-        // Map the memory chunk as PT entries (4KiB pages)
+        uint64_t neededPages = (totalRAM >> (
+            12 +    // group ram bytes by page
+            1 +     // group buddy pages by pair
+            level + // each levels requires 2 times less bits
+            3 +     // bits -> bytes
+            12      // bytes -> pages
+        )) + 1;
+
+        kprintf("level: %U, neededPages: %U\n", level, neededPages);
+        // Allocate and map each needed pages
+        // Map the memory as PT entries (4KiB pages)
         for (uint64_t i = 0; i < neededPages; i++) {
             // Need to create a new PT
+            // kprintf("pd: %u, pt: %u\n", pdIdx, ptIdx);
             if (ptIdx == 0) {
-                if (pdIdx < 510) {
-                    kputs("Create new pt\n");
-                    PhysAddr physPage = _getPhysMemoryFromMemRanges(&validMemory, validCount, 1 << 12);
-                    totalMapSize += 1 << 12;
-                    clearPageTable(physPage);
-                    ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_P | PTE_RW | PTE_NX );
-                } else {
-                    PRINT_ERR("HOW MUCH RAM DO YOU HAVE ?????");
+                if (pdIdx > 510) {
+                    PRINT_ERR("ERRM THIS SHOULDN'T HAPPEN\n");
                     CRIT_HLT();
+                } else {
+                    PhysAddr physPage = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1 << 12);
+                    clearPageTable(physPage);
+                    ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_P | PTE_RW | PTE_NX);
+                    invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
+                    // kprintf("New pt, pdIdx: %u, pa: 0x%X, va: 0x%X\n", pdIdx, physPage, VA(510, 508, pdIdx, 0));
                 }
             }
 
-            PhysAddr page = _getPhysMemoryFromMemRanges(&validMemory, validCount, 1 << 12);
-            totalMapSize += 1 << 12;
-            ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = 
-                MAKE_PAGE_ENTRY(page + 4096 * i + (1<<21) * (pdIdx - 1), PTE_P | PTE_RW | PTE_NX);
+            // Map a physical page
+            PhysAddr page = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1 << 12);
+            ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_P | PTE_RW | PTE_NX);
+            invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
 
             // Clear the whole page
             memset(VA(510, 508, pdIdx, ptIdx), 0, 1<<12);
@@ -153,8 +184,6 @@ void initBuddy(EfiMemMap *physMemMap) {
             if (ptIdx > 511) { ptIdx = 0; pdIdx++; }
         }
     }
-
-    kprintf("Buddy table map total size: %X\n", totalMapSize);
 
     for (int i = 0; i < validCount; i++) {
         uint64_t nbOfPages = validMemory[i].size / (1 << 12);

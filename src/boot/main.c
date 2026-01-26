@@ -447,7 +447,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
     }
 
     // allocate that memory
-    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiRuntimeServicesData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiReservedMemoryType, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
 
     for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
@@ -648,7 +648,7 @@ static EFI_STATUS getMemoryMap() {
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Failed to get memory map information !");
 
-    status = bs->AllocatePool(EfiRuntimeServicesData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
+    status = bs->AllocatePool(EfiReservedMemoryType, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
     EFI_CALL_FATAL_ERROR(u"Failed to allocate memory for memmap");
 
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
@@ -694,7 +694,7 @@ static void exitBootServices() {
 
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageEntry** OUT pml4_) {
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 7, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiReservedMemoryType, 7, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
@@ -816,7 +816,7 @@ static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
 
-    status = systemTable->BootServices->AllocatePool(EfiRuntimeServicesData, sizeofInfo, (void**)&fileInfo);
+    status = systemTable->BootServices->AllocatePool(EfiReservedMemoryType, sizeofInfo, (void**)&fileInfo);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
 
     status = file->GetInfo(file, &EfiFileInfoId, &sizeofInfo, fileInfo);
@@ -829,7 +829,7 @@ static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
     return EFI_SUCCESS;
 }
 
-#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
+#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiReservedMemoryType, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
 
 static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
 {

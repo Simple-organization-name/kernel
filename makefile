@@ -66,7 +66,8 @@ emul:
 	-drive if=none,format=raw,id=live_usb,file=fat:rw:iso/ \
 	-usb \
 	-device usb-storage,bus=usb-bus.0,drive=live_usb \
-	-bios $(OVMF_PATH) $(EMUL_ARGS)
+	-bios $(OVMF_PATH) $(EMUL_ARGS) \
+	-m 1024M
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade
