@@ -174,7 +174,12 @@ void initBuddy(EfiMemMap *physMemMap) {
             // Map a physical page
             PhysAddr page = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1 << 12);
             ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_P | PTE_RW | PTE_NX);
-            invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
+            uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
+            invlpg((uint64_t)addr);
+
+            if (i == 0) {
+                buddyTable.levels[level].map = addr;
+            }
 
             // Clear the whole page
             memset(VA(510, 508, pdIdx, ptIdx), 0, 1<<12);
