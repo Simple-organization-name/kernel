@@ -18,6 +18,7 @@ static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
 // THOU SHALL NOT FAIL
 static Buddy *grabUsableBuddy(BuddyTable *src) {
     if (!src->usable) {
+        kprintf("no thanks");
         CRIT_HLT();
         PhysAddr tmp[BUDDY_MAX_ORDER] = { 0 };
         unsigned level = 0;
@@ -63,18 +64,17 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
     Buddy **buddy = &table->levels[level].list;
     for (; *buddy; buddy = &(*buddy)->next) {
         PhysAddr current = addr >> (level + 12 + 1);
-        // kprintf("Cur: 0x%X, target: 0x%X\n", current, nextLevelAlignedAddr);
         if (current == nextLevelAlignedAddr) {
             break;
         }
     }
     if (!*buddy) {
+        PRINT_ERR("Buddy is gone...\n");
         kprintf("level = %u, addr = 0x%X\n", (unsigned)level, addr);
         kputs("map :");
         for (int i = 0; i < 10; i++) {
             kprintf(" 0x%x", ((uint8_t *)table->levels[level].map)[i]);
         }
-        PRINT_ERR("Buddy is gone...\n");
         CRIT_HLT();
     }
     Buddy *ret = *buddy;
@@ -83,36 +83,20 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
 }
 
 void buddyFree(BuddyTable *table, uint8_t level, PhysAddr addr) {
+    if (level >= BUDDY_MAX_ORDER) {
+        PRINT_ERR("WTF");
+        CRIT_HLT();
+    }
     addr = ALIGN(addr, 1 << (level + 12)); // just in case
-    Buddy *new;
-    uint8_t done = 0;
-    while (!done) {
-        // read pair state, then either we insert (0 -> 1) or we merge (1 -> 0) so we can just flip
-        uint8_t buddyState = BUDDY_STATE(table, level, addr);
-        BUDDY_TOGGLE_BIT(table, level, addr);
-
-        // if we have to merge
-        if (buddyState && level != BUDDY_MAX_ORDER) {
-            // grab and discard taddr's buddy
-            new = grabAssociatedBuddy(table, level, addr);
-            new->next = table->usable;
-            table->usable = new;
-            
-            // set addr to the pair's address and raise level
-            addr = ALIGN(addr, 1 << (level + 12)); // Align to the next level
-            level++;
-        }
-        // if we have to insert
-        else {
-            new = grabUsableBuddy(table);
-            new->start = addr;
-
-            // Insert new
-            new->next = table->levels[level].list;
-            table->levels[level].list = new;
-
-            done = 1;
-        }
+    if (level < BUDDY_MAX_ORDER - 1 && BUDDY_STATE(table, level, addr)) {
+        // need to seek and merge
+        Buddy *friend = grabAssociatedBuddy(table, level, addr);
+        buddyTransfer(&friend, &table->usable);
+        buddyFree(table, level + 1, ALIGN(addr, 1 << (level + 1 + 12)));
+    } else {
+        // need to insert
+        buddyTransfer(&table->usable, &table->levels[level].list);
+        table->levels[level].list->start = addr;
     }
 }
 
@@ -134,7 +118,7 @@ void initBuddy(EfiMemMap *physMemMap) {
     invlpg((uint64_t)buf);
 
     // Linked list init for the usable buddies :)
-    uint64_t count = (1 << 20) / sizeof(Buddy);
+    uint64_t count = (1 << 21) / sizeof(Buddy);
     for (uint64_t i = 0; i < (count - 1); i++) {
         buf[i].next = &buf[i+1];
     }
@@ -192,9 +176,12 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     for (int i = 0; i < validCount; i++) {
         uint64_t nbOfPages = validMemory[i].size / (1 << 12);
+        kprintf("\nfree range no %d/%d, of size %U...", i, validCount, nbOfPages);
         for (uint64_t j = 0; j < nbOfPages; j++) {
+            if (j % 10000 == 0) kputc('.');
             buddyFree(&buddyTable, 0, validMemory[i].start + j * (1 << 12));
         }
     }
+    kputc('\n');
 }
 

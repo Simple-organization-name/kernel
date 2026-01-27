@@ -10,4 +10,5 @@
 | kernel        | PTE_P / PTE_RW / PTE_G  | PD             | 510  | 510  |     |    |      | Should not be touched                    |
 | framebuffer   | PTE_P / PTE_RW          | PD             | 510  | 509  |     |    |      | Should not be touched before init of GPU |
 | memManagement | PTE_P / PTE_RW / PTE_NX | PD             | 510  | 508  |     |    |      |                                          |
+| memManagement | PTE_P / PTE_RW / PTE_NX | PD             | 510  | 508  | 510 |    |      |                                          |
 | temp          | PTE_P / PTE_RW / PTE_NX | PT             | 510  | 508  | 511 |    |      |                                          |
