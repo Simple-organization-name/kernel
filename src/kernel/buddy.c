@@ -18,7 +18,8 @@ static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
 // THOU SHALL NOT FAIL
 static Buddy *grabUsableBuddy(BuddyTable *src) {
     if (!src->usable) {
-        kprintf("no thanks");
+        PRINT_ERR("OOUB (Out-Of-Usable-Buddy)\n");
+        PRINT_ERR("Ran out of usable buddies; don't wanna implement behavior :)");
         CRIT_HLT();
         PhysAddr tmp[BUDDY_MAX_ORDER] = { 0 };
         unsigned level = 0;
@@ -70,11 +71,12 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
     }
     if (!*buddy) {
         PRINT_ERR("Buddy is gone...\n");
-        kprintf("level = %u, addr = 0x%X\n", (unsigned)level, addr);
-        kputs("map :");
+        PRINT_ERR("level = %u, addr = 0x%X\n", (unsigned)level, addr);
+        PRINT_ERR("map :");
         for (int i = 0; i < 10; i++) {
             kprintf(" 0x%x", ((uint8_t *)table->levels[level].map)[i]);
         }
+        kputc('\n');
         CRIT_HLT();
     }
     Buddy *ret = *buddy;
@@ -176,9 +178,7 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     for (int i = 0; i < validCount; i++) {
         uint64_t nbOfPages = validMemory[i].size / (1 << 12);
-        kprintf("\nfree range no %d/%d, of size %U...", i, validCount, nbOfPages);
         for (uint64_t j = 0; j < nbOfPages; j++) {
-            if (j % 10000 == 0) kputc('.');
             buddyFree(&buddyTable, 0, validMemory[i].start + j * (1 << 12));
         }
     }
