@@ -67,7 +67,7 @@ emul:
 	-usb \
 	-device usb-storage,bus=usb-bus.0,drive=live_usb \
 	-bios $(OVMF_PATH) $(EMUL_ARGS) \
- 	-m 1024M
+	-m 128M
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade

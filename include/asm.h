@@ -57,7 +57,7 @@ inline static void cli()
     __asm__ volatile ("cli");
 }
 
-#define CRIT_HLT() {cli(); while(1) hlt();}
+#define CRIT_HLT() do {cli(); while(1) hlt();} while (0)
 
 inline static void sti()
 {

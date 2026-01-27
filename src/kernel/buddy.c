@@ -72,7 +72,7 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
     if (!*buddy) {
         PRINT_ERR("Buddy is gone...\n");
         PRINT_ERR("level = %u, addr = 0x%X\n", (unsigned)level, addr);
-        PRINT_ERR("map :");
+        PRINT_ERR("map (first bit):");
         for (int i = 0; i < 10; i++) {
             kprintf(" 0x%x", ((uint8_t *)table->levels[level].map)[i]);
         }
@@ -107,7 +107,7 @@ void initBuddy(EfiMemMap *physMemMap) {
     buddyTable.totalRAM = totalRAM;
     kprintf("Total RAM: %U\n", totalRAM);
     if (totalRAM >= (1UL<<40)) {
-        PRINT_ERR("HOW MUCH RAM DO YOU HAVE ??????\n");
+        PRINT_ERR("HOW MUCH RAM DO YOU HAVE ?????? (%U)\n", totalRAM);
         CRIT_HLT();
     }
 
@@ -184,4 +184,3 @@ void initBuddy(EfiMemMap *physMemMap) {
     }
     kputc('\n');
 }
-

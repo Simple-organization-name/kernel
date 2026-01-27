@@ -153,8 +153,7 @@ void interrupt_handler(interrupt_frame_t* context)
     case 0x08:  // double fault
         kprintf("A double fault has occured at RIP=0x%X.\n", context->rip);
         kputs("Execution will be frozen to prevent an automatic reboot.\n");
-        cli();
-        while (1) hlt();
+        CRIT_HLT();
 
     case 0x0D:  // general protection fault
         kprintf("A general protection fault was triggered at RIP=0x%x.\n", context->rip);
