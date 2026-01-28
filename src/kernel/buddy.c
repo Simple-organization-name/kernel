@@ -6,6 +6,13 @@
 
 static BuddyTable buddyTable = {0};
 
+#define BUDDY_SIZE(level)               ((1 << (level)) * (1 << 12))
+#define BUDDY_PAIR_ID(level, addr)      ((addr) >> ((level) + 12 + 1))
+#define BUDDY_STATE(level, addr)        (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &  (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_SET_BIT(level, addr)      (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] |= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_REMOVE_BIT(level, addr)   (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &= ~(1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_TOGGLE_BIT(level, addr)   (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] ^= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+
 static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
     if (!src || !*src) return 1;
     Buddy *tmp = *src;
@@ -32,8 +39,8 @@ static Buddy *grabUsableBuddy(BuddyTable *src) {
     return out;
 }
 
-PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
-    BuddyLevel* levels = table->levels;
+PhysAddr buddyAlloc(uint8_t level) {
+    BuddyLevel* levels = buddyTable.levels;
 
     uint8_t curLevel;
     for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
@@ -44,11 +51,11 @@ PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
     while (curLevel != level) {
         // insert big one as its first half one level down
         uint64_t addr = levels[curLevel].list->start;
-        BUDDY_TOGGLE_BIT(table, curLevel, addr);
+        BUDDY_TOGGLE_BIT(curLevel, addr);
         buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
         
         // insert its second half
-        Buddy *tmp = grabUsableBuddy(table);
+        Buddy *tmp = grabUsableBuddy(&buddyTable);
         tmp->next = levels[curLevel - 1].list;
         levels[curLevel - 1].list = tmp;
         tmp->start = addr + (1 << ((curLevel - 1) + 12));
@@ -56,13 +63,13 @@ PhysAddr buddyAlloc(BuddyTable *table, uint8_t level) {
     }
     // we are sure that we've got memory and grabUsableBuddy handles 
     // ooms on its own so we can assume levels[level].list != NULL
-    BUDDY_TOGGLE_BIT(table, level, levels[level].list->start);
-    return buddyTransfer(&levels[level].list, &table->usable);
+    BUDDY_TOGGLE_BIT(level, levels[level].list->start);
+    return buddyTransfer(&levels[level].list, &buddyTable.usable);
 }
 
-inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysAddr addr) {
+inline static Buddy *grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
     PhysAddr nextLevelAlignedAddr = addr >> (level + 12 + 1);
-    Buddy **buddy = &table->levels[level].list;
+    Buddy **buddy = &buddyTable.levels[level].list;
     for (; *buddy; buddy = &(*buddy)->next) {
         PhysAddr current = addr >> (level + 12 + 1);
         if (current == nextLevelAlignedAddr) {
@@ -72,9 +79,9 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
     if (!*buddy) {
         PRINT_ERR("Buddy is gone...\n");
         PRINT_ERR("level = %u, addr = 0x%X\n", (unsigned)level, addr);
-        PRINT_ERR("map (first bit):");
+        PRINT_ERR("map (first bytes):");
         for (int i = 0; i < 10; i++) {
-            kprintf(" 0x%x", ((uint8_t *)table->levels[level].map)[i]);
+            kprintf(" 0x%x", ((uint8_t *)buddyTable.levels[level].map)[i]);
         }
         kputc('\n');
         CRIT_HLT();
@@ -84,21 +91,21 @@ inline static Buddy *grabAssociatedBuddy(BuddyTable *table, uint8_t level, PhysA
     return ret;
 }
 
-void buddyFree(BuddyTable *table, uint8_t level, PhysAddr addr) {
+void buddyFree(uint8_t level, PhysAddr addr) {
     if (level >= BUDDY_MAX_ORDER) {
         PRINT_ERR("WTF");
         CRIT_HLT();
     }
     addr = ALIGN(addr, 1 << (level + 12)); // just in case
-    if (level < BUDDY_MAX_ORDER - 1 && BUDDY_STATE(table, level, addr)) {
+    if (level < BUDDY_MAX_ORDER - 1 && BUDDY_STATE(level, addr)) {
         // need to seek and merge
-        Buddy *friend = grabAssociatedBuddy(table, level, addr);
-        buddyTransfer(&friend, &table->usable);
-        buddyFree(table, level + 1, ALIGN(addr, 1 << (level + 1 + 12)));
+        Buddy *friend = grabAssociatedBuddy(level, addr);
+        buddyTransfer(&friend, &buddyTable.usable);
+        buddyFree(level + 1, ALIGN(addr, 1 << (level + 1 + 12)));
     } else {
         // need to insert
-        buddyTransfer(&table->usable, &table->levels[level].list);
-        table->levels[level].list->start = addr;
+        buddyTransfer(&buddyTable.usable, &buddyTable.levels[level].list);
+        buddyTable.levels[level].list->start = addr;
     }
 }
 
@@ -179,7 +186,7 @@ void initBuddy(EfiMemMap *physMemMap) {
     for (int i = 0; i < validCount; i++) {
         uint64_t nbOfPages = validMemory[i].size / (1 << 12);
         for (uint64_t j = 0; j < nbOfPages; j++) {
-            buddyFree(&buddyTable, 0, validMemory[i].start + j * (1 << 12));
+            buddyFree(0, validMemory[i].start + j * (1 << 12));
         }
     }
     kputc('\n');
