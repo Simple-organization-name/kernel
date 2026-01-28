@@ -36,13 +36,6 @@
 typedef uint64_t PhysAddr;
 typedef uint64_t VirtAddr;
 
-typedef enum _PageType {
-    PTE_PML4,
-    PTE_PDP,    // PageDirectoryPointer:    1GiB
-    PTE_PD,     // PageDirectory:           2MiB
-    PTE_PT,     // PageTable:               4kiB
-} PageType;
-
 typedef enum {
     EfiReservedMemoryType,
     EfiLoaderCode,
@@ -69,14 +62,8 @@ typedef struct _MemoryRange {
 void *memset(void *dest, int val, size_t count);
 
 // Memory init
-uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange (*validMemory)[]);
+uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory);
 uint64_t getTotalRAM(EfiMemMap *physMemMap);
-PhysAddr _getPhysMemoryFromMemRanges(MemoryRange (*validMemory)[], uint8_t *validCount, size_t size);
-
-// Mapping
-void clearPageTable(PhysAddr addr);
-int unmapPage(VirtAddr virtual);
-PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
-
+PhysAddr _getPhysMemoryFromMemRanges(MemoryRange *validMemory, uint8_t *validCount, size_t size);
 
 #endif

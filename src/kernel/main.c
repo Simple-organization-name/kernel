@@ -4,6 +4,7 @@
 #include "asm.h"
 #include "buddy.h"
 #include "PCI.h"
+#include "memmap.h"
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -18,6 +19,12 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
     initBuddy(bootInfo->memMap);
+
+    uint16_t idx[4] = {0};
+    if (!findEmptySlotPageIdx(PTE_PML4, idx)) {
+        PRINT_WARN("Failed to find an empty space\n");
+    }
+    kprintf("%u %u %u %u -> %X", idx[0], idx[1], idx[2], idx[3], VA(idx[0], idx[1], idx[2], idx[3]));
 
     kputs("\nHello from SOS kernel !\n");
 

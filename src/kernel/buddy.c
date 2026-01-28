@@ -1,7 +1,7 @@
 #include "buddy.h"
 #include "asm.h"
 #include "kterm.h"
-#include "attribute.h"
+#include "memmap.h"
 #include "kmemory.h"
 
 static BuddyTable buddyTable = {0};
@@ -114,14 +114,14 @@ void initBuddy(EfiMemMap *physMemMap) {
     buddyTable.totalRAM = totalRAM;
     kprintf("Total RAM: %U\n", totalRAM);
     if (totalRAM >= (1UL<<40)) {
-        PRINT_ERR("HOW MUCH RAM DO YOU HAVE ?????? (%U)\n", totalRAM);
+        PRINT_ERR("HOW MUCH RAM DO YOU HAVE ??????\n");
         CRIT_HLT();
     }
 
     MemoryRange validMemory[256];
-    uint8_t validCount = getValidMemRanges(physMemMap, &validMemory);
+    uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
 
-    PhysAddr memoryChunk = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1<<21);
+    PhysAddr memoryChunk = _getPhysMemoryFromMemRanges(validMemory, &validCount, 1<<21);
     ((PageEntry *)PD(510, 508))[0].whole = MAKE_PAGE_ENTRY(memoryChunk, PTE_P | PTE_RW | PTE_PS | PTE_NX);
     Buddy *buf = (Buddy *)VA(510, 508, 0, 0);
     invlpg((uint64_t)buf);
@@ -156,7 +156,7 @@ void initBuddy(EfiMemMap *physMemMap) {
                     PRINT_ERR("ERRM THIS SHOULDN'T HAPPEN\n");
                     CRIT_HLT();
                 } else {
-                    PhysAddr physPage = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1 << 12);
+                    PhysAddr physPage = _getPhysMemoryFromMemRanges(validMemory, &validCount, 1 << 12);
                     clearPageTable(physPage);
                     ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_P | PTE_RW | PTE_NX);
                     invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
@@ -165,7 +165,7 @@ void initBuddy(EfiMemMap *physMemMap) {
             }
 
             // Map a physical page
-            PhysAddr page = _getPhysMemoryFromMemRanges(&validMemory, &validCount, 1 << 12);
+            PhysAddr page = _getPhysMemoryFromMemRanges(validMemory, &validCount, 1 << 12);
             ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_P | PTE_RW | PTE_NX);
             uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
             invlpg((uint64_t)addr);
