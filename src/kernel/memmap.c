@@ -1,3 +1,4 @@
+#include "utility.h"
 #include "kmemory.h"
 #include "asm.h"
 #include "memmap.h"
@@ -45,6 +46,13 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
 
 int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
     return _findEmptySlotPageIdx(targetType, idx, 0);
+}
+
+int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr) {
+    PageEntry *entry = RECURSIVE_BASE;
+    for (uint8_t i = 0; i < pageType; i++) {
+        TYPE_CAST(entry, uint64_t) |= (RECURSIVE_SLOT << (39 - 9*i));
+    }
 }
 
 int unmapPage(VirtAddr virtual) {

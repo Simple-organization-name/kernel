@@ -6,14 +6,13 @@
 #include "kerror.h"
 
 typedef enum _PageType {
-    PTE_PML4,
+    PTE_PML4 = 0,
     PTE_PDP,    // PageDirectoryPointer:    1GiB
     PTE_PD,     // PageDirectory:           2MiB
     PTE_PT,     // PageTable:               4kiB
 } PageType;
 
 void clearPageTable(PhysAddr addr);
-
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 /**
  * Get an empty slot starting at indexes in idx
