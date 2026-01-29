@@ -21,10 +21,25 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initBuddy(bootInfo->memMap);
 
     uint16_t idx[4] = {0};
-    if (!findEmptySlotPageIdx(PTE_PML4, idx)) {
+    if (!findEmptySlotPageIdx(PTE_PT, idx)) {
         PRINT_WARN("Failed to find an empty space\n");
+    } else {
+        kprintf("%u %u %u %u -> %X\n", idx[0], idx[1], idx[2], idx[3], VA(idx[0], idx[1], idx[2], idx[3]));
+        PhysAddr phys = buddyAlloc(0);
+        
+        mapPage(idx, PTE_PT, phys, PTE_RW | PTE_NX);
+        char *test = VA_ARRAY(idx);
+        kprintf("test phys: 0x%X, virt 0x%X\n", phys, test);
+        for (uint8_t i = 0; i < UINT8_MAX; i++) {
+            test[i] = i;
+        }
+
+        kprintf("test array:\n");
+        for (uint8_t i = 0; i < UINT8_MAX; i++) {
+            kprintf("%u ", test[i]);
+        }
     }
-    kprintf("%u %u %u %u -> %X", idx[0], idx[1], idx[2], idx[3], VA(idx[0], idx[1], idx[2], idx[3]));
+
 
     kputs("\nHello from SOS kernel !\n");
 

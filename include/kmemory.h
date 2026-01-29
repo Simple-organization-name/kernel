@@ -16,7 +16,7 @@
 // Standard recursive page table mapping formulas
 #define PML4()      ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | (RECURSIVE_SLOT << 12)))
 #define PDPT(i)     ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (RECURSIVE_SLOT << 21) | ((uint64_t)(i) << 12)))
-#define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | (((uint64_t)i) << 21) | ((uint64_t)(j) << 12)))
+#define PD(i, j)    ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | (RECURSIVE_SLOT << 30) | ((uint64_t)(i) << 21) | ((uint64_t)(j) << 12)))
 #define PT(i, j, k) ((PageEntry*)(RECURSIVE_BASE | (RECURSIVE_SLOT << 39) | ((uint64_t)(i) << 30) | ((uint64_t)(j) << 21) | ((uint64_t)(k) << 12)))
 
 #define KERNEL_CANONICAL    0xFFFF000000000000UL
@@ -29,6 +29,7 @@
         ((uint64_t)pml4 << 39) | ((uint64_t)pdpt << 30) | ((uint64_t)pd << 21) | ((uint64_t)pt << 12) \
     ) \
 )
+#define VA_ARRAY(arr) VA((arr)[0], (arr)[1], (arr)[2], (arr)[3])
 
 // Address types
 #define PHYSICAL

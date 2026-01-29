@@ -1,4 +1,3 @@
-#include "utility.h"
 #include "kmemory.h"
 #include "asm.h"
 #include "memmap.h"
@@ -7,14 +6,14 @@
 void clearPageTable(PhysAddr addr) {
     ((PageEntry *)PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_P | PTE_NX | PTE_RW);
     invlpg((uint64_t)VA(510, 508, 511, 0));
-    memset(VA(510, 508, 511, 0), 0, sizeof(PageEntry));
+    memset(VA(510, 508, 511, 0), 0, 4096);
     ((PageEntry *)PT(510, 508, 511))[0].whole = 0;
     invlpg((uint64_t)VA(510, 508, 511, 0));
 }
 
-static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curType) {
+inline static PageEntry *getTable(PageType type, uint16_t *idx) {
     PageEntry *table;
-    switch (curType) {
+    switch (type) {
         case PTE_PML4: // Searching for entry in pml4
             table = PML4();
             break;
@@ -28,31 +27,40 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
             table = PT(idx[0], idx[1], idx[2]);
             break;
         default:
-            PRINT_ERR("Invalid level to map page\n");
+            PRINT_ERR("Invalid level\n");
             CRIT_HLT();
     }
+    return table;
+}
 
-    for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 509 : 511); i++) {
-        if (!table[i].present) {
-            if (curType == targetType || _findEmptySlotPageIdx(targetType, idx, curType + 1)) {
-                idx[curType] = i;
+static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curType) {
+    PageEntry *table = getTable(curType, idx);
+
+    for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 511 : 512); i++) {
+        // kprintf("targetType: %u, curType: %u, curIdx: %u\n", targetType, curType, i);
+        idx[curType] = i;
+        if (curType == targetType && !table[i].present) { // if it is the right level and the slot is free
+            if (curType == targetType)
                 return 1;
-            }
+
+        } else if (curType != targetType && table[i].present && !table[i].pageSize) {
+            if (_findEmptySlotPageIdx(targetType, idx, curType + 1))
+                return 1;
         }
     }
 
+    idx[curType] = 0;
     return 0;
 }
 
-int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
+inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
     return _findEmptySlotPageIdx(targetType, idx, 0);
 }
 
-int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr) {
-    PageEntry *entry = RECURSIVE_BASE;
-    for (uint8_t i = 0; i < pageType; i++) {
-        TYPE_CAST(entry, uint64_t) |= (RECURSIVE_SLOT << (39 - 9*i));
-    }
+inline void mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
+    PageEntry *table = getTable(pageType, idx);
+    ((PageEntry *)table)[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
+    invlpg((uint64_t)VA_ARRAY(idx));
 }
 
 int unmapPage(VirtAddr virtual) {
