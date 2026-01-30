@@ -36,10 +36,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
         kprintf("test array:\n");
         for (uint8_t i = 0; i < UINT8_MAX; i++) {
-            kprintf("%u ", test[i]);
+            kprintf("%d ", test[i]);
         }
     }
-
 
     kputs("\nHello from SOS kernel !\n");
 

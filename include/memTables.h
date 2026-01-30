@@ -39,6 +39,6 @@ typedef union _PageEntry {
 #define PTE_NX  (1ULL<<63)  // not exec
 #define PTE_ADDR (0x000FFFFFFFFFF000)
 
-#define MAKE_PAGE_ENTRY(addr, flags) ((uint64_t)(((uintptr_t)(addr) & PTE_ADDR) | ((uint64_t)(flags))))
+#define MAKE_PAGE_ENTRY(addr, flags) ((uint64_t)(((uintptr_t)(addr) & PTE_ADDR) | PTE_P | ((uint64_t)(flags))))
 
 #endif

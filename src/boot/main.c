@@ -716,19 +716,19 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     CLEAR_PT(pt_temp);
 
     // delegate low 512GiB VA mapping to the pdp_low table
-    pml4[0].whole = (uint64_t)((uintptr_t)pdp_low & PTE_ADDR) | PTE_P | PTE_RW;
-    pml4[510].whole = (uint64_t)((uintptr_t)pdp_high & PTE_ADDR) | PTE_P | PTE_RW;
+    pml4[0].whole = MAKE_PAGE_ENTRY(pdp_low, PTE_RW);
+    pml4[510].whole = MAKE_PAGE_ENTRY(pdp_high, PTE_RW);
     // make pml4 point to itself to recursively map all page tables
-    pml4[511].whole = (uint64_t)((uintptr_t)pml4 & PTE_ADDR) | PTE_P | PTE_RW;
+    pml4[511].whole = MAKE_PAGE_ENTRY(pml4, PTE_RW);
 
     // this maps all of lower 1GiB by identity
-    pdp_low[0].whole = MAKE_PAGE_ENTRY(0, PTE_P | PTE_RW | PTE_PS);
+    pdp_low[0].whole = MAKE_PAGE_ENTRY(0, PTE_RW | PTE_PS);
 
-    pdp_high[509].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
+    pdp_high[509].whole = MAKE_PAGE_ENTRY(pd_framebuffer, PTE_RW);
     for (uint16_t i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
-        pd_framebuffer[i].whole = MAKE_PAGE_ENTRY(framebuffer.addr + (i<<21), PTE_P | PTE_RW | PTE_PS | PTE_PCD);
+        pd_framebuffer[i].whole = MAKE_PAGE_ENTRY(framebuffer.addr + (i<<21), PTE_RW | PTE_PS | PTE_PCD);
 
-    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_P | PTE_RW | PTE_G);
+    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_RW | PTE_G);
 
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
@@ -737,10 +737,10 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     }
 
     for (uint16_t i = 0; i < (kernel_size + (1<<21) - 1) >> 21; i++)
-        pd_kernel[i].whole = MAKE_PAGE_ENTRY(kernel_pa + (i<<21), PTE_P | PTE_RW | PTE_PS);
+        pd_kernel[i].whole = MAKE_PAGE_ENTRY(kernel_pa + (i<<21), PTE_RW | PTE_PS);
 
-    pdp_high[508].whole = MAKE_PAGE_ENTRY(pd_memManagement, PTE_P | PTE_RW | PTE_NX);
-    pd_memManagement[511].whole = MAKE_PAGE_ENTRY(pt_temp, PTE_P | PTE_RW | PTE_NX);
+    pdp_high[508].whole = MAKE_PAGE_ENTRY(pd_memManagement, PTE_RW | PTE_NX);
+    pd_memManagement[511].whole = MAKE_PAGE_ENTRY(pt_temp, PTE_RW | PTE_NX);
 
     *pml4_ = pml4;
 

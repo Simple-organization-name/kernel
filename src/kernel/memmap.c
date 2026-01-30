@@ -39,14 +39,12 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
     for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 511 : 512); i++) {
         // kprintf("targetType: %u, curType: %u, curIdx: %u\n", targetType, curType, i);
         idx[curType] = i;
-        if (curType == targetType && !table[i].present) { // if it is the right level and the slot is free
-            if (curType == targetType)
-                return 1;
+        if (curType == targetType && !table[i].present) // if it is the right level and the slot is free
+            return 1;
 
-        } else if (curType != targetType && table[i].present && !table[i].pageSize) {
+        else if (curType != targetType && table[i].present && !table[i].pageSize)
             if (_findEmptySlotPageIdx(targetType, idx, curType + 1))
                 return 1;
-        }
     }
 
     idx[curType] = 0;
