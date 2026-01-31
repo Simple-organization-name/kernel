@@ -14,10 +14,10 @@ void *memset(void *dest, int val, size_t count) {
     return dest;
 }
 
-uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory) {
+uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory) {
     uint8_t validMemoryCount = 0;
-    for (uint64_t i = 0; (i < physMemoryMap->count) && (validMemoryCount < UINT8_MAX); i++) {
-        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemoryMap->map + physMemoryMap->descSize * i);
+    for (uint64_t i = 0; (i < physMemMap->count) && (validMemoryCount < UINT8_MAX); i++) {
+        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
         switch (desc->Type) {
             case EfiLoaderCode:
             case EfiLoaderData:

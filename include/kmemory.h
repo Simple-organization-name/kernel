@@ -63,7 +63,7 @@ typedef struct _MemoryRange {
 void *memset(void *dest, int val, size_t count);
 
 // Memory init
-uint8_t getValidMemRanges(EfiMemMap *physMemoryMap, MemoryRange *validMemory);
+uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory);
 uint64_t getTotalRAM(EfiMemMap *physMemMap);
 PhysAddr _getPhysMemoryFromMemRanges(MemoryRange *validMemory, uint8_t *validCount, size_t size);
 

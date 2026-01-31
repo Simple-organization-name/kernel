@@ -19,6 +19,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
     initBuddy(bootInfo->memMap);
+    printBuddyTableInfo();
 
     uint16_t idx[4] = {0};
     if (!findEmptySlotPageIdx(PTE_PT, idx)) {
@@ -39,7 +40,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
             kprintf("%d ", test[i]);
         }
     }
-
+    
     kputs("\nHello from SOS kernel !\n");
 
     printAllPCI();
