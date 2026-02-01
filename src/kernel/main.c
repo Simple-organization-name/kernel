@@ -29,15 +29,18 @@ _Noreturn void kmain(BootInfo* bootInfo)
         PhysAddr phys = buddyAlloc(0);
         
         mapPage(idx, PTE_PT, phys, PTE_RW | PTE_NX);
-        char *test = VA_ARRAY(idx);
+        short *test = VA_ARRAY(idx);
         kprintf("test phys: 0x%X, virt 0x%X\n", phys, test);
-        for (uint8_t i = 0; i < UINT8_MAX; i++) {
-            test[i] = i;
+        for (short i = 1; i <= 2048; i++) {
+            test[i-1] = i;
         }
 
         kprintf("test array:\n");
-        for (uint8_t i = 0; i < UINT8_MAX; i++) {
-            kprintf("%d ", test[i]);
+        for (short i = 1, pow = 0; i <= 2048; i++) {
+            if (i == (1<<pow)) {
+                kprintf("%d ", test[i-1]);
+                pow++;
+            }
         }
     }
     

@@ -182,7 +182,7 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
 
 void initBuddy(EfiMemMap *physMemMap) {
     uint64_t totalRAM = getTotalRAM(physMemMap);
-    kprintf("Total RAM: %U\n", totalRAM);
+    kprintf("Total RAM: %UB\n", totalRAM);
     if (totalRAM >= (1UL<<40)) {
         PRINT_ERR("HOW MUCH RAM DO YOU HAVE ??????\n");
         CRIT_HLT();
