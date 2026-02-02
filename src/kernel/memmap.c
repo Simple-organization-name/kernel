@@ -57,19 +57,19 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
 
 inline int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
-    if ((table)[idx[pageType]].used) return 1;
-    (table)[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
+    if (table[idx[pageType]].used) return 1;
+    table[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
     invlpg((uint64_t)VA_ARRAY(idx));
     return 0;
 }
 
 int unmapPage(VirtAddr virtual) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
-    PageEntry *entry = (PML4()) + pml4_index;
+    PageEntry *entry = PML4() + pml4_index;
     if (!entry->present) return 0;
 
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
-    entry = (PDPT(pml4_index)) + pdpt_index;
+    entry = PDPT(pml4_index) + pdpt_index;
     if (!entry->present) return 0;
     if (entry->pageSize) {
         entry->whole = 0;
@@ -78,7 +78,7 @@ int unmapPage(VirtAddr virtual) {
     }
 
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
-    entry = (PD(pml4_index, pdpt_index)) + pd_index;
+    entry = PD(pml4_index, pdpt_index) + pd_index;
     if (!entry->present) return 0;
     if (entry->pageSize) {
         entry->whole = 0;
@@ -87,7 +87,7 @@ int unmapPage(VirtAddr virtual) {
     }
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
-    entry = (PT(pml4_index, pdpt_index, pd_index)) + pt_index;
+    entry = PT(pml4_index, pdpt_index, pd_index) + pt_index;
     if (!entry->present) return 0;
     entry->whole = 0;
     invlpg(virtual);
@@ -103,8 +103,8 @@ int reservePage(VirtAddr addr, PageType level)
         (addr >> 12) & 0x1FF
     };
     PageEntry *table = getTable(level, idx);
-    if ((table)[idx[level]].used) return 1;
-    (table)[idx[level]].whole = PTE_USED;
+    if (table[idx[level]].used) return 1;
+    table[idx[level]].whole = PTE_USED;
     return 0;
 }
 
@@ -134,11 +134,11 @@ int unReservePage(VirtAddr addr)
 
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
-    PageEntry entry = (PML4())[pml4_index];
+    PageEntry entry = PML4()[pml4_index];
     if (!entry.present) return -1;
 
     uint16_t pdpt_index = (virtual >> 30) & 0x1FF;
-    entry = (PDPT(pml4_index))[pdpt_index];
+    entry = PDPT(pml4_index)[pdpt_index];
     if (!entry.present) return -1;
     if (entry.pageSize) {
         if (pageLevel) *pageLevel = PTE_PDP;
@@ -146,7 +146,7 @@ PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     }
 
     uint16_t pd_index = (virtual >> 21) & 0x1FF;
-    entry = (PD(pml4_index, pdpt_index))[pd_index];
+    entry = PD(pml4_index, pdpt_index)[pd_index];
     if (!entry.present) return -1;
     if (entry.pageSize) {
         if (pageLevel) *pageLevel = PTE_PD;
@@ -154,7 +154,7 @@ PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel) {
     }
 
     uint16_t pt_index = (virtual >> 12) & 0x1FF;
-    entry = (PT(pml4_index, pdpt_index, pd_index))[pt_index];
+    entry = PT(pml4_index, pdpt_index, pd_index)[pt_index];
     if (!entry.present) return -1;
     if (pageLevel) *pageLevel = PTE_PT;
     return entry.whole & PTE_ADDR; // pt is always 4KiB so it doesn't have the pageSize flag

@@ -4,5 +4,5 @@
 #include "memmap.h"
 
 void vmalloc(size_t size) {
-    
+    (void)size;
 }
