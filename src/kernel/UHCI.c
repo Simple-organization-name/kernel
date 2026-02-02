@@ -1,7 +1,6 @@
 #include <UHCI.h>
 #include <stddef.h>
 #include <kterm.h>
-#include <kalloc.h>
 
 #include <PCI.h>
 

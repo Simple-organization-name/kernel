@@ -9,7 +9,7 @@
 typedef union _PageEntry {
     uint64_t whole;
     struct {
-    uint64_t present : 1,   // is used
+    uint64_t present : 1,   // is mapped
             rw : 1,         // is writable
             us : 1,         // can userspace code access it
             pwt : 1,
@@ -18,7 +18,8 @@ typedef union _PageEntry {
             dirty : 1,      // has it been written to
             pageSize : 1,   // is leaf / ps / whatever
             global : 1,     // if set, not uncached when switching cr3 (for example kernel mapping that is the same in all processes)
-            avl_1 : 3,
+            used : 1,       // custom : wether the pages is used even if not mapped
+            avl_1 : 2,
             dest : 40,      // if leaf, where page starts. else, where next pageTable is
             avl_2 : 11,
             xd : 1;         // if set, cannot execute page
@@ -27,16 +28,20 @@ typedef union _PageEntry {
 
 // to OR things together
 
-#define PTE_P   (1UL<<0)   // used
-#define PTE_RW  (1UL<<1)   // read/write
-#define PTE_US  (1UL<<2)   // user mode
-#define PTE_PWT (1UL<<3)   // cache write through or whatever that means
-#define PTE_PCD (1UL<<4)   // cache disable
-#define PTE_A   (1UL<<5)   // accessed
-#define PTE_D   (1UL<<6)   // dirty
-#define PTE_PS  (1UL<<7)   // leaf node
-#define PTE_G   (1UL<<8)   // global
-#define PTE_NX  (1UL<<63)  // not exec
+#define PTE_P   (1ULL<<0)   // mapped
+#define PTE_RW  (1ULL<<1)   // read/write
+#define PTE_US  (1ULL<<2)   // user mode
+#define PTE_PWT (1ULL<<3)   // cache write through or whatever that means
+#define PTE_PCD (1ULL<<4)   // cache disable
+#define PTE_A   (1ULL<<5)   // accessed
+#define PTE_D   (1ULL<<6)   // dirty
+#define PTE_PS  (1ULL<<7)   // leaf node
+#define PTE_G   (1ULL<<8)   // global
+// custom bits
+#   define PTE_USED    (1ULL<<9)
+#define PTE_NX  (1ULL<<63)  // not exec
 #define PTE_ADDR (0x000FFFFFFFFFF000)
+
+#define MAKE_PAGE_ENTRY(addr, flags) ((uint64_t)(((uintptr_t)(addr) & PTE_ADDR) | PTE_P | PTE_USED | ((uint64_t)(flags))))
 
 #endif

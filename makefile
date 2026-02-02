@@ -9,7 +9,7 @@ BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
 
 KERNEL_CC		= gcc
 KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
-				-I include -nostartfiles -fno-stack-protector -O2 -fopt-info-vec-optimized -fno-builtin #-fno-tree-slp-vectorize
+				-I include -nostartfiles -fno-stack-protector -O2 -fopt-info-vec-optimized -fno-builtin -LTO
 
 KERNEL_ASM		= nasm
 KERNEL_ASMFLAGS = -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror -O2 -X gnu
@@ -66,7 +66,8 @@ emul:
 	-drive if=none,format=raw,id=live_usb,file=fat:rw:iso/ \
 	-usb \
 	-device usb-storage,bus=usb-bus.0,drive=live_usb \
-	-bios $(OVMF_PATH) $(EMUL_ARGS)
+	-bios $(OVMF_PATH) $(EMUL_ARGS) \
+	-m 128M
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade

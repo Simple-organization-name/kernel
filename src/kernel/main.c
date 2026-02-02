@@ -2,37 +2,48 @@
 #include "idt.h"
 #include "kterm.h"
 #include "asm.h"
-#include "kalloc.h"
+#include "buddy.h"
 #include "PCI.h"
+#include "memmap.h"
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
     init_interrupts();
 
-    if (kterminit(bootInfo, 1, 0)) {
-        cli();
-        while (1) hlt();
-    }
+    if (kterminit(bootInfo, 1, 0)) CRIT_HLT();
     kfillscreen(0xFF000000);
 
-    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
-    kprintf("Kernel at 0x%X\n", kernelPhysAddr);
-    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
-    kprintf("Framebuffer at 0x%X\n\n", fbPhysAddr);
+    // PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
+    // PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
+    // PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
+    // PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
-    initPhysMem(bootInfo->memMap);
-    printMemBitmap();
+    initBuddy(bootInfo->memMap);
+    printBuddyTableInfo();
 
-    char *test = (char *)kallocPage(MEM_4K);
-    kprintf("Test using kallocPage at 0x%X\n", test);
-    uint8_t i = 0;
-    for (char c = 'a'; c <= 'z'; c++) {
-        test[i++] = c;
+    uint16_t idx[4] = {0};
+    if (!findEmptySlotPageIdx(PTE_PT, idx)) {
+        PRINT_WARN("Failed to find an empty space\n");
+    } else {
+        kprintf("%u %u %u %u -> %X\n", idx[0], idx[1], idx[2], idx[3], VA(idx[0], idx[1], idx[2], idx[3]));
+        PhysAddr phys = buddyAlloc(0);
+        
+        mapPage(idx, PTE_PT, phys, PTE_RW | PTE_NX);
+        short *test = VA_ARRAY(idx);
+        kprintf("test phys: 0x%X, virt 0x%X\n", phys, test);
+        for (short i = 1; i <= 2048; i++) {
+            test[i-1] = i;
+        }
+
+        kprintf("test array:\n");
+        for (short i = 1, pow = 0; i <= 2048; i++) {
+            if (i == (1<<pow)) {
+                kprintf("%d ", test[i-1]);
+                pow++;
+            }
+        }
     }
-    test[i] = 0;
-    kputs(test);
-    kfreePage(test);
-
+    
     kputs("\nHello from SOS kernel !\n");
     
     PCI_printAll();

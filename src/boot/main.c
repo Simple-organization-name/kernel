@@ -9,9 +9,9 @@
 #undef EFI_FILE_MODE_READ
 #undef EFI_FILE_MODE_WRITE
 #undef EFI_FILE_MODE_CREATE
-#define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001UL
-#define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003UL
-#define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003UL
+#define EFI_FILE_MODE_READ      (UINT64)0x0000000000000001ULL
+#define EFI_FILE_MODE_WRITE     (UINT64)0x0000000000000003ULL
+#define EFI_FILE_MODE_CREATE    (UINT64)0x8000000000000003ULL
 
 #define EFI_CALL_ERROR if (EFI_ERROR(status))
 #define EFI_CALL_FATAL_ERROR(message) EFI_CALL_ERROR { EfiPrintError(status, message); while(1); }
@@ -447,7 +447,7 @@ static EFI_STATUS loadKernelImage(IN FileData *file, OUT EFI_PHYSICAL_ADDRESS* e
     }
 
     // allocate that memory
-    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiRuntimeServicesData, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
+    status = systemTable->BootServices->AllocatePages(AllocateAddress, EfiReservedMemoryType, EFI_SIZE_TO_PAGES(ps_top_max - ps_base_min), &load_base);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory to load kernel program into\r\n");
 
     for (Elf64_Half phdr_i = 0; phdr_i < ehdr->e_phnum; phdr_i++)
@@ -648,7 +648,7 @@ static EFI_STATUS getMemoryMap() {
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Failed to get memory map information !");
 
-    status = bs->AllocatePool(EfiRuntimeServicesData, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
+    status = bs->AllocatePool(EfiReservedMemoryType, memmap.mapSize = (dummy * 2), (void **)&memmap.map);
     EFI_CALL_FATAL_ERROR(u"Failed to allocate memory for memmap");
 
     status = bs->GetMemoryMap(&memmap.mapSize, (EFI_MEMORY_DESCRIPTOR *)memmap.map, &memmap.key, &memmap.descSize, &descriptorVersion);
@@ -694,7 +694,7 @@ static void exitBootServices() {
 
 static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageEntry** OUT pml4_) {
     EFI_PHYSICAL_ADDRESS pageAddress;
-    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 5, &pageAddress);
+    EFI_STATUS status = systemTable->BootServices->AllocatePages(AllocateAnyPages, EfiReservedMemoryType, 7, &pageAddress);
     EFI_CALL_FATAL_ERROR(u"Couldn't get memory for level 4 page table");
 
     // top level page table that encompasses all
@@ -704,26 +704,31 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     PageEntry* pdp_high         = (PageEntry*)(pageAddress + 2*4096);
     PageEntry* pd_kernel        = (PageEntry*)(pageAddress + 3*4096);
     PageEntry* pd_framebuffer   = (PageEntry*)(pageAddress + 4*4096);
+    PageEntry* pd_memManagement = (PageEntry*)(pageAddress + 5*4096);
+    PageEntry* pt_temp          = (PageEntry*)(pageAddress + 6*4096);
 
     CLEAR_PT(pml4);
-    // delegate low 512GiB VA mapping to the pdp_low table
-    pml4[0].whole = (uint64_t)((uintptr_t)pdp_low & PTE_ADDR) | PTE_P | PTE_RW;
-    pml4[510].whole = (uint64_t)((uintptr_t)pdp_high & PTE_ADDR) | PTE_P | PTE_RW;
-    // make pml4 point to itself to recursively map all page tables
-    pml4[511].whole = (uint64_t)((uintptr_t)pml4 & PTE_ADDR) | PTE_P | PTE_RW;
-
     CLEAR_PT(pdp_low);
-    // this maps all of lower 1GiB by identity
-    pdp_low[0].whole = PTE_P | PTE_RW | PTE_PS;
-
     CLEAR_PT(pdp_high);
-    pdp_high[509].whole = (uint64_t)((uintptr_t)pd_framebuffer & PTE_ADDR) | PTE_P | PTE_RW;
-    CLEAR_PT(pd_framebuffer);
-    for (UINT16 i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
-        pd_framebuffer[i].whole = ((framebuffer.addr + (i<<21)) & PTE_ADDR) | PTE_P | PTE_RW | PTE_PS | PTE_PCD;
-
-    pdp_high[510].whole = (uint64_t)((uintptr_t)pd_kernel & PTE_ADDR) | PTE_P | PTE_RW | PTE_G;
     CLEAR_PT(pd_kernel);
+    CLEAR_PT(pd_framebuffer);
+    CLEAR_PT(pd_memManagement);
+    CLEAR_PT(pt_temp);
+
+    // delegate low 512GiB VA mapping to the pdp_low table
+    pml4[0].whole = MAKE_PAGE_ENTRY(pdp_low, PTE_RW);
+    pml4[510].whole = MAKE_PAGE_ENTRY(pdp_high, PTE_RW);
+    // make pml4 point to itself to recursively map all page tables
+    pml4[511].whole = MAKE_PAGE_ENTRY(pml4, PTE_RW);
+
+    // this maps all of lower 1GiB by identity
+    pdp_low[0].whole = MAKE_PAGE_ENTRY(0, PTE_RW | PTE_PS);
+
+    pdp_high[509].whole = MAKE_PAGE_ENTRY(pd_framebuffer, PTE_RW);
+    for (uint16_t i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
+        pd_framebuffer[i].whole = MAKE_PAGE_ENTRY(framebuffer.addr + (i<<21), PTE_RW | PTE_PS | PTE_PCD);
+
+    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_RW | PTE_G);
 
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
@@ -732,7 +737,10 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
     }
 
     for (uint16_t i = 0; i < (kernel_size + (1<<21) - 1) >> 21; i++)
-        pd_kernel[i].whole = (uint64_t) (kernel_pa + (i<<21)) | PTE_P | PTE_RW | PTE_PS;
+        pd_kernel[i].whole = MAKE_PAGE_ENTRY(kernel_pa + (i<<21), PTE_RW | PTE_PS);
+
+    pdp_high[508].whole = MAKE_PAGE_ENTRY(pd_memManagement, PTE_RW | PTE_NX);
+    pd_memManagement[511].whole = MAKE_PAGE_ENTRY(pt_temp, PTE_RW | PTE_NX);
 
     *pml4_ = pml4;
 
@@ -808,7 +816,7 @@ static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
     if(status != EFI_BUFFER_TOO_SMALL)
         EFI_CALL_FATAL_ERROR(u"Error while getting kernel file info size");
 
-    status = systemTable->BootServices->AllocatePool(EfiRuntimeServicesData, sizeofInfo, (void**)&fileInfo);
+    status = systemTable->BootServices->AllocatePool(EfiReservedMemoryType, sizeofInfo, (void**)&fileInfo);
     EFI_CALL_FATAL_ERROR(u"Could not allocate memory for kernel file info");
 
     status = file->GetInfo(file, &EfiFileInfoId, &sizeofInfo, fileInfo);
@@ -821,7 +829,7 @@ static EFI_STATUS getFileSize(IN EFI_FILE_PROTOCOL* file, OUT UINT64* size)
     return EFI_SUCCESS;
 }
 
-#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiRuntimeServicesData, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
+#define id_alloc(dest_var, size) (dest_var = (void*)(1 << 30), systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiReservedMemoryType, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS*)&(dest_var)))
 
 static EFI_STATUS openFiles(IN CHAR16 *configPath, OUT FileArray *files)
 {

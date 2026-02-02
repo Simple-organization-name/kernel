@@ -57,7 +57,7 @@ inline static void cli()
     __asm__ volatile ("cli");
 }
 
-#define CRIT_HLT() {cli(); while(1) hlt();}
+#define CRIT_HLT() do {cli(); while(1) hlt();} while (0)
 
 inline static void sti()
 {
@@ -71,6 +71,26 @@ inline static void invlpg(uint64_t addr)
         :: "m"(addr)
         : "memory"
     );
+}
+
+inline static uint64_t bsr64(uint64_t n) {
+    uint64_t ret;
+    __asm__ volatile (
+        "bsrq %1, %0"
+        : "=r"(ret)
+        : "rm"(n)
+    );
+    return ret;
+}
+
+inline static uint64_t lzcnt64(uint64_t n) {
+    uint64_t ret;
+    __asm__ volatile (
+        "lzcntq %1, %0"
+        : "=r"(ret)
+        : "rm"(n)
+    );
+    return ret;
 }
 
 #endif
