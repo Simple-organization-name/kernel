@@ -42,9 +42,14 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
         if (curType == targetType && !table[i].used) // if it is the right level and the slot is free
             return 1;
 
-        else if (curType != targetType && table[i].used && !table[i].pageSize)
+        else if (curType != targetType && !table[i].pageSize) {
+            if (!table[i].used) {
+                PhysAddr page = buddyAlloc(0);
+                table[i].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
+            }
             if (_findEmptySlotPageIdx(targetType, idx, curType + 1))
                 return 1;
+        }
     }
 
     idx[curType] = 0;
@@ -52,7 +57,7 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
 }
 
 inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
-    return _findEmptySlotPageIdx(targetType, idx, 0);
+    return _findEmptySlotPageIdx(targetType, idx, PTE_PML4);
 }
 
 static int _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count, uint8_t curType) {
@@ -73,7 +78,11 @@ static int _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t co
             if (found) {
                 return 1;
             }
-        } else if (curType != targetType && table[i].used && !table[i].pageSize) {
+        } else if (curType != targetType && !table[i].pageSize) {
+            if (!table[i].used) {
+                PhysAddr page = buddyAlloc(0);
+                table[i].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
+            }
             if (_findEmptyRangePageIdx(targetType, idx, count, curType + 1)) {
                 return 1;
             }
