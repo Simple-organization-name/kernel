@@ -61,6 +61,7 @@ typedef struct _MemoryRange {
 } MemoryRange;
 
 void *memset(void *dest, int val, size_t count);
+void *memcpy(void * restrict dest, const void * restrict src, size_t n);
 
 // Memory init
 uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory);

@@ -60,41 +60,41 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
     return _findEmptySlotPageIdx(targetType, idx, PTE_PML4);
 }
 
-static int _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count, uint8_t curType) {
-    PageEntry *table = getTable(curType, idx);
+static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t *curIdx, size_t count, uint8_t curType, size_t found) {
+    PageEntry *table = getTable(curType, curIdx);
 
     uint16_t maxIndex = curType == PTE_PML4 ? 511 : 512;
-    for (uint16_t i = idx[curType]; i < maxIndex; i++) {
-        idx[curType] = i;
+    for (uint16_t i = curIdx[curType]; i < maxIndex; i++) {
+        curIdx[curType] = i;
         if (curType == targetType && !table[i].used) {
-            uint8_t found = 1;
-            for (uint16_t j = i; j - i < count && j < maxIndex; j++) {
+            for (uint16_t j = i; found < count && j < maxIndex; j++) {
                 if (table[j].used || table[j].present) {
                     i = j;
                     found = 0;
-                    break;
-                }
-            }
-            if (found) {
-                return 1;
+                    memcpy(idx, curIdx, sizeof(uint16_t) * 4);
+                    idx[curType]++;
+                } else found++;
             }
         } else if (curType != targetType && !table[i].pageSize) {
             if (!table[i].used) {
                 PhysAddr page = buddyAlloc(0);
                 table[i].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
             }
-            if (_findEmptyRangePageIdx(targetType, idx, count, curType + 1)) {
-                return 1;
-            }
+            found = _findEmptyRangePageIdx(targetType, idx, curIdx, count, curType + 1, found);
+        } else {
+            found = 0;
+            memcpy(idx, curIdx, sizeof(uint16_t) * 4);
+            idx[curType]++;
         }
     }
 
-    idx[curType] = 0;
-    return 0;
+    return found;
 }
 
 inline int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count) {
-    return _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4);
+    uint16_t curIdx[4];
+    memcpy(curIdx, idx, sizeof(uint16_t) * 4);
+    return _findEmptyRangePageIdx(targetType, idx, curIdx, count, PTE_PML4, 0);
 }
 
 inline int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
