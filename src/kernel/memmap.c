@@ -39,11 +39,11 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
     for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 511 : 512); i++) {
         // kprintf("targetType: %u, curType: %u, curIdx: %u\n", targetType, curType, i);
         idx[curType] = i;
-        if (curType == targetType && !table[i].used) // if it is the right level and the slot is free
+        if (curType == targetType && !table[i].reserved) // if it is the right level and the slot is free
             return 1;
 
         else if (curType != targetType && !table[i].pageSize) {
-            if (!table[i].used) {
+            if (!table[i].reserved) {
                 PhysAddr page = buddyAlloc(0);
                 table[i].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
             }
@@ -60,46 +60,55 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
     return _findEmptySlotPageIdx(targetType, idx, PTE_PML4);
 }
 
-static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t *curIdx, size_t count, uint8_t curType, size_t found) {
+static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count, uint8_t curType, uint16_t *curIdx, size_t found) {
     PageEntry *table = getTable(curType, curIdx);
 
-    uint16_t maxIndex = curType == PTE_PML4 ? 511 : 512;
-    for (uint16_t i = curIdx[curType]; i < maxIndex; i++) {
+    uint16_t maxIdx = curType == PTE_PML4 ? 511 : 510;
+    for (uint16_t i = curIdx[curType]; i < maxIdx; i++) {
         curIdx[curType] = i;
-        if (curType == targetType && !table[i].used) {
-            for (uint16_t j = i; found < count && j < maxIndex; j++) {
-                if (table[j].used || table[j].present) {
-                    i = j;
-                    found = 0;
-                    memcpy(idx, curIdx, sizeof(uint16_t) * 4);
-                    idx[curType]++;
-                } else found++;
-            }
-        } else if (curType != targetType && !table[i].pageSize) {
-            if (!table[i].used) {
-                PhysAddr page = buddyAlloc(0);
-                table[i].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
-            }
-            found = _findEmptyRangePageIdx(targetType, idx, curIdx, count, curType + 1, found);
-        } else {
+        
+        // Cases where the page is occupied and we should slide the window
+        if (table[i].pageSize || table[i].reserved || (targetType == curType && table[i].present)) {
+            // kprintf("Occupied page\n");
             found = 0;
             memcpy(idx, curIdx, sizeof(uint16_t) * 4);
-            idx[curType]++;
+            idx[curType] = i+1;
+            // kprintf("Ajusting new idx to %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
+            continue;
+        }
+
+        if (targetType != curType) {
+            if (!table[i].present) {
+                found += (targetType - curType) * 512;
+                kprintf("Page not present adding %lu pages\n", (targetType - curType) * 512);
+            } else {
+                found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found);
+            }
+        } else {
+            found++;
+        }
+        if (found >= count) {
+            return found;
         }
     }
 
+    curIdx[curType] = 0;
     return found;
 }
 
 inline int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count) {
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
-    return _findEmptyRangePageIdx(targetType, idx, curIdx, count, PTE_PML4, 0);
+    size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
+    kprintf("Found a total of %U pages\n", found);
+    if (found < count) return 0;
+
+    return found;
 }
 
 inline int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
-    if (table[idx[pageType]].used) return 1;
+    if (table[idx[pageType]].reserved) return 1;
     table[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
     invlpg((uint64_t)VA_ARRAY(idx));
     return 0;
@@ -145,8 +154,8 @@ int reservePage(VirtAddr addr, PageType level)
         (addr >> 12) & 0x1FF
     };
     PageEntry *table = getTable(level, idx);
-    if (table[idx[level]].used) return 1;
-    table[idx[level]].whole = PTE_USED;
+    if (table[idx[level]].reserved) return 1;
+    table[idx[level]].whole = PTE_RESERVED;
     return 0;
 }
 
@@ -158,16 +167,16 @@ int unReservePage(VirtAddr addr)
         (addr >> 21) & 0x1FF,
         (addr >> 12) & 0x1FF
     };
-    if (PML4()[idx[0]].used) {
+    if (PML4()[idx[0]].reserved) {
         PML4()[idx[0]].whole = 0;
         return 1;
-    } else if (PDPT(idx[0])[idx[1]].used) {
+    } else if (PDPT(idx[0])[idx[1]].reserved) {
         PDPT(idx[0])[idx[1]].whole = 0;
         return 1;
-    } else if (PD(idx[0],idx[1])[idx[2]].used) {
+    } else if (PD(idx[0],idx[1])[idx[2]].reserved) {
         PD(idx[0],idx[1])[idx[2]].whole = 0;
         return 1;
-    } else if (PT(idx[0], idx[1], idx[2])[idx[3]].used) {
+    } else if (PT(idx[0], idx[1], idx[2])[idx[3]].reserved) {
         PT(idx[0], idx[1], idx[2])[idx[3]].whole = 0;
         return 1;
     }

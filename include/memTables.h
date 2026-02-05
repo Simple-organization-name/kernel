@@ -18,7 +18,7 @@ typedef union _PageEntry {
             dirty : 1,      // has it been written to
             pageSize : 1,   // is leaf / ps / whatever
             global : 1,     // if set, not uncached when switching cr3 (for example kernel mapping that is the same in all processes)
-            used : 1,       // custom : wether the pages is used even if not mapped
+            reserved : 1,   // custom : wether the pages is reserved even if not mapped
             avl_1 : 2,
             dest : 40,      // if leaf, where page starts. else, where next pageTable is
             avl_2 : 11,
@@ -38,10 +38,10 @@ typedef union _PageEntry {
 #define PTE_PS  (1ULL<<7)   // leaf node
 #define PTE_G   (1ULL<<8)   // global
 // custom bits
-#   define PTE_USED    (1ULL<<9)
+#   define PTE_RESERVED (1ULL<<9)
 #define PTE_NX  (1ULL<<63)  // not exec
 #define PTE_ADDR (0x000FFFFFFFFFF000)
 
-#define MAKE_PAGE_ENTRY(addr, flags) ((uint64_t)(((uintptr_t)(addr) & PTE_ADDR) | PTE_P | PTE_USED | ((uint64_t)(flags))))
+#define MAKE_PAGE_ENTRY(addr, flags) ((uint64_t)(((uintptr_t)(addr) & PTE_ADDR) | PTE_P | ((uint64_t)(flags))))
 
 #endif

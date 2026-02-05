@@ -7,8 +7,6 @@
 #define VM_START_ARR    ((uint16_t[4]){2, 0, 0, 0})
 #define VM_START        (0x10000000000UL)
 
-#define VM_START 
-
 typedef struct _VirtMemory {
     void                *addr;
     size_t              size;
