@@ -45,7 +45,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // }
 
     uint16_t idx[4] = {510, 508, 0, 0};
-    if (findEmptyRangePageIdx(PTE_PD, idx, 2000)) {
+    if (findEmptyRangePageIdx(PTE_PT, idx, 10)) {
         kprintf("%u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
     }
     

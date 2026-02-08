@@ -15,6 +15,7 @@ typedef enum _PageType {
 void clearPageTable(PhysAddr addr);
 
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
+
 /**
  * Get an empty slot starting at indexes in idx
  * \param targetType The page type needed
@@ -25,9 +26,9 @@ int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx);
 int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count);
 
 int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
-int unmapPage(VirtAddr virtual);
+int unmapPage(VirtAddr virt, PhysAddr *phys);
 
-int reservePage(VirtAddr addr, PageType level);
+int reservePage(VirtAddr addr, PageType pageType);
 int unReservePage(VirtAddr addr);
 
 #endif
