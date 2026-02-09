@@ -4,8 +4,7 @@
 #include "buddy.h"
 
 void clearPageTable(PhysAddr addr) {
-    (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_P | PTE_NX | PTE_RW);
-    invlpg((uint64_t)VA(510, 508, 511, 0));
+    (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_NX | PTE_RW);
     memset(VA(510, 508, 511, 0), 0, 4096);
     (PT(510, 508, 511))[0].whole = 0;
     invlpg((uint64_t)VA(510, 508, 511, 0));
@@ -64,28 +63,42 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
 
 static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count, uint8_t curType, uint16_t *curIdx, size_t found) {
     // kprintf("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
+    // Get the page table associated with the current type at the current index in the paging
     PageEntry *table = getTable(curType, curIdx);
 
+    // Set the max index, if it is PML3 set it to 511 as the 511th page is the recursive mapping
     uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
-    for (; curIdx[curType] < maxIdx; curIdx[curType]++) {
+    for (uint16_t *i = &curIdx[curType]; *i < maxIdx; (*i)++) {
         // Cases where the page is occupied and we should slide the window
-        if (table[curIdx[curType]].pageSize || table[curIdx[curType]].sreserved ||
-            table[curIdx[curType]].reserved || (targetType == curType && table[curIdx[curType]].present)) {
-            // kprintf("Occupied page\n");
-            found = 0;
-            // kprintf("%u %u %u %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
-            memcpy(idx, curIdx, sizeof(uint16_t) * 4);
+        if (table[*i].pageSize || // If the page is actually mapped to physical memory
+            table[*i].sreserved || // If the page is reserved with special use cases, cannot be touched by normal functions
+            table[*i].reserved || // If the page is already reserved
+            (table[*i].present && curType == targetType) // If the page is mapped at level PTE_PT as PTs doesn't have the PS flag
+        ) {
+            kprintf("Occupied page, PS: %u, SRES: %u, RES: %u, P: %u\n", table[*i].pageSize, table[*i].sreserved, table[*i].reserved, targetType == curType && table[*i].present);
+            kprintf("targetType: %u, curType: %u, curIdx: %u %u %u %u\n", targetType, curType, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
+            found = 0; // reset found to 0, as the next empty slot will not be contiguous to the current range
+            memcpy(idx, curIdx, sizeof(uint16_t) * 4); // Change the return idx to the current one
             idx[curType]++;
             continue;
         }
-        if (targetType != curType) {
-            if (!table[curIdx[curType]].present) {
+        if (targetType != curType) { // If the current level is not the targeted level
+            if (!table[*i].present) { // If the page isn't present
+                kprintf("Making a new page table, level: %u, curIdx: %u %u %u %u\n", curType + 1, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
                 PhysAddr page = buddyAlloc(BUDDY_4K);
-                table[curIdx[curType]].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
+                kprintf("Clearing page (phys: 0x%U).", page);
+                clearPageTable(page);
+                kprintf(" Done\n");
+                table[*i].whole = MAKE_PAGE_ENTRY(page, PTE_RW); // Map a new table
+                kprintf("New page mapped\n");
             }
-            found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found);
+            // kprintf("found before recursion: %u\n", found);
+            kprintf("Start recursion at %u %u %u %u, level: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], curType + 1);
+            found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found); // Recurse in the next level
+            kprintf("Found after recursion: %u, starting at: %u %u %u %u\n", found, idx[0], idx[1], idx[2], idx[3]);
+            // if (found == 0) CRIT_HLT();
         } else {
-            table[curIdx[curType]].whole = PTE_RESERVED; // Do the same shit as linux
+            table[*i].whole = PTE_RESERVED; // Do the same shit as linux
             // Basically says the page is reserved, and if accessed but is not actually mapped it raises
             // the page fault interrupt and then map the page via the interrupt
             found++;

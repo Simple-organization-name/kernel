@@ -13,13 +13,13 @@ _Noreturn void kmain(BootInfo* bootInfo)
     if (kterminit(bootInfo, 1, 0)) CRIT_HLT();
     kfillscreen(0xFF000000);
 
-    // PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
-    // PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
-    // PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
-    // PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
+    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
+    PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
+    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
+    PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
     initBuddy(bootInfo->memMap);
-    printBuddyTableInfo();
+    // printBuddyTableInfo();
 
     // uint16_t idx[4] = {0};
     // if (!findEmptySlotPageIdx(PTE_PT, idx)) {
@@ -44,8 +44,8 @@ _Noreturn void kmain(BootInfo* bootInfo)
     //     }
     // }
 
-    uint16_t idx[4] = {510, 508, 0, 0};
-    if (findEmptyRangePageIdx(PTE_PT, idx, 10)) {
+    uint16_t idx[4] = {10, 0, 10, 0};
+    if (findEmptyRangePageIdx(PTE_PT, idx, 600)) {
         kprintf("%u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
     }
     
