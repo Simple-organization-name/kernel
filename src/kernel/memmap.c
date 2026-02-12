@@ -46,7 +46,10 @@ static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curT
         else if (curType != targetType && !table[i].pageSize) {
             if (!table[i].sreserved) {
                 PhysAddr page = buddyAlloc(BUDDY_4K);
-                table[i].whole = MAKE_PAGE_ENTRY(page, PTE_RW);
+                if (!mapPage(idx, curType, page, PTE_RW)) {
+                    PRINT_ERR("Failed to map page\n");
+                    CRIT_HLT();
+                }
             }
             if (_findEmptySlotPageIdx(targetType, idx, curType + 1))
                 return 1;
@@ -89,7 +92,11 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
                 kprintf("Clearing page (phys: 0x%U).", page);
                 clearPageTable(page);
                 kprintf(" Done\n");
-                table[*i].whole = MAKE_PAGE_ENTRY(page, PTE_RW); // Map a new table
+                // Map a new table
+                if (!mapPage(curIdx, curType, page, PTE_RW)) {
+                    PRINT_ERR("Failed to map page\n");
+                    CRIT_HLT();
+                }
                 kprintf("New page mapped\n");
             }
             // kprintf("found before recursion: %u\n", found);
