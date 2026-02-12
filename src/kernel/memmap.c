@@ -83,31 +83,22 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
             found = 0; // reset found to 0, as the next empty slot will not be contiguous to the current range
             memcpy(idx, curIdx, sizeof(uint16_t) * 4); // Change the return idx to the current one
             idx[curType]++;
+            for (uint8_t j = curType + 1; j <= targetType; j++)
+                idx[j] = 0;
             continue;
         }
         if (targetType != curType) { // If the current level is not the targeted level
             if (!table[*i].present) { // If the page isn't present
-                kprintf("Making a new page table, level: %u, curIdx: %u %u %u %u\n", curType + 1, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
-                PhysAddr page = buddyAlloc(BUDDY_4K);
-                kprintf("Clearing page (phys: 0x%U).", page);
-                clearPageTable(page);
-                kprintf(" Done\n");
-                // Map a new table
-                if (!mapPage(curIdx, curType, page, PTE_RW)) {
-                    PRINT_ERR("Failed to map page\n");
-                    CRIT_HLT();
-                }
-                kprintf("New page mapped\n");
+                found += 512 * (1<<(9 * (targetType - curType)));
+            } else {
+                // kprintf("found before recursion: %u\n", found);
+                kprintf("Start recursion at %u %u %u %u, level: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], curType + 1);
+                found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found); // Recurse in the next level
+                curIdx[curType + 1] = 0;
+                kprintf("Found after recursion: %u, starting at: %u %u %u %u\n", found, idx[0], idx[1], idx[2], idx[3]);
+                // if (found == 0) CRIT_HLT();
             }
-            // kprintf("found before recursion: %u\n", found);
-            kprintf("Start recursion at %u %u %u %u, level: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], curType + 1);
-            found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found); // Recurse in the next level
-            kprintf("Found after recursion: %u, starting at: %u %u %u %u\n", found, idx[0], idx[1], idx[2], idx[3]);
-            // if (found == 0) CRIT_HLT();
         } else {
-            table[*i].whole = PTE_RESERVED; // Do the same shit as linux
-            // Basically says the page is reserved, and if accessed but is not actually mapped it raises
-            // the page fault interrupt and then map the page via the interrupt
             found++;
         }
 
@@ -116,8 +107,15 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
         }
     }
 
-    curIdx[curType] = 0;
     return found;
+}
+
+static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t found, uint8_t curType) {
+    PageEntry *table = getTable(curType, curIdx);
+    uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
+    for (uint16_t *i = &curIdx[curType]; *i < maxIdx; (*i)++) {
+        
+    }
 }
 
 inline int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count) {
