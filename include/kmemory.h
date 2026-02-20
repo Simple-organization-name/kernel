@@ -34,8 +34,9 @@
 // Address types
 #define PHYSICAL
 #define VIRTUAL
-typedef uint64_t PhysAddr;
-typedef uint64_t VirtAddr;
+typedef uint64_t    PhysAddr;
+typedef uint64_t    VirtAddr;
+#define ADDR_MAX    UINT64_MAX;
 
 typedef enum {
     EfiReservedMemoryType,

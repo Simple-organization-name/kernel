@@ -15,12 +15,12 @@ static PhysAddr     reservedBuddyForReplenishing = 0; // Yep
 #define BUDDY_TOGGLE_BIT(level, addr)   (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] ^= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
 
 static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
-    if (!src || !*src) return 1;
+    if (!src || !*src) return ADDR_MAX;
     Buddy *tmp = *src;
     *src = (*src)->next;
     tmp->next = *dest;
     *dest = tmp;
-    return 0;
+    return tmp->start;
 }
 
 // Uses only 2MiB pages

@@ -110,29 +110,61 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
     return found;
 }
 
-static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t found, uint8_t curType) {
+static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t count, size_t found, uint8_t curType) {
     PageEntry *table = getTable(curType, curIdx);
     uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     for (uint16_t *i = &curIdx[curType]; *i < maxIdx; (*i)++) {
-        
+        if (table[*i].present) continue;
+        if (targetType != curType) {
+            PhysAddr page = buddyAlloc(BUDDY_4K);
+            clearPageTable(page);
+            if (!mapPage(curIdx, curType, page, PTE_RW)) {
+                PRINT_ERR("Failed to map a page\n");
+                CRIT_HLT();
+            }
+            found = createNeededTable(targetType, curIdx, count, found, curType + 1);
+            curIdx[curType + 1] = 0;
+        } else {
+            table[*i].reserved = 1;
+            found++;
+        }
+        if (count == found)
+            return found;
     }
+
+    return found;
 }
 
-inline int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count) {
+/**
+ * \param targetType The type of page needed
+ * \param idx The array of 4 uint16_t (`uint16_t[4]`) where to store the start of the range if found
+ * \param count The number of pages needed
+ * \return The number of pages if successful, 0 else
+ */
+inline size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count) {
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
-    kprintf("Found a total of %U pages\n", found);
     if (found < count) return 0;
+
+    memcpy(curIdx, idx, sizeof(uint16_t) * 4);
+    size_t mappedPages = createNeededTable(targetType, curIdx, count, 0, 0);
+    if (mappedPages != found) {
+        // TODO: NEED TO CLEAR THE RESERVED FLAGS OF THE ALREADY MAPPED PAGES
+        return 0;
+    }
 
     return found;
 }
 
 inline int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
-    if (table[idx[pageType]].sreserved || table[idx[pageType]].present) return 0;
+    PageEntry *entry = &table[idx[pageType]];
+    if (entry->sreserved || entry->present) {
+        PRINT_WARN("Page used: SRES: %d, P: %d, abort mapping\n", entry->sreserved, entry->present);
+        return 0;
+    }
     table[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
-    invlpg((uint64_t)VA_ARRAY(idx));
     return 1;
 }
 
