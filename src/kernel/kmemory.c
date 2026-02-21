@@ -14,6 +14,14 @@ void *memset(void *dest, int val, size_t count) {
     return dest;
 }
 
+__attribute_maybe_unused__
+void *memcpy(void * restrict dest, const void * restrict src, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        ((char *)dest)[i] = ((char *)src)[i];
+    }
+    return dest;
+}
+
 uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory) {
     uint8_t validMemoryCount = 0;
     for (uint64_t i = 0; (i < physMemMap->count) && (validMemoryCount < UINT8_MAX); i++) {

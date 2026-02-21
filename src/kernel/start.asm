@@ -1,7 +1,7 @@
 extern kmain
 
 stack:
-    times 2048 dq 0
+    times 2096 dq 0
 stack_top:
 
 section .text
