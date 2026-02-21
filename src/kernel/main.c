@@ -5,6 +5,7 @@
 #include "buddy.h"
 #include "PCI.h"
 #include "memmap.h"
+#include "kvmalloc.h"
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -21,15 +22,16 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initBuddy(bootInfo->memMap);
     printBuddyTableInfo();
 
-    // for (int i = 0; i < 10000000; i++) {
-    //     buddyAlloc(BUDDY_2M);
-    // }
+    uint16_t idx[4] = {50, 0, 0, 0};
+    int *test = kvmalloc(idx, 1, 0);
+    if (test) {
+        for (int i = 0; i < 1024; i++) {
+            test[i] = i;
+            kprintf("%d ", test[i]);
+        }
+        kprintf("\ntest at: 0x%X\n", test);
+    } else PRINT_WARN("MSLQDKQSMLDK\n");
 
-    uint16_t idx[4] = {10, 0, 10, 0};
-    if (findEmptyRangePageIdx(PTE_PT, idx, 600)) {
-        kprintf("%u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
-    }
-    
     kputs("\nHello from SOS kernel !\n");
     
     PCI_printAll();

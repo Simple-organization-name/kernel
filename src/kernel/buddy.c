@@ -58,7 +58,6 @@ static Buddy *grabUsableBuddy(BuddyTable *src) {
 }
 
 PhysAddr buddyAlloc(uint8_t level) {
-    kprintf("Start buddyAlloc(%u)\n", level);
     BuddyLevel* levels = buddyTable.levels;
 
     
@@ -86,7 +85,6 @@ PhysAddr buddyAlloc(uint8_t level) {
     // we are sure that we've got memory and grabUsableBuddy handles
     // ooms on its own so we can assume levels[level].list != NULL
     BUDDY_TOGGLE_BIT(level, levels[level].list->start);
-    kprintf("End buddyAlloc(%u)\n", level);
     return buddyTransfer(&levels[level].list, &buddyTable.usable);
 }
 
