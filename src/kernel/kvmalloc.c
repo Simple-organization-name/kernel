@@ -10,6 +10,7 @@ inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
     void *ptr = VA_ARRAY(idx);
     for (size_t i = 0; i < nbPages; i++) {
         PhysAddr phys = buddyAlloc(BUDDY_4K);
+        kprintf("0x%X ", phys);
         if (!mapPage(idx, PTE_PT, phys, PTE_RW | flags)) {
             // TODO: Free physical pages and reserved virtual pages
             return NULL;
@@ -20,6 +21,7 @@ inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
             idx[j] = 0;
             idx[j-1]++;
         }
+        // kprintf("next idx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
         if (idx[0] >= 512) {
             PRINT_ERR("Found range exceeds PML4[512] ???\n");    
             CRIT_HLT();

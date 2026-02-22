@@ -22,6 +22,7 @@ void *memcpy(void * restrict dest, const void * restrict src, size_t n) {
     return dest;
 }
 
+__attribute_no_vectorize__
 uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory) {
     uint8_t validMemoryCount = 0;
     for (uint64_t i = 0; (i < physMemMap->count) && (validMemoryCount < UINT8_MAX); i++) {
@@ -39,10 +40,15 @@ uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory) {
                     validMemory[validMemoryCount - 1].size ==
                     desc->PhysicalStart)
                 {
+                    kprintf("cur: {start: 0x%X, size: 0x%X}, last: {start: 0x%X, size: 0x%X, end: 0x%X}\n", 
+                        desc->PhysicalStart, desc->NumberOfPages * 4096, validMemory[validMemoryCount - 1].start, 
+                        validMemory[validMemoryCount - 1].size, 
+                        validMemory[validMemoryCount - 1].start + validMemory[validMemoryCount - 1].size);
                     validMemory[validMemoryCount - 1].size += desc->NumberOfPages * 4096;
                 }
                 else
                 {
+                    kprintf("new range, {start: 0x%X, size: 0x%X}\n", desc->PhysicalStart, desc->NumberOfPages * 4096);
                     validMemory[validMemoryCount].start = desc->PhysicalStart;
                     validMemory[validMemoryCount].size = desc->NumberOfPages * 4096;
                     validMemoryCount++;
@@ -53,6 +59,7 @@ uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory) {
         }
     }
 
+    // CRIT_HLT();
     return validMemoryCount;
 }
 

@@ -60,7 +60,6 @@ static Buddy *grabUsableBuddy(BuddyTable *src) {
 PhysAddr buddyAlloc(uint8_t level) {
     BuddyLevel* levels = buddyTable.levels;
 
-    
     uint8_t curLevel;
     for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
     if (curLevel == BUDDY_MAX_ORDER) {
@@ -70,9 +69,7 @@ PhysAddr buddyAlloc(uint8_t level) {
     while (curLevel != level) {
         // insert big one as its first half one level down
         uint64_t addr = levels[curLevel].list->start;
-        kputc('@');
         BUDDY_SET_BIT(level, addr);
-        kputc('#');
         buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
         
         // insert its second half
@@ -157,7 +154,6 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
                     PhysAddr physPage = _getPhysMemoryFromMemRanges(validMemory, validCount, 1 << 12);
                     clearPageTable(physPage);
                     ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_RW | PTE_NX);
-                    // invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
                     // kprintf("New pt, pdIdx: %u, pa: 0x%X, va: 0x%X\n", pdIdx, physPage, VA(510, 508, pdIdx, 0));
                 }
             }
@@ -175,7 +171,7 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
             // Clear the whole page
             memset(VA(510, 508, pdIdx, ptIdx), 0, 1<<12);
 
-            kprintf("pdIdx: %u, ptIdx: %u\n", pdIdx, ptIdx);
+            // kprintf("pdIdx: %u, ptIdx: %u\n", pdIdx, ptIdx);
 
             ptIdx++;
             // If the page table is full go to next index of pd
@@ -195,7 +191,11 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     MemoryRange validMemory[256];
     uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
-    
+    for (uint8_t i = 0; i < validCount; i++) {
+        MemoryRange mem = validMemory[i];
+        kprintf("start: 0x%X, end: 0x%X, size: 0x%X\n", mem.start, mem.start + mem.size, mem.size);
+    }
+
     // Get memory to make usable buddies
     PhysAddr memoryChunk = _getPhysMemoryFromMemRanges(validMemory, &validCount, 1<<21);
     ((PageEntry *)PD(510, 508))[0].whole = MAKE_PAGE_ENTRY(memoryChunk, PTE_P | PTE_RW | PTE_PS | PTE_NX);
@@ -210,12 +210,13 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     // Init buddy table with all the available memory
     for (int i = 0; i < validCount; i++) {
-        uint64_t nbOfPages = validMemory[i].size / (1 << 12);
+        uint64_t nbOfPages = validMemory[i].size / 4096;
         for (uint64_t j = 0; j < nbOfPages; j++) {
-            buddyFree(0, validMemory[i].start + j * (1 << 12));
+            if (validMemory[i].start + j * 4096 == 0x7F00000)
+                PRINT_WARN("Kernel in valid ?\n");
+            buddyFree(0, validMemory[i].start + j * 4096);
         }
     }
-    kputc('\n');
 
     reservedBuddyForReplenishing = buddyAlloc(BUDDY_2M); // reserve a page of 2MiB
 }
