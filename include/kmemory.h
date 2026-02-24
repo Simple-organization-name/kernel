@@ -38,35 +38,10 @@ typedef uint64_t    PhysAddr;
 typedef uint64_t    VirtAddr;
 #define ADDR_MAX    UINT64_MAX;
 
-typedef enum {
-    EfiReservedMemoryType,
-    EfiLoaderCode,
-    EfiLoaderData,
-    EfiBootServicesCode,
-    EfiBootServicesData,
-    EfiRuntimeServicesCode,
-    EfiRuntimeServicesData,
-    EfiConventionalMemory,
-    EfiUnusableMemory,
-    EfiACPIReclaimMemory,
-    EfiACPIMemoryNVS,
-    EfiMemoryMappedIO,
-    EfiMemoryMappedIOPortSpace,
-    EfiPalCode,
-    EfiMaxMemoryType
-} PhysicalMemoryType;
-
-typedef struct _MemoryRange {
-    PhysAddr    start;
-    size_t      size;
-} MemoryRange;
-
 void *memset(void *dest, int val, size_t count);
 void *memcpy(void * restrict dest, const void * restrict src, size_t n);
 
-// Memory init
-uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory);
 uint64_t getTotalRAM(EfiMemMap *physMemMap);
-PhysAddr _getPhysMemoryFromMemRanges(MemoryRange *validMemory, uint8_t *validCount, size_t size);
+PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *map, size_t nbpages);
 
 #endif

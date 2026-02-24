@@ -129,7 +129,7 @@ void buddyFree(uint8_t level, PhysAddr addr) {
     }
 }
 
-static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
+static void initBuddyMap(EfiMemMap *map) {
     // Init buddy map for each levels
     uint16_t pdIdx = 1, ptIdx = 0;
     for (uint8_t level = 0; level < BUDDY_MAX_ORDER; level++) {
@@ -151,7 +151,7 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
                     PRINT_ERR("ERRM THIS SHOULDN'T HAPPEN\n");
                     CRIT_HLT();
                 } else {
-                    PhysAddr physPage = _getPhysMemoryFromMemRanges(validMemory, validCount, 1 << 12);
+                    PhysAddr physPage = _getPhysMemoryFromEFIMemMap(map, 1);
                     clearPageTable(physPage);
                     ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_RW | PTE_NX);
                     // kprintf("New pt, pdIdx: %u, pa: 0x%X, va: 0x%X\n", pdIdx, physPage, VA(510, 508, pdIdx, 0));
@@ -159,7 +159,7 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
             }
 
             // Map a physical page
-            PhysAddr page = _getPhysMemoryFromMemRanges(validMemory, validCount, 1 << 12);
+            PhysAddr page = _getPhysMemoryFromEFIMemMap(map, 1);
             ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
             uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
             // invlpg((uint64_t)addr);
@@ -189,15 +189,8 @@ void initBuddy(EfiMemMap *physMemMap) {
     }
     buddyTable.totalRAM = totalRAM;
 
-    MemoryRange validMemory[256];
-    uint8_t validCount = getValidMemRanges(physMemMap, validMemory);
-    for (uint8_t i = 0; i < validCount; i++) {
-        MemoryRange mem = validMemory[i];
-        kprintf("start: 0x%X, end: 0x%X, size: 0x%X\n", mem.start, mem.start + mem.size, mem.size);
-    }
-
     // Get memory to make usable buddies
-    PhysAddr memoryChunk = _getPhysMemoryFromMemRanges(validMemory, &validCount, 1<<21);
+    PhysAddr memoryChunk = _getPhysMemoryFromEFIMemMap(physMemMap, 1<<(21 - 12));
     ((PageEntry *)PD(510, 508))[0].whole = MAKE_PAGE_ENTRY(memoryChunk, PTE_P | PTE_RW | PTE_PS | PTE_NX);
     Buddy *buf = (Buddy *)VA(510, 508, 0, 0);
     invlpg((uint64_t)buf);
@@ -206,15 +199,15 @@ void initBuddy(EfiMemMap *physMemMap) {
     buddyTable.usable = buf;
 
     // Init buddy map
-    initBuddyMap(validMemory, &validCount);
+    initBuddyMap(physMemMap);
 
     // Init buddy table with all the available memory
-    for (int i = 0; i < validCount; i++) {
-        uint64_t nbOfPages = validMemory[i].size / 4096;
+    for (uint64_t i = 0; i < physMemMap->count; i++) {
+        uint64_t nbOfPages = physMemMap->map[i].NumberOfPages;
         for (uint64_t j = 0; j < nbOfPages; j++) {
-            if (validMemory[i].start + j * 4096 == 0x7F00000)
+            if (physMemMap->map[i].PhysicalStart + j * 4096 == 0x7F00000)
                 PRINT_WARN("Kernel in valid ?\n");
-            buddyFree(0, validMemory[i].start + j * 4096);
+            buddyFree(0, physMemMap->map[i].PhysicalStart + j * 4096);
         }
     }
 
