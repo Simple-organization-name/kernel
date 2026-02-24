@@ -5,6 +5,8 @@
 #include "kmemory.h"
 #include "kerror.h"
 
+#define _IDX_TO_ARR(idx) {}
+
 typedef enum _PageType {
     PTE_PML4 = 0,
     PTE_PDP,    // PageDirectoryPointer:    1GiB
@@ -15,6 +17,7 @@ typedef enum _PageType {
 void clearPageTable(PhysAddr addr);
 
 PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
+
 /**
  * Get an empty slot starting at indexes in idx
  * \param targetType The page type needed
@@ -22,12 +25,12 @@ PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
  * \return 1 if slot found, 0 else
  */
 int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx);
-int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count);
+size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count);
 
 int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
-int unmapPage(VirtAddr virtual);
+int unmapPage(VirtAddr virt, PhysAddr *phys);
 
-int reservePage(VirtAddr addr, PageType level);
+int reservePage(VirtAddr addr, PageType pageType);
 int unReservePage(VirtAddr addr);
 
 #endif

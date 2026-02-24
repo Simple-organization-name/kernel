@@ -15,12 +15,12 @@ static PhysAddr     reservedBuddyForReplenishing = 0; // Yep
 #define BUDDY_TOGGLE_BIT(level, addr)   (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] ^= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
 
 static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
-    if (!src || !*src) return 1;
+    if (!src || !*src) return ADDR_MAX;
     Buddy *tmp = *src;
     *src = (*src)->next;
     tmp->next = *dest;
     *dest = tmp;
-    return 0;
+    return tmp->start;
 }
 
 // Uses only 2MiB pages
@@ -60,6 +60,7 @@ static Buddy *grabUsableBuddy(BuddyTable *src) {
 PhysAddr buddyAlloc(uint8_t level) {
     BuddyLevel* levels = buddyTable.levels;
 
+    
     uint8_t curLevel;
     for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
     if (curLevel == BUDDY_MAX_ORDER) {
@@ -69,9 +70,11 @@ PhysAddr buddyAlloc(uint8_t level) {
     while (curLevel != level) {
         // insert big one as its first half one level down
         uint64_t addr = levels[curLevel].list->start;
+        kputc('@');
         BUDDY_SET_BIT(level, addr);
+        kputc('#');
         buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
-
+        
         // insert its second half
         Buddy *tmp = grabUsableBuddy(&buddyTable);
         tmp->next = levels[curLevel - 1].list;
@@ -141,7 +144,6 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
             12      // bytes -> pages
         )) + 1;
 
-        kprintf("level: %U, neededPages: %U\n", level, neededPages);
         // Allocate and map each needed pages
         // Map the memory as PT entries (4KiB pages)
         for (uint64_t i = 0; i < neededPages; i++) {
@@ -154,17 +156,17 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
                 } else {
                     PhysAddr physPage = _getPhysMemoryFromMemRanges(validMemory, validCount, 1 << 12);
                     clearPageTable(physPage);
-                    ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_P | PTE_RW | PTE_NX);
-                    invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
+                    ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_RW | PTE_NX);
+                    // invlpg((uint64_t)VA(510, 508, pdIdx, ptIdx));
                     // kprintf("New pt, pdIdx: %u, pa: 0x%X, va: 0x%X\n", pdIdx, physPage, VA(510, 508, pdIdx, 0));
                 }
             }
 
             // Map a physical page
             PhysAddr page = _getPhysMemoryFromMemRanges(validMemory, validCount, 1 << 12);
-            ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_P | PTE_RW | PTE_NX);
+            ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
             uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
-            invlpg((uint64_t)addr);
+            // invlpg((uint64_t)addr);
 
             if (i == 0) {
                 buddyTable.levels[level].map = addr;
@@ -172,6 +174,8 @@ static void initBuddyMap(MemoryRange *validMemory, uint8_t *validCount) {
 
             // Clear the whole page
             memset(VA(510, 508, pdIdx, ptIdx), 0, 1<<12);
+
+            kprintf("pdIdx: %u, ptIdx: %u\n", pdIdx, ptIdx);
 
             ptIdx++;
             // If the page table is full go to next index of pd

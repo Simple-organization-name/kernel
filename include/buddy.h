@@ -2,12 +2,14 @@
 #define __BUDDY_H__
 
 #include <stddef.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "boot/bootInfo.h"
 #include "memTables.h"
 #include "kmemory.h"
+
+#define BUDDY_IDX_BLOCK_SIZE(n) ((size_t)(1UL << (12 + (n))))
 
 typedef enum _BuddyType {
     BUDDY_4K = 0,

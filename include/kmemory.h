@@ -34,8 +34,9 @@
 // Address types
 #define PHYSICAL
 #define VIRTUAL
-typedef uint64_t PhysAddr;
-typedef uint64_t VirtAddr;
+typedef uint64_t    PhysAddr;
+typedef uint64_t    VirtAddr;
+#define ADDR_MAX    UINT64_MAX;
 
 typedef enum {
     EfiReservedMemoryType,
@@ -61,6 +62,7 @@ typedef struct _MemoryRange {
 } MemoryRange;
 
 void *memset(void *dest, int val, size_t count);
+void *memcpy(void * restrict dest, const void * restrict src, size_t n);
 
 // Memory init
 uint8_t getValidMemRanges(EfiMemMap *physMemMap, MemoryRange *validMemory);

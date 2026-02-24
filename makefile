@@ -1,29 +1,31 @@
-BOOT 			= boot
-BOOT_NAME		= BOOTX64.EFI
-ISO_ENTRY		= EFI/BOOT/$(BOOT_NAME)
+BOOT 					= boot
+BOOT_NAME				= BOOTX64.EFI
+ISO_ENTRY				= EFI/BOOT/$(BOOT_NAME)
 
-BOOT_CC 		= x86_64-w64-mingw32-gcc
-BOOT_CFLAGS 	= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
-				-fno-stack-check -maccumulate-outgoing-args -fpic -fshort-wchar -mno-red-zone \
-				-Wall -Wextra -Werror -I include -Wl,--subsystem,10 -e EfiMain -O2 -nostartfiles
+BOOT_CC 				= x86_64-w64-mingw32-gcc
+BOOT_CFLAGS 			= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
+						-fno-stack-check -maccumulate-outgoing-args -fpic -fshort-wchar -mno-red-zone \
+						-Wall -Wextra -Werror -I include -Wl,--subsystem,10 -e EfiMain -O2 -nostartfiles
 
-KERNEL_CC		= gcc
-KERNEL_CFLAGS	= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
-				-I include -nostartfiles -fno-stack-protector -O2 -fopt-info-vec-optimized -fno-builtin -LTO
+KERNEL_CC				= gcc
+KERNEL_CFLAGS			= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
+						-I include -nostartfiles -fno-stack-protector -fno-builtin
+KERNEL_CFLAGS_OPTI		= -O2 -LTO
+KERNEL_CFLAGS_FNO_OPTI	= -fopt-info-vec-optimized
 
-KERNEL_ASM		= nasm
-KERNEL_ASMFLAGS = -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror -O2 -X gnu
+KERNEL_ASM				= nasm
+KERNEL_ASMFLAGS 		= -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror -O2 -X gnu
 
-KERNEL			= kernel
+KERNEL					= kernel
 
-OVMF_PATH 		= OVMF.fd
-EMUL_ARGS		= -net none # -d int 2> stderr.log
+OVMF_PATH 				= OVMF.fd
+EMUL_ARGS				= -net none # -d int 2> stderr.log
 
-KERNEL_SOURCES_ASM = $(wildcard src/kernel/*.asm)
-KERNEL_OBJECTS_ASM = $(patsubst src/kernel/%.asm,build/kernel/%.o,$(KERNEL_SOURCES_ASM))
+KERNEL_SOURCES_ASM 		= $(wildcard src/kernel/*.asm)
+KERNEL_OBJECTS_ASM 		= $(patsubst src/kernel/%.asm,build/kernel/%.o,$(KERNEL_SOURCES_ASM))
 
-KERNEL_SOURCES_C = $(wildcard src/kernel/*.c)
-KERNEL_OBJECTS_C = $(patsubst src/kernel/%.c,build/kernel/%.o,$(KERNEL_SOURCES_C))
+KERNEL_SOURCES_C 		= $(wildcard src/kernel/*.c)
+KERNEL_OBJECTS_C 		= $(patsubst src/kernel/%.c,build/kernel/%.o,$(KERNEL_SOURCES_C))
 
 all: iso emul
 
@@ -40,11 +42,11 @@ bootloader:
 
 kernel: $(KERNEL_OBJECTS_ASM) $(KERNEL_OBJECTS_C)
 	@printf "[ KERNEL ] Linking kernel...\n"
-	@$(KERNEL_CC) $(KERNEL_OBJECTS_C) $(KERNEL_OBJECTS_ASM) -o iso/$(KERNEL).elf $(KERNEL_CFLAGS)
+	@$(KERNEL_CC) $(KERNEL_OBJECTS_C) $(KERNEL_OBJECTS_ASM) -o iso/$(KERNEL).elf $(KERNEL_CFLAGS) $(KERNEL_CFLAGS_OPTI) $(KERNEL_CFLAGS_FNO_OPTI)
 
 build/kernel/%.o: src/kernel/%.c
 	@printf "[ KERNEL ][  C  ] Building $*.c...\n"
-	@$(KERNEL_CC) -c $< -o $@ $(KERNEL_CFLAGS)
+	@$(KERNEL_CC) -c $< -o $@ $(KERNEL_CFLAGS) $(KERNEL_CFLAGS_OPTI) $(KERNEL_CFLAGS_FNO_OPTI)
 
 build/kernel/%.o: src/kernel/%.asm
 	@printf "[ KERNEL ][ ASM ] Building $*.asm...\n"

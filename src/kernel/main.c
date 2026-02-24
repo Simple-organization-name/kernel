@@ -5,6 +5,7 @@
 #include "buddy.h"
 #include "PCI.h"
 #include "memmap.h"
+#include "kvmalloc.h"
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -13,37 +14,24 @@ _Noreturn void kmain(BootInfo* bootInfo)
     if (kterminit(bootInfo, 1, 0)) CRIT_HLT();
     kfillscreen(0xFF000000);
 
-    // PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
-    // PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
-    // PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
-    // PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
+    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
+    PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
+    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
+    PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
     initBuddy(bootInfo->memMap);
     printBuddyTableInfo();
 
-    uint16_t idx[4] = {0};
-    if (!findEmptySlotPageIdx(PTE_PT, idx)) {
-        PRINT_WARN("Failed to find an empty space\n");
-    } else {
-        kprintf("%u %u %u %u -> %X\n", idx[0], idx[1], idx[2], idx[3], VA(idx[0], idx[1], idx[2], idx[3]));
-        PhysAddr phys = buddyAlloc(0);
-        
-        mapPage(idx, PTE_PT, phys, PTE_RW | PTE_NX);
-        short *test = VA_ARRAY(idx);
-        kprintf("test phys: 0x%X, virt 0x%X\n", phys, test);
-        for (short i = 1; i <= 2048; i++) {
-            test[i-1] = i;
+    uint16_t idx[4] = {50, 0, 0, 0};
+    int *test = kvmalloc(idx, 1, 0);
+    if (test) {
+        for (int i = 0; i < 1024; i++) {
+            test[i] = i;
+            kprintf("%d ", test[i]);
         }
+        kprintf("\ntest at: 0x%X\n", test);
+    } else PRINT_WARN("MSLQDKQSMLDK\n");
 
-        kprintf("test array:\n");
-        for (short i = 1, pow = 0; i <= 2048; i++) {
-            if (i == (1<<pow)) {
-                kprintf("%d ", test[i-1]);
-                pow++;
-            }
-        }
-    }
-    
     kputs("\nHello from SOS kernel !\n");
     
     PCI_printAll();
