@@ -20,6 +20,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
     PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
     PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
+    // printEFIMemMap(bootInfo->memMap);
+    // CRIT_HLT();
+
     initBuddy(bootInfo->memMap);
     // printBuddyTableInfo();
 

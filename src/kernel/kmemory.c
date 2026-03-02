@@ -64,16 +64,30 @@ uint64_t getTotalRAM(EfiMemMap *physMemMap) {
     return total;
 }
 
+void printEFIMemMap(EfiMemMap *physMemMap) {
+    kputs("----==== EfiMemMap ====----\n");
+    for (uint64_t i = 0; i < physMemMap->count; i++) {
+        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        kprintf("start: 0x%X, end: 0x%X, nb of pages: %U\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * 4096, desc->NumberOfPages);
+    }
+    kputs("----===================----\n\n");
+}
+
+// Side effects: Modifies the EfiMemMap (removes some pages)
 PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     size_t found = 0;
-    uint64_t iStart = 0, iEnd = 0;
+    uint64_t iEnd = 0;
     for (uint64_t i = 0; i < physMemMap->count && found < nbpages; i++) {
-        MemoryDescriptor *desc = &physMemMap->map[i];
-
-        if (!isValidMem(desc) ||
-            physMemMap->map[i].PhysicalStart + physMemMap->map[i].NumberOfPages * 4096 != desc->PhysicalStart) { // Memory is not usable
+        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        MemoryDescriptor *end = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * iEnd);
+        if (
+            !isValidMem(desc) || 
+            desc->NumberOfPages == 0 ||
+            end->PhysicalStart + end->NumberOfPages * 4096 != desc->PhysicalStart
+        ) { // Memory is not usable
+            // kprintf("end of range: 0x%X, current start : 0x%X\n", end->PhysicalStart + end->NumberOfPages * 4096, desc->PhysicalStart);
             found = 0;
-            iStart = iEnd = i;
+            iEnd = i;
         }
 
         found += desc->NumberOfPages;
@@ -83,12 +97,14 @@ PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     if (found >= nbpages) {
         uint64_t i = iEnd;
         for (; nbpages != 0; i--) {
-            MemoryDescriptor *desc = &physMemMap->map[i];
+            MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
             uint64_t min = desc->NumberOfPages < nbpages ? desc->NumberOfPages : nbpages;
             desc->NumberOfPages -= min;
             nbpages -= min;
         }
-        return physMemMap->map[iStart].PhysicalStart + physMemMap->map[iStart].NumberOfPages * 4096;
+        // kprintf("istart: %U, i: %U\n", iStart, i);
+        MemoryDescriptor *start = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        return start->PhysicalStart + start->NumberOfPages * 4096;
     }
 
     PRINT_ERR("Could not find enough contiguous memory\n");

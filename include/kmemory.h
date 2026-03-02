@@ -36,12 +36,13 @@
 #define VIRTUAL
 typedef uint64_t    PhysAddr;
 typedef uint64_t    VirtAddr;
-#define ADDR_MAX    UINT64_MAX;
+#define ADDR_MAX    UINT64_MAX
 
 void *memset(void *dest, int val, size_t count);
 void *memcpy(void * restrict dest, const void * restrict src, size_t n);
 
 uint64_t getTotalRAM(EfiMemMap *physMemMap);
+void printEFIMemMap(EfiMemMap *physMemMap);
 PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *map, size_t nbpages);
 
 #endif
