@@ -64,25 +64,33 @@ uint64_t getTotalRAM(EfiMemMap *physMemMap) {
     return total;
 }
 
-PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *map, size_t nbpages) {
-    uint64_t i = 0, start = 0;
+PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     size_t found = 0;
-    for (PhysAddr previousEnd = 0; i < map->count && found >= nbpages; i++) {
-        MemoryDescriptor *desc = &map->map[i];
-        if (!isValidMem(desc)) continue;
+    uint64_t iStart = 0, iEnd = 0;
+    for (uint64_t i = 0; i < physMemMap->count && found < nbpages; i++) {
+        MemoryDescriptor *desc = &physMemMap->map[i];
 
-        if (previousEnd != desc->PhysicalStart) {
-            previousEnd = desc->PhysicalStart;
+        if (!isValidMem(desc) ||
+            physMemMap->map[i].PhysicalStart + physMemMap->map[i].NumberOfPages * 4096 != desc->PhysicalStart) { // Memory is not usable
             found = 0;
-            start = i;
+            iStart = iEnd = i;
         }
 
         found += desc->NumberOfPages;
-        if (found >= nbpages) {
-            
+        iEnd = i;
+    }
+
+    if (found >= nbpages) {
+        uint64_t i = iEnd;
+        for (; nbpages != 0; i--) {
+            MemoryDescriptor *desc = &physMemMap->map[i];
+            uint64_t min = desc->NumberOfPages < nbpages ? desc->NumberOfPages : nbpages;
+            desc->NumberOfPages -= min;
+            nbpages -= min;
         }
+        return physMemMap->map[iStart].PhysicalStart + physMemMap->map[iStart].NumberOfPages * 4096;
     }
 
     PRINT_ERR("Could not find enough contiguous memory\n");
-    return -1UL;
+    return ADDR_MAX;
 }
