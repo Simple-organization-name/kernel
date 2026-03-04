@@ -76,18 +76,19 @@ void printEFIMemMap(EfiMemMap *physMemMap) {
 // Side effects: Modifies the EfiMemMap (removes some pages)
 PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     size_t found = 0;
-    uint64_t iEnd = 0;
+    uint64_t iStart = 0, iEnd = 0;
     for (uint64_t i = 0; i < physMemMap->count && found < nbpages; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
         MemoryDescriptor *end = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * iEnd);
         if (
             !isValidMem(desc) || 
             desc->NumberOfPages == 0 ||
-            end->PhysicalStart + end->NumberOfPages * 4096 != desc->PhysicalStart
+            (i != iStart && end->PhysicalStart + end->NumberOfPages * 4096 != desc->PhysicalStart)
         ) { // Memory is not usable
             // kprintf("end of range: 0x%X, current start : 0x%X\n", end->PhysicalStart + end->NumberOfPages * 4096, desc->PhysicalStart);
             found = 0;
-            iEnd = i;
+            iStart = iEnd = i + 1;
+            continue;
         }
 
         found += desc->NumberOfPages;
@@ -95,14 +96,18 @@ PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     }
 
     if (found >= nbpages) {
+        // Consume pages from the end of the range backwards
+        size_t remaining = nbpages;
         uint64_t i = iEnd;
-        for (; nbpages != 0; i--) {
+        while (remaining != 0) {
             MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
-            uint64_t min = desc->NumberOfPages < nbpages ? desc->NumberOfPages : nbpages;
+            uint64_t min = desc->NumberOfPages < remaining ? desc->NumberOfPages : remaining;
             desc->NumberOfPages -= min;
-            nbpages -= min;
+            remaining -= min;
+            if (i == iStart) break;
+            i--;
         }
-        // kprintf("istart: %U, i: %U\n", iStart, i);
+        // The start address is at the end of the first partially-consumed descriptor
         MemoryDescriptor *start = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
         return start->PhysicalStart + start->NumberOfPages * 4096;
     }

@@ -213,10 +213,10 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     // Init buddy table with all the available memory
     for (uint64_t i = 0; i < physMemMap->count; i++) {
-        uint64_t nbOfPages = physMemMap->map[i].NumberOfPages;
-        for (uint64_t j = 0; j < nbOfPages; j++) {
-            kprintf("(%U, %U) ", i, j);
-            buddyFree(0, physMemMap->map[i].PhysicalStart + j * 4096);
+        MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        for (uint64_t j = 0; j < desc->NumberOfPages; j++) {
+            // kprintf("(%U, %U) ", i, j);
+            buddyFree(BUDDY_4K, desc->PhysicalStart + j * 4096);
         }
     }
 
