@@ -24,10 +24,13 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // CRIT_HLT();
 
     initBuddy(bootInfo->memMap);
-    // printBuddyTableInfo();
+    printBuddyTableInfo();
 
     uint16_t idx[4] = {10, 0, 0, 0};
-    __attribute_maybe_unused__ int *test = kvmalloc(idx, 50, 0);
+    findEmptyRangePageIdx(PTE_PT, idx, 10);
+    kputc('\n');
+
+    // __attribute_maybe_unused__ int *test = kvmalloc(idx, 50, 0);
     // if (test) {
     //     for (int i = 0; i < 1024*50; i++) {
     //         test[i] = i;

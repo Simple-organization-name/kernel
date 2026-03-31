@@ -65,6 +65,7 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
 }
 
 static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count, uint8_t curType, uint16_t *curIdx, size_t found) {
+    kprintf("found: %U\n", found);
     // kprintf("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     // Get the page table associated with the current type at the current index in the paging
     PageEntry *table = getTable(curType, curIdx);
@@ -89,7 +90,8 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
         }
         if (targetType != curType) { // If the current level is not the targeted level
             if (!table[*i].present) { // If the page isn't present
-                found += 512 * (1<<(9 * (targetType - curType)));
+                kprintf("add %U pages\n", (size_t)(512 * (1<<(9 * (curType - targetType)))));
+                found += 512 * (1<<(9 * (curType - targetType)));
             } else {
                 // kprintf("Start recursion at %u %u %u %u, level: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], curType + 1);
                 found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found); // Recurse in the next level
