@@ -157,39 +157,6 @@ inline size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t co
     return count;
 }
 
-static int _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count, uint8_t curType) {
-    PageEntry *table = getTable(curType, idx);
-
-    uint16_t maxIndex = curType == PTE_PML4 ? 511 : 512;
-    for (uint16_t i = idx[curType]; i < maxIndex; i++) {
-        idx[curType] = i;
-        if (curType == targetType && !table[i].used) {
-            uint8_t found = 1;
-            for (uint16_t j = i; j - i < count && j < maxIndex; j++) {
-                if (table[j].used || table[j].present) {
-                    i = j;
-                    found = 0;
-                    break;
-                }
-            }
-            if (found) {
-                return 1;
-            }
-        } else if (curType != targetType && table[i].used && !table[i].pageSize) {
-            if (_findEmptyRangePageIdx(targetType, idx, count, curType + 1)) {
-                return 1;
-            }
-        }
-    }
-
-    idx[curType] = 0;
-    return 0;
-}
-
-inline int findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, uint16_t count) {
-    return _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4);
-}
-
 inline int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
     PageEntry *entry = &table[idx[pageType]];
