@@ -8,8 +8,8 @@ section .text
 
 global _start
 _start:
-    lea     rbp,    [rel stack_top]
-    mov     rsp,    rbp
-    jmp     kmain
+    lea     rsp,    [rel stack_top]
+    xor     rbp,    rbp
+    call     kmain
 
 section .note.GNU-stack noexec

@@ -9,7 +9,8 @@ BOOT_CFLAGS 			= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
 
 KERNEL_CC				= gcc
 KERNEL_CFLAGS			= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
-						-I include -nostartfiles -fno-stack-protector -fno-builtin
+						-I include -nostartfiles -fno-stack-protector -fno-builtin \
+						-DPRINT_SERIAL
 KERNEL_CFLAGS_OPTI		= -O2 -LTO
 KERNEL_CFLAGS_FNO_OPTI	= -fopt-info-vec-optimized
 
@@ -19,7 +20,7 @@ KERNEL_ASMFLAGS 		= -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror
 KERNEL					= kernel
 
 OVMF_PATH 				= OVMF.fd
-EMUL_ARGS				= -net none # -d int 2> stderr.log
+EMUL_ARGS				= -net none -serial file:serial.log# -d int 2> stderr.log
 
 KERNEL_SOURCES_ASM 		= $(wildcard src/kernel/*.asm)
 KERNEL_OBJECTS_ASM 		= $(patsubst src/kernel/%.asm,build/kernel/%.o,$(KERNEL_SOURCES_ASM))
