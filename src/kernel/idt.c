@@ -4,6 +4,7 @@
 
 #include <idt.h>
 #include <kterm.h>
+#include <kdbg.h>
 
 #include <asm.h>
 
@@ -181,6 +182,10 @@ void interrupt_handler(interrupt_frame_t* context)
         kprintf("R10 = 0x%X | R11 = 0x%X\n", context->registers.r10, context->registers.r11);
         kprintf("R12 = 0x%X | R13 = 0x%X\n", context->registers.r12, context->registers.r13);
         kprintf("R14 = 0x%X | R15 = 0x%X\n", context->registers.r14, context->registers.r15);
+        kputs("\n  ---=== STACK TRACE ===---\n");
+        uint64_t rbp;
+        __asm__ volatile ("movq %%rbp, %0" : "=r"(rbp) :: );
+        print_stack_trace(rbp);
         kputs("\n  ---==== CODE DUMP ====---\n");
         if (context->err_code & 32) {
             kputs("Error due to code fetch; will not fetch code\n");
@@ -189,7 +194,6 @@ void interrupt_handler(interrupt_frame_t* context)
                 kprintf("%x ", ((uint8_t *)context->rip)[i]);
             }
         }
-        
         hlt();
         return;
 

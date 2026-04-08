@@ -148,8 +148,16 @@ void knewline()
     setcursorx(0);
 }
 
+#ifdef PRINT_SERIAL
+#   include <asm.h>
+#endif
+
 void kputc(unsigned char chr)
 {
+    #ifdef PRINT_SERIAL
+    outb(0x3F8, chr);
+    #endif
+
     if (chr < PRINTABLE_ASCII_FIRST) {
         switch (chr)
         {
