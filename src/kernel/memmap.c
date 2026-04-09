@@ -3,7 +3,7 @@
 #include "memmap.h"
 #include "buddy.h"
 
-void clearPageTable(PhysAddr addr) {
+inline void clearPageTable(PhysAddr addr) {
     (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_NX | PTE_RW);
     memset(VA(510, 508, 511, 0), 0, 4096);
     (PT(510, 508, 511))[0].whole = 0;
@@ -110,29 +110,38 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
     return found;
 }
 
-static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t count, size_t found, uint8_t curType) {
+static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t count, uint8_t curType) {
     PageEntry *table = getTable(curType, curIdx);
     uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
+    size_t reserved = 0;
     for (uint16_t *i = &curIdx[curType]; *i < maxIdx; (*i)++) {
-        if (table[*i].present) continue;
-        if (targetType != curType) {
-            PhysAddr page = buddyAlloc(BUDDY_4K);
-            clearPageTable(page);
-            if (!mapPage(curIdx, curType, page, PTE_RW)) {
-                PRINT_ERR("Failed to map a page\n");
-                CRIT_HLT();
-            }
-            found = createNeededTable(targetType, curIdx, count, found, curType + 1);
-            curIdx[curType + 1] = 0;
-        } else {
+        if (curType == targetType) {
+            if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
             table[*i].reserved = 1;
-            found++;
+            reserved++;
+            PRINT_WARN("Reserved %U pages\n", reserved);
+        } else {
+            if (!table[*i].present) {
+                PhysAddr phys = buddyAlloc(BUDDY_4K);
+                clearPageTable(phys);
+                if (!mapPage(curIdx, curType, phys, PTE_RW)) {
+                    PRINT_WARN("Failed to map new page\n");
+                    CRIT_HLT();
+                }
+                // invlpg((uint64_t)VA_ARRAY(curIdx));
+                PRINT_WARN("Mapped new table at idx: %u %u %u %u, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], VA_ARRAY(curIdx), curType);
+            }
+            PRINT_WARN("Recursive call\n");
+            reserved += createNeededTable(targetType, curIdx, count - reserved, curType + 1);
+            PRINT_WARN("End of recursive call\n");
+            PRINT_WARN("Reserved %U pages\n", reserved);
+            curIdx[curType + 1] = 0;
         }
-        if (count == found)
-            return found;
+
+        if (reserved == count) return reserved;
     }
 
-    return found;
+    return reserved;
 }
 
 /**
@@ -149,7 +158,7 @@ inline size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t co
     if (found < count) return 0;
 
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
-    size_t mappedPages = createNeededTable(targetType, curIdx, count, 0, 0);
+    size_t mappedPages = createNeededTable(targetType, curIdx, count, 0);
     PRINT_WARN("mapped pages: %U\n", mappedPages);
     if (mappedPages != count) {
         // TODO: NEED TO CLEAR THE RESERVED FLAGS OF THE ALREADY MAPPED PAGES

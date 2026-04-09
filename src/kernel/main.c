@@ -7,6 +7,7 @@
 #include "PCI.h"
 #include "memmap.h"
 #include "kvmalloc.h"
+#include "kdbg.h"
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -19,6 +20,8 @@ _Noreturn void kmain(BootInfo* bootInfo)
     PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
     PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
     PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
+
+    init_kdbg(&bootInfo->files->files[0]);
 
     // printEFIMemMap(bootInfo->memMap);
     // CRIT_HLT();
