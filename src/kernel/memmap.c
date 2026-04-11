@@ -111,12 +111,16 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
 }
 
 static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t count, uint8_t curType) {
-    PageEntry *table = getTable(curType, curIdx);
+    PRINT_WARN("Called with\n       targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
+    register PageEntry *table = getTable(curType, curIdx);
     uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     size_t reserved = 0;
-    for (uint16_t *i = &curIdx[curType]; *i < maxIdx; (*i)++) {
+    for (register uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
+            kputc('a');
+            PRINT_WARN("curIdx: %u %u %u %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3]); // Page fault here: table[*i] not present
             if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
+            kputc('b');
             table[*i].reserved = 1;
             reserved++;
             PRINT_WARN("Reserved %U pages\n", reserved);
@@ -154,7 +158,7 @@ inline size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t co
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
-    PRINT_WARN("found: %U\n", found);
+    PRINT_WARN("found: %U, at: %u %u %u %u\n", found, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     if (found < count) return 0;
 
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
