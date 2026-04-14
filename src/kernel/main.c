@@ -6,6 +6,11 @@
 #include "PCI.h"
 #include "memmap.h"
 #include "kvmalloc.h"
+#include <kthread.h>
+#include <kdbg.h>
+
+void func1();
+void func2();
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {
@@ -36,5 +41,27 @@ _Noreturn void kmain(BootInfo* bootInfo)
     
     PCI_printAll();
 
-    while (1) hlt();
+    init_kdbg(&bootInfo->files->files[0]);
+
+    {
+        const char *test_name;
+        uint64_t test_offset;
+        get_symbol_offset((uint64_t)kprintf + 0x127, &test_name, &test_offset);
+        kprintf("KDGB TEST : %s +0x%X\n", test_name, test_offset);
+    }
+
+    init_threading(func1);
+
+    CRIT_HLT();
+}
+
+void func1()
+{
+    spawn_thread(func2, 10);
+    while (1) kputc('/');
+}
+
+void func2()
+{
+    while (1) kputc('\\');
 }

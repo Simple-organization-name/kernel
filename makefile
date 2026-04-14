@@ -11,7 +11,7 @@ KERNEL_CC				= gcc
 KERNEL_CFLAGS			= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
 						-I include -nostartfiles -fno-stack-protector -fno-builtin \
 						-DPRINT_SERIAL
-KERNEL_CFLAGS_OPTI		= -O2 -LTO
+KERNEL_CFLAGS_OPTI		= -O2 # -LTO
 KERNEL_CFLAGS_FNO_OPTI	= -fopt-info-vec-optimized
 
 KERNEL_ASM				= nasm

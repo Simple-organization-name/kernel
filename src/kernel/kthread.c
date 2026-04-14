@@ -5,6 +5,7 @@
 #include <buddy.h>
 #include <memory.h>
 #include <asm.h>
+#include <kvmalloc.h>
 
 #define TSTACKS_PML4_INDEX 510
 #define TSTACKS_PDPT_INDEX 507
@@ -61,15 +62,7 @@ static void rotateContextQueueNext(ThreadNode **queue)
 static int fillThreadContextReserve()
 {
     const int contextCount = 4096 / sizeof(ThreadNode);
-    PhysAddr pa = buddyAlloc(BUDDY_4K);
-    uint16_t idx[4] = { TSTACKS_PML4_INDEX, TSTACKS_PDPT_INDEX };
-    if (!findEmptySlotPageIdx(PTE_PT, idx)) {
-        return 1;
-    }
-    if (mapPage(idx, PTE_PT, pa, PTE_RW | PTE_PS)) {
-        return 1;
-    }
-    ThreadNode **va = VA_ARRAY(idx);
+    ThreadNode **va = kvmalloc(1, PTE_RW | PTE_PS | PTE_NX);
     memset(va, 0, 4096);
     for (int i = 0; i < contextCount; i++) {
         insertContextQueueNext(&nodeReserve, va[i]);
@@ -128,33 +121,33 @@ void spawn_thread(void (*entry)(), unsigned stackPageCount)
     if (!nodeReserve) fillThreadContextReserve();
     ThreadNode *new = extractContextQueue(&nodeReserve);
     uint16_t idx[4] = { 510, 507 };
-    findEmptyRangePageIdx(PTE_PT, idx, stackPageCount + 1);
+    kvmalloc(idx, stackPageCount, PTE_RW | PTE_NX | PTE_PS);
     new->context.stackPageCount = stackPageCount;
     new->context.stack_origin = (VirtAddr)VA_ARRAY(idx);
     new->context.stack_current = new->context.stack_origin + 4096*stackPageCount;
-    while (stackPageCount) {
-        PhysAddr pa = buddyAlloc(BUDDY_4K);
-        kprintf("stack alloc at 0x%X\n", pa);
-        mapPage(idx, PTE_PT, pa, PTE_RW | PTE_PS);
-        idx[3]++;
-        if (idx[3] == 512) {
-            idx[3] = 0;
-            idx[2]++;
-            if (idx[2] == 512) {
-                idx[2] = 0;
-                idx[1]++;
-                if (idx[1] == 512) {
-                    idx[1] = 0;
-                    idx[0]++;
-                    if (idx[0] == 512) {
-                        PRINT_ERR("FUCK YOU\n");
-                        CRIT_HLT();
-                    }
-                }
-            }
-        }
-        stackPageCount--;
-    }
+    // while (stackPageCount) {
+    //     PhysAddr pa = buddyAlloc(BUDDY_4K);
+    //     kprintf("stack alloc at 0x%X\n", pa);
+    //     mapPage(idx, PTE_PT, pa, PTE_RW | PTE_PS);
+    //     idx[3]++;
+    //     if (idx[3] == 512) {
+    //         idx[3] = 0;
+    //         idx[2]++;
+    //         if (idx[2] == 512) {
+    //             idx[2] = 0;
+    //             idx[1]++;
+    //             if (idx[1] == 512) {
+    //                 idx[1] = 0;
+    //                 idx[0]++;
+    //                 if (idx[0] == 512) {
+    //                     PRINT_ERR("FUCK YOU\n");
+    //                     CRIT_HLT();
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     stackPageCount--;
+    // }
 
     insertContextQueueNext(&threads, new);
     rotateContextQueueNext(&threads);
