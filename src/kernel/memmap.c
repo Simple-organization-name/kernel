@@ -3,14 +3,14 @@
 #include "memmap.h"
 #include "buddy.h"
 
-inline void clearPageTable(PhysAddr addr) {
+inline void clearPageTable(const PhysAddr addr) {
     (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_NX | PTE_RW);
     memset(VA(510, 508, 511, 0), 0, 4096);
     (PT(510, 508, 511))[0].whole = 0;
     invlpg((uint64_t)VA(510, 508, 511, 0));
 }
 
-inline static PageEntry *getTable(PageType type, uint16_t *idx) {
+inline static PageEntry *getTable(const PageType type, uint16_t const * const idx) {
     PageEntry *table;
     switch (type) {
         case PTE_PML4: // Searching for entry in pml4
@@ -32,8 +32,8 @@ inline static PageEntry *getTable(PageType type, uint16_t *idx) {
     return table;
 }
 
-static int _findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx, uint8_t curType) {
-    PageEntry *table = getTable(curType, idx);
+static int _findEmptySlotPageIdx(const uint8_t targetType, uint16_t * const idx, const uint8_t curType) {
+    PageEntry * const table = getTable(curType, idx);
 
     for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 511 : 512); i++) {
         // kprintf("targetType: %u, curType: %u, curIdx: %u\n", targetType, curType, i);
@@ -64,14 +64,14 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
     return _findEmptySlotPageIdx(targetType, idx, PTE_PML4);
 }
 
-static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count, uint8_t curType, uint16_t *curIdx, size_t found) {
+static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, const size_t count, const uint8_t curType, uint16_t * const curIdx, size_t found) {
     kprintf("found: %U\n", found);
     // kprintf("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     // Get the page table associated with the current type at the current index in the paging
-    PageEntry *table = getTable(curType, curIdx);
+    PageEntry * const table = getTable(curType, curIdx);
 
     // Set the max index, if it is PML3 set it to 511 as the 511th page is the recursive mapping
-    uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
+    const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     for (uint16_t *i = &curIdx[curType]; *i < maxIdx; (*i)++) {
         // Cases where the page is occupied and we should slide the window
         if (table[*i].pageSize || // If the page is actually mapped to physical memory
@@ -110,15 +110,22 @@ static size_t _findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t c
     return found;
 }
 
-static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t count, uint8_t curType) {
-    PRINT_WARN("Called with\n       targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
-    register PageEntry *table = getTable(curType, curIdx);
-    uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
+/**
+ * Create the needed intermediate tables
+ * \param targetType Target type of map page
+ * \param curIdx The array containing the index where to start the mapping
+ * \param count The number of pages wanted by the caller
+ * \param curType The current type (recursion)
+ */
+static size_t createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType) {
+    PRINT_WARN("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
+    volatile PageEntry * const table = getTable(curType, curIdx);
+    const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     size_t reserved = 0;
-    for (register uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
+    for (volatile uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
             kputc('a');
-            PRINT_WARN("curIdx: %u %u %u %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3]); // Page fault here: table[*i] not present
+            PRINT_WARN("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
             if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
             kputc('b');
             table[*i].reserved = 1;
@@ -126,14 +133,21 @@ static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t cou
             PRINT_WARN("Reserved %U pages\n", reserved);
         } else {
             if (!table[*i].present) {
-                PhysAddr phys = buddyAlloc(BUDDY_4K);
+                const PhysAddr phys = buddyAlloc(BUDDY_4K);
                 clearPageTable(phys);
                 if (!mapPage(curIdx, curType, phys, PTE_RW)) {
                     PRINT_WARN("Failed to map new page\n");
                     CRIT_HLT();
                 }
                 // invlpg((uint64_t)VA_ARRAY(curIdx));
-                PRINT_WARN("Mapped new table at idx: %u %u %u %u, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], VA_ARRAY(curIdx), curType);
+                PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
+                PRINT_WARN("Testing new page...\n");
+                PageEntry * const test = getTable(curType + 1, curIdx);
+                uint64_t tmp = 0;
+                for (uint16_t _ = 0; _ < 512; _++) {
+                    tmp += test[_].present;
+                }
+                PRINT_WARN("Read test successful: read present: %U\n", tmp);
             }
             PRINT_WARN("Recursive call\n");
             reserved += createNeededTable(targetType, curIdx, count - reserved, curType + 1);
@@ -154,15 +168,15 @@ static size_t createNeededTable(uint8_t targetType, uint16_t *curIdx, size_t cou
  * \param count The number of pages needed
  * \return The number of pages if successful, 0 else
  */
-inline size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count) {
+size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, const size_t count) {
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
-    size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
+    const size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
     PRINT_WARN("found: %U, at: %u %u %u %u\n", found, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     if (found < count) return 0;
 
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
-    size_t mappedPages = createNeededTable(targetType, curIdx, count, 0);
+    const size_t mappedPages = createNeededTable(targetType, curIdx, count, 0);
     PRINT_WARN("mapped pages: %U\n", mappedPages);
     if (mappedPages != count) {
         // TODO: NEED TO CLEAR THE RESERVED FLAGS OF THE ALREADY MAPPED PAGES
