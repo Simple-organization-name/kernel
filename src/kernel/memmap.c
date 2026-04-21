@@ -65,7 +65,7 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
 }
 
 static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, const size_t count, const uint8_t curType, uint16_t * const curIdx, size_t found) {
-    kprintf("found: %U\n", found);
+    // kprintf("found: %U\n", found);
     // kprintf("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     // Get the page table associated with the current type at the current index in the paging
     PageEntry * const table = getTable(curType, curIdx);
@@ -90,7 +90,7 @@ static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const 
         }
         if (targetType != curType) { // If the current level is not the targeted level
             if (!table[*i].present) { // If the page isn't present
-                kprintf("add %U pages\n", (size_t)(512 * (1<<(9 * (curType - targetType)))));
+                // kprintf("add %U pages\n", (size_t)(512 * (1<<(9 * (curType - targetType)))));
                 found += 512 * (1<<(9 * (curType - targetType)));
             } else {
                 // kprintf("Start recursion at %u %u %u %u, level: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], curType + 1);
@@ -118,19 +118,19 @@ static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const 
  * \param curType The current type (recursion)
  */
 static size_t createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType) {
-    PRINT_WARN("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
+    // PRINT_WARN("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
     volatile PageEntry * const table = getTable(curType, curIdx);
     const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     size_t reserved = 0;
     for (volatile uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
-            kputc('a');
-            PRINT_WARN("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
+            // kputc('a');
+            // PRINT_WARN("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
             if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
-            kputc('b');
+            // kputc('b');
             table[*i].reserved = 1;
             reserved++;
-            PRINT_WARN("Reserved %U pages\n", reserved);
+            // PRINT_WARN("Reserved %U pages\n", reserved);
         } else {
             if (!table[*i].present) {
                 const PhysAddr phys = buddyAlloc(BUDDY_4K);
@@ -140,19 +140,19 @@ static size_t createNeededTable(const uint8_t targetType, uint16_t * const curId
                     CRIT_HLT();
                 }
                 // invlpg((uint64_t)VA_ARRAY(curIdx));
-                PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
-                PRINT_WARN("Testing new page...\n");
+                // PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
+                // PRINT_WARN("Testing new page...\n");
                 PageEntry * const test = getTable(curType + 1, curIdx);
                 uint64_t tmp = 0;
                 for (uint16_t _ = 0; _ < 512; _++) {
                     tmp += test[_].present;
                 }
-                PRINT_WARN("Read test successful: read present: %U\n", tmp);
+                // PRINT_WARN("Read test successful: read present: %U\n", tmp);
             }
-            PRINT_WARN("Recursive call\n");
+            // PRINT_WARN("Recursive call\n");
             reserved += createNeededTable(targetType, curIdx, count - reserved, curType + 1);
-            PRINT_WARN("End of recursive call\n");
-            PRINT_WARN("Reserved %U pages\n", reserved);
+            // PRINT_WARN("End of recursive call\n");
+            // PRINT_WARN("Reserved %U pages\n", reserved);
             curIdx[curType + 1] = 0;
         }
 
@@ -172,12 +172,12 @@ size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, con
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     const size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
-    PRINT_WARN("found: %U, at: %u %u %u %u\n", found, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
+    // PRINT_WARN("found: %U, at: %u %u %u %u\n", found, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     if (found < count) return 0;
 
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     const size_t mappedPages = createNeededTable(targetType, curIdx, count, 0);
-    PRINT_WARN("mapped pages: %U\n", mappedPages);
+    // PRINT_WARN("mapped pages: %U\n", mappedPages);
     if (mappedPages != count) {
         // TODO: NEED TO CLEAR THE RESERVED FLAGS OF THE ALREADY MAPPED PAGES
         return 0;

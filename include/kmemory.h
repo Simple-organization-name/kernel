@@ -8,7 +8,7 @@
 #include "boot/bootInfo.h"
 
 // Align address to `align` alignment
-#define ALIGN(addr, align) (((uint64_t)(addr) + ((uint64_t)(align)) - 1UL) & ~(((uint64_t)(align)) - 1UL))
+#define ALIGN(addr, align) ((uint64_t)(addr) & ~(((uint64_t)(align)) - 1UL))
 
 #define RECURSIVE_BASE      0xFFFFFF8000000000UL
 #define RECURSIVE_SLOT      511UL
