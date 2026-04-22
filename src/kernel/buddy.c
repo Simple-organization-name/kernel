@@ -156,7 +156,6 @@ static void initBuddyMap(EfiMemMap *map) {
                         PRINT_ERR("Failed to get memory for buddy map\n");
                         CRIT_HLT();
                     }
-                    kprintf("0x%X ", physPage);
                     clearPageTable(physPage);
                     ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_RW | PTE_NX);
                     // kprintf("New pt, pdIdx: %u, pa: 0x%X, va: 0x%X\n", pdIdx, physPage, VA(510, 508, pdIdx, 0));
@@ -169,7 +168,6 @@ static void initBuddyMap(EfiMemMap *map) {
                 PRINT_ERR("Faild to get memory for buddy map\n");
                 CRIT_HLT();
             }
-            kprintf("0x%X ", page);
             ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
             uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
             // invlpg((uint64_t)addr);

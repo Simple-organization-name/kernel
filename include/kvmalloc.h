@@ -1,6 +1,7 @@
 #ifndef __KVMALLOC_H__
 #define __KVMALLOC_H__
 
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 

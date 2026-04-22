@@ -10,6 +10,6 @@ global _start
 _start:
     lea     rsp,    [rel stack_top]
     xor     rbp,    rbp
-    call     kmain
+    call    kmain
 
 section .note.GNU-stack noexec

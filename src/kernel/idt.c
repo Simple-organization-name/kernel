@@ -46,6 +46,17 @@ static idt_entry_t _IDT[NUM_IDTE] __attribute__((aligned(4096)));
 
 #define PIC_IRQ_OFFSET  32
 
+inline void registerDump(const register_state_t *reg) {
+    kputs("\n  ---==== REGISTERS ====---\n");
+    kprintf("RAX = 0x%X | RBX = 0x%X\n", reg->rax, reg->rbx);
+    kprintf("RCX = 0x%X | RDX = 0x%X\n", reg->rcx, reg->rdx);
+    kprintf("RDI = 0x%X | RSI = 0x%X\n", reg->rdi, reg->rsi);
+    kprintf("R8 = 0x%X | R9 = 0x%X\n", reg->r8, reg->r9);
+    kprintf("R10 = 0x%X | R11 = 0x%X\n", reg->r10, reg->r11);
+    kprintf("R12 = 0x%X | R13 = 0x%X\n", reg->r12, reg->r13);
+    kprintf("R14 = 0x%X | R15 = 0x%X\n", reg->r14, reg->r15);
+}
+
 void set_interrupt(uint8_t int_no, void* func, bool trap)
 {
     // if int is in a PIC, disable the mask
@@ -156,6 +167,12 @@ void interrupt_handler(interrupt_frame_t* context)
         kputs("Execution will be frozen to prevent an automatic reboot.\n");
         CRIT_HLT();
 
+    case 0x0C: // Stack-Segment fault
+        kprintf("A stack-segment fault has occured at RIP=0x%X.\n", context->rip);
+        if (context->err_code != 0) kprintf("Related segment: %X\n", context->err_code);
+        registerDump(&context->registers);
+        return;
+
     case 0x0D:  // general protection fault
         kprintf("A general protection fault was triggered at RIP=0x%x.\n", context->rip);
         if (context->err_code != 0) {
@@ -174,14 +191,7 @@ void interrupt_handler(interrupt_frame_t* context)
         kprintf("\nPage fault at address 0x%X, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
         kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
         kprintf("Caused at RIP=0x%X, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
-        kputs("\n  ---==== REGISTERS ====---\n");
-        kprintf("RAX = 0x%X | RBX = 0x%X\n", context->registers.rax, context->registers.rbx);
-        kprintf("RCX = 0x%X | RDX = 0x%X\n", context->registers.rcx, context->registers.rdx);
-        kprintf("RDI = 0x%X | RSI = 0x%X\n", context->registers.rdi, context->registers.rsi);
-        kprintf("R8 = 0x%X | R9 = 0x%X\n", context->registers.r8, context->registers.r9);
-        kprintf("R10 = 0x%X | R11 = 0x%X\n", context->registers.r10, context->registers.r11);
-        kprintf("R12 = 0x%X | R13 = 0x%X\n", context->registers.r12, context->registers.r13);
-        kprintf("R14 = 0x%X | R15 = 0x%X\n", context->registers.r14, context->registers.r15);
+        registerDump(&context->registers);
         kputs("\n  ---=== STACK TRACE ===---\n");
         uint64_t rbp;
         __asm__ volatile ("movq %%rbp, %0" : "=r"(rbp) :: );

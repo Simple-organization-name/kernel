@@ -29,18 +29,15 @@ _Noreturn void kmain(BootInfo* bootInfo)
     initBuddy(bootInfo->memMap);
     printBuddyTableInfo();
 
-    uint16_t idx[4] = {10, 0, 0, 0};
-    findEmptyRangePageIdx(PTE_PT, idx, 10);
-    kputc('\n');
-
-    // __attribute_maybe_unused__ int *test = kvmalloc(idx, 50, 0);
-    // if (test) {
-    //     for (int i = 0; i < 1024*50; i++) {
-    //         test[i] = i;
-    //         // kprintf("%d ", test[i]);
-    //     }
-    //     kprintf("\ntest at: 0x%X\n", test);
-    // } else PRINT_WARN("MSLQDKQSMLDK\n");
+    #define nb 100
+    __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
+    if (test) {
+        for (int i = 0; i < 1024*nb; i++) {
+            test[i] = i;
+            // kprintf("%d ", test[i]);
+        }
+        kprintf("\ntest at: 0x%X\n", test);
+    } else PRINT_WARN("MSLQDKQSMLDK\n");
 
     kputs("\nHello from SOS kernel !\n");
 

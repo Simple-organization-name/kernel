@@ -1,19 +1,26 @@
+#include <stdatomic.h>
 #include "kvmalloc.h"
 #include "memmap.h"
 #include "buddy.h"
 #include "asm.h"
+#include "kerror.h"
+
+static atomic_flag kvmallocLock = ATOMIC_FLAG_INIT;
 
 inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
+    while (atomic_flag_test_and_set(&kvmallocLock)) { // Lock
+        __builtin_ia32_pause();
+    }
+
     if (findEmptyRangePageIdx(PTE_PT, idx, nbPages) != nbPages) {
         return NULL;
     }
     void *ptr = VA_ARRAY(idx);
     for (size_t i = 0; i < nbPages; i++) {
         PhysAddr phys = buddyAlloc(BUDDY_4K);
-        kprintf("0x%X ", phys);
         if (!mapPage(idx, PTE_PT, phys, PTE_RW | flags)) {
-            // TODO: Free physical pages and reserved virtual pages
-            return NULL;
+            PRINT_ERR("Lock did not lock...\n");
+            CRIT_HLT();
         }
         idx[3]++;
         for (uint8_t j = 3; j > 0; j--) {
@@ -22,12 +29,13 @@ inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
             idx[j-1]++;
         }
         // kprintf("next idx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
-        if (idx[0] >= 512) {
-            PRINT_ERR("Found range exceeds PML4[512] ???\n");    
+        if (idx[0] >= 511) {
+            PRINT_ERR("Found range exceeds PML4[511] ???\n");    
             CRIT_HLT();
         }
     }
 
+    atomic_flag_clear(&kvmallocLock); // Release
     return ptr;
 }
 

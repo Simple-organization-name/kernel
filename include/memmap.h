@@ -3,7 +3,6 @@
 
 #include "memTables.h"
 #include "kmemory.h"
-#include "kerror.h"
 
 #define _IDX_TO_ARR(idx) {}
 

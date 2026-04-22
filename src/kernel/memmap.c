@@ -1,7 +1,8 @@
 #include "kmemory.h"
 #include "asm.h"
-#include "memmap.h"
 #include "buddy.h"
+#include "kerror.h"
+#include "memmap.h"
 
 inline void clearPageTable(const PhysAddr addr) {
     (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_NX | PTE_RW);
@@ -118,11 +119,11 @@ static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const 
  * \param curType The current type (recursion)
  */
 static size_t createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType) {
-    // PRINT_WARN("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
-    volatile PageEntry * const table = getTable(curType, curIdx);
+    PRINT_WARN("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
+    PageEntry * const table = getTable(curType, curIdx);
     const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     size_t reserved = 0;
-    for (volatile uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
+    for (uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
             // kputc('a');
             // PRINT_WARN("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
@@ -140,18 +141,18 @@ static size_t createNeededTable(const uint8_t targetType, uint16_t * const curId
                     CRIT_HLT();
                 }
                 // invlpg((uint64_t)VA_ARRAY(curIdx));
-                // PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
-                // PRINT_WARN("Testing new page...\n");
+                PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
+                PRINT_WARN("Testing new page...\n");
                 PageEntry * const test = getTable(curType + 1, curIdx);
                 uint64_t tmp = 0;
                 for (uint16_t _ = 0; _ < 512; _++) {
                     tmp += test[_].present;
                 }
-                // PRINT_WARN("Read test successful: read present: %U\n", tmp);
+                PRINT_WARN("Read test successful: read present: %U\n", tmp);
             }
-            // PRINT_WARN("Recursive call\n");
+            PRINT_WARN("Recursive call\n");
             reserved += createNeededTable(targetType, curIdx, count - reserved, curType + 1);
-            // PRINT_WARN("End of recursive call\n");
+            PRINT_WARN("End of recursive call\n");
             // PRINT_WARN("Reserved %U pages\n", reserved);
             curIdx[curType + 1] = 0;
         }
