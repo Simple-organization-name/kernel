@@ -1,6 +1,6 @@
-#include "PCI.h"
-#include "kterm.h"
-#include "asm.h"
+#include <PCI.h>
+#include <kterm.h>
+#include <asm.h>
 
 uint32_t PCI_readConfigRegister(uint8_t bus, uint8_t slot, uint8_t func, uint8_t reg)
 {

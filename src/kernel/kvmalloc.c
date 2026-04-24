@@ -1,9 +1,9 @@
 #include <stdatomic.h>
-#include "kvmalloc.h"
-#include "memmap.h"
-#include "buddy.h"
-#include "asm.h"
-#include "kerror.h"
+#include <kvmalloc.h>
+#include <memmap.h>
+#include <buddy.h>
+#include <asm.h>
+#include <kerror.h>
 
 static atomic_flag kvmallocLock = ATOMIC_FLAG_INIT;
 

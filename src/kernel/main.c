@@ -1,13 +1,13 @@
-#include "attribute.h"
-#include "boot/bootInfo.h"
-#include "idt.h"
-#include "kterm.h"
-#include "asm.h"
-#include "buddy.h"
-#include "PCI.h"
-#include "memmap.h"
-#include "kvmalloc.h"
-#include "kdbg.h"
+#include <attribute.h>
+#include <boot/bootInfo.h>
+#include <idt.h>
+#include <kterm.h>
+#include <asm.h>
+#include <buddy.h>
+#include <PCI.h>
+#include <memmap.h>
+#include <kvmalloc.h>
+#include <kdbg.h>
 
 _Noreturn void kmain(BootInfo* bootInfo)
 {

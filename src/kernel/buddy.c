@@ -1,8 +1,8 @@
-#include "buddy.h"
-#include "asm.h"
-#include "kterm.h"
-#include "memmap.h"
-#include "kmemory.h"
+#include <buddy.h>
+#include <asm.h>
+#include <kterm.h>
+#include <memmap.h>
+#include <kmemory.h>
 
 static BuddyTable   buddyTable = {0};
 static PhysAddr     reservedBuddyForReplenishing = 0; // Yep

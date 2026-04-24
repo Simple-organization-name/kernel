@@ -1,6 +1,6 @@
+#include <stddef.h>
 #include <kdbg.h>
 #include <kterm.h>
-#include <stddef.h>
 #include <asm.h>
 #include <attribute.h>
 

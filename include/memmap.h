@@ -1,8 +1,8 @@
 #ifndef __KMAP_H__
 #define __KMAP_H__
 
-#include "memTables.h"
-#include "kmemory.h"
+#include <memTables.h>
+#include <kmemory.h>
 
 #define _IDX_TO_ARR(idx) {}
 

@@ -1,9 +1,9 @@
-#include "asm.h"
+#include <asm.h>
 
-#include "boot/bootInfo.h"
-#include "boot/efi/efi.h"
-#include "elf.h"
-#include "memTables.h"
+#include <boot/bootInfo.h>
+#include <boot/efi/efi.h>
+#include <elf.h>
+#include <memTables.h>
 
 // Macros
 #undef EFI_FILE_MODE_READ

@@ -3,9 +3,9 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#include "kterm.h"
-#include "boot/bootInfo.h"
-#include "bmft.h"
+#include <kterm.h>
+#include <boot/bootInfo.h>
+#include <bmft.h>
 
 static struct cursor {
     uint32_t*   screen;

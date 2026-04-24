@@ -2,10 +2,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "asm.h"
-#include "attribute.h"
-#include "kterm.h"
-#include "kmemory.h"
+#include <asm.h>
+#include <attribute.h>
+#include <kterm.h>
+#include <kmemory.h>
 
 typedef enum {
     EfiReservedMemoryType,

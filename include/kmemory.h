@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "memTables.h"
-#include "boot/bootInfo.h"
+#include <memTables.h>
+#include <boot/bootInfo.h>
 
 // Align address to `align` alignment
 #define ALIGN(addr, align) ((uint64_t)(addr) & ~(((uint64_t)(align)) - 1UL))

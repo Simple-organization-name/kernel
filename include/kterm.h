@@ -1,8 +1,8 @@
 #ifndef __KTERM_H__
 #define __KTERM_H__
 
-#include "boot/bootInfo.h"
-#include "kerror.h"
+#include <boot/bootInfo.h>
+#include <kerror.h>
 #include <stdbool.h>
 
 int kterminit(BootInfo *bootInfo, uint16_t ratio, bool hres);

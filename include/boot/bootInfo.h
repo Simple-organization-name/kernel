@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "memTables.h"
+#include <memTables.h>
 
 typedef struct _Framebuffer {
     uint64_t    addr,

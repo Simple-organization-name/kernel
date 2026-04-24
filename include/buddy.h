@@ -5,9 +5,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "boot/bootInfo.h"
-#include "memTables.h"
-#include "kmemory.h"
+#include <boot/bootInfo.h>
+#include <memTables.h>
+#include <kmemory.h>
 
 #define BUDDY_IDX_BLOCK_SIZE(n) ((size_t)(1UL << (12 + (n))))
 

@@ -1,8 +1,8 @@
-#include "kmemory.h"
-#include "asm.h"
-#include "buddy.h"
-#include "kerror.h"
-#include "memmap.h"
+#include <kmemory.h>
+#include <asm.h>
+#include <buddy.h>
+#include <kerror.h>
+#include <memmap.h>
 
 inline void clearPageTable(const PhysAddr addr) {
     (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_NX | PTE_RW);
