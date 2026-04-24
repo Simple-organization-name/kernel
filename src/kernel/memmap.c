@@ -5,10 +5,11 @@
 #include <memmap.h>
 
 inline void clearPageTable(const PhysAddr addr) {
-    (PT(510, 508, 511))[0].whole = MAKE_PAGE_ENTRY(addr, PTE_NX | PTE_RW);
-    memset(VA(510, 508, 511, 0), 0, 4096);
-    (PT(510, 508, 511))[0].whole = 0;
-    invlpg((uint64_t)VA(510, 508, 511, 0));
+    static const uint16_t idx[] = {510, 508, 511, 0};
+    static const uint64_t virt = (uint64_t)VA_ARRAY(idx);
+    mapPage(idx, PTE_PT, addr, PTE_NX | PTE_RW);
+    memset((void *)virt, 0, 4096);
+    unmapPage(virt, NULL);
 }
 
 inline static PageEntry *getTable(const PageType type, uint16_t const * const idx) {
@@ -186,15 +187,15 @@ size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, con
  * \param flags The flags to be used for the mapping, see `memTables.h`
  * \return 1 if success, 0 if there were already a mapped page
  */
-inline int mapPage(uint16_t idx[4], uint8_t pageType, PhysAddr addr, uint64_t flags) {
+inline int mapPage(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
     PageEntry *entry = &table[idx[pageType]];
     if (entry->present) {
         PRINT_WARN("Page used: P: %d, abort mapping\n", entry->present);
         return 0;
     }
-    entry->reserved = 0;
-    table[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
+    entry->whole = MAKE_PAGE_ENTRY(addr, flags);
+    invlpg((uint64_t)VA_ARRAY(idx));
     return 1;
 }
 

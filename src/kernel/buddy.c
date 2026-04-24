@@ -80,7 +80,10 @@ PhysAddr buddyAlloc(uint8_t level) {
     }
     // we are sure that we've got memory and grabUsableBuddy handles
     // ooms on its own so we can assume levels[level].list != NULL
+    kprintcheck("a");
+    PRINT_WARN("level=%u, addr=0x%X\n", level, levels[level].list->start);
     BUDDY_TOGGLE_BIT(level, levels[level].list->start);
+    kprintcheck("b");
     return buddyTransfer(&levels[level].list, &buddyTable.usable);
 }
 
@@ -160,7 +163,12 @@ static void initBuddyMap(EfiMemMap *map) {
                         CRIT_HLT();
                     }
                     clearPageTable(physPage);
-                    ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_RW | PTE_NX);
+                    const uint16_t idx[] = {510, 508, pdIdx, 0};
+                    if (!mapPage(idx, PTE_PD, physPage, PTE_RW | PTE_NX)) {
+                        PRINT_ERR("welp");
+                        CRIT_HLT();
+                    }
+                    // ((PageEntry *)PD(510, 508))[pdIdx].whole = MAKE_PAGE_ENTRY(physPage, PTE_RW | PTE_NX);
                     // kprintf("New pt, pdIdx: %u, pa: 0x%X, va: 0x%X\n", pdIdx, physPage, VA(510, 508, pdIdx, 0));
                 }
             }
@@ -171,7 +179,12 @@ static void initBuddyMap(EfiMemMap *map) {
                 PRINT_ERR("Faild to get memory for buddy map\n");
                 CRIT_HLT();
             }
-            ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
+            const uint16_t idx[] = {510, 508, pdIdx, ptIdx};
+            if (!mapPage(idx, PTE_PT, page, PTE_RW | PTE_NX)) {
+                PRINT_ERR("welp");
+                CRIT_HLT();
+            }
+            // ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
             uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
             // invlpg((uint64_t)addr);
 
@@ -202,7 +215,12 @@ void initBuddy(EfiMemMap *physMemMap) {
 
     // Get memory to make usable buddies
     PhysAddr memoryChunk = _getPhysMemoryFromEFIMemMap(physMemMap, 1<<(21 - 12));
-    ((PageEntry *)PD(510, 508))[0].whole = MAKE_PAGE_ENTRY(memoryChunk, PTE_P | PTE_RW | PTE_PS | PTE_NX);
+    const uint16_t idx[] = {510, 508, 0, 0};
+    if (!mapPage(idx, PTE_PD, memoryChunk, PTE_RW | PTE_PS | PTE_NX)) {
+        PRINT_ERR("welp");
+        CRIT_HLT();
+    }
+    // ((PageEntry *)PD(510, 508))[0].whole = MAKE_PAGE_ENTRY(memoryChunk, PTE_P | PTE_RW | PTE_PS | PTE_NX);
     Buddy *buf = (Buddy *)VA(510, 508, 0, 0);
     invlpg((uint64_t)buf);
     // Make the buddies
@@ -215,6 +233,24 @@ void initBuddy(EfiMemMap *physMemMap) {
     // Init buddy table with all the available memory
     for (uint64_t i = 0; i < physMemMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        // BuddyType startLevel = BUDDY_4K;
+        // for (int level = BUDDY_4K; level < BUDDY_MAX_ORDER; level++) {
+        //     if (ALIGN(desc->PhysicalStart, BUDDY_IDX_BLOCK_SIZE(level)) == desc->PhysicalStart) {
+        //         startLevel = level;
+        //     }
+        // }
+        // here, `startLevel` is the max level of buddy i can insert without breaking alignment
+
+
+
+        // // for (int level = BUDDY_MAX_ORDER - 1; level >= 0; level--) {
+        // //     const uint64_t levelPages = 1 << level;
+        // //     while (desc->NumberOfPages >= levelPages) {
+        // //         buddyFree(level, desc->PhysicalStart);
+        // //         desc->PhysicalStart += levelPages * 4096;
+        // //         desc->NumberOfPages -= levelPages;
+        // //     }
+        // // }
         for (uint64_t j = 0; j < desc->NumberOfPages; j++) {
             // kprintf("(%U, %U) ", i, j);
             buddyFree(BUDDY_4K, desc->PhysicalStart + j * 4096);

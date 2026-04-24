@@ -71,6 +71,7 @@ inline static void invlpg(uint64_t addr)
         :: "m"(addr)
         : "memory"
     );
+    for (volatile int i = 0; i < 1000000; i++);
 }
 
 inline static uint64_t bsr64(uint64_t n) {

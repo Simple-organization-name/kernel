@@ -193,9 +193,15 @@ void interrupt_handler(interrupt_frame_t* context)
         kprintf("Caused at RIP=0x%X, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
         registerDump(&context->registers);
         kputs("\n  ---=== STACK TRACE ===---\n");
-        uint64_t rbp;
+        {
+            const char *symbol;
+            uint64_t offset;
+            get_symbol_offset(context->rip, &symbol, &offset);
+            kprintf("RIP=0x%X => %s + 0x%X\n", context->rip, symbol, offset);
+        }
+        uint64_t *rbp;
         __asm__ volatile ("movq %%rbp, %0" : "=r"(rbp) :: );
-        print_stack_trace(rbp);
+        print_stack_trace(*rbp);
         kputs("\n  ---==== CODE DUMP ====---\n");
         if (context->err_code & 32) {
             kputs("Error due to code fetch; will not fetch code\n");

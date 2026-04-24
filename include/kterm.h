@@ -16,4 +16,6 @@ void kputc(unsigned char chr);
 void kputs(const char *str);
 void kprintf(const char *format, ...);
 
+void kprintcheck(const char *str);
+
 #endif

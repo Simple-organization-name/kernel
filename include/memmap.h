@@ -26,7 +26,7 @@ PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
 int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx);
 size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count);
 
-int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
+int mapPage(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
 int unmapPage(VirtAddr virt, PhysAddr *phys);
 
 int reservePage(VirtAddr addr, PageType pageType);

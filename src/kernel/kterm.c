@@ -312,3 +312,15 @@ void kprintf(const char *format, ...) {
         format++;
     }
 }
+
+void kprintcheck(const char *str)
+{
+#ifdef PRINT_SERIAL
+    static const char * const prefix = "[CHECK] ";
+    for (const char *i = prefix; *i; i++) outb(0x3F8, *i);
+    for (const char *i = str; *i; i++) outb(0x3F8, *i);
+    outb(0x3F8, '\n');
+#else
+    kprintf("[CHECK] %s\n", str)
+#endif
+}
