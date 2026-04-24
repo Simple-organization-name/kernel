@@ -40,7 +40,7 @@ static int _findEmptySlotPageIdx(const uint8_t targetType, uint16_t * const idx,
         // kprintf("targetType: %u, curType: %u, curIdx: %u\n", targetType, curType, i);
         idx[curType] = i;
         if (curType == targetType && !table[i].sreserved) { // if it is the right level and the slot is free
-            table[i].whole = PTE_RESERVED;
+            table[i].whole = PTE_R;
             return 1;
         }
 
@@ -66,8 +66,6 @@ inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
 }
 
 static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, const size_t count, const uint8_t curType, uint16_t * const curIdx, size_t found) {
-    // kprintf("found: %U\n", found);
-    // kprintf("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     // Get the page table associated with the current type at the current index in the paging
     PageEntry * const table = getTable(curType, curIdx);
 
@@ -80,24 +78,19 @@ static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const 
             table[*i].reserved || // If the page is already reserved
             (table[*i].present && curType == targetType) // If the page is mapped at level PTE_PT as PTs doesn't have the PS flag
         ) {
-            // kprintf("Occupied page, PS: %u, SRES: %u, RES: %u, P: %u\n", table[*i].pageSize, table[*i].sreserved, table[*i].reserved, targetType == curType && table[*i].present);
-            // kprintf("targetType: %u, curType: %u, curIdx: %u %u %u %u\n", targetType, curType, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
             found = 0; // reset found to 0, as the next empty slot will not be contiguous to the current range
             memcpy(idx, curIdx, sizeof(uint16_t) * 4); // Change the return idx to the current one
             idx[curType]++;
-            for (uint8_t j = curType + 1; j <= targetType; j++)
+            for (uint8_t j = curType + 1; j <= targetType; j++) // Clear lower page table idxs
                 idx[j] = 0;
             continue;
         }
         if (targetType != curType) { // If the current level is not the targeted level
             if (!table[*i].present) { // If the page isn't present
-                // kprintf("add %U pages\n", (size_t)(512 * (1<<(9 * (curType - targetType)))));
                 found += 512 * (1<<(9 * (curType - targetType)));
             } else {
-                // kprintf("Start recursion at %u %u %u %u, level: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], curType + 1);
                 found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found); // Recurse in the next level
                 curIdx[curType + 1] = 0;
-                // kprintf("Found after recursion: %u, starting at: %u %u %u %u\n", found, idx[0], idx[1], idx[2], idx[3]);
             }
         } else {
             found++;
@@ -125,10 +118,8 @@ static size_t createNeededTable(const uint8_t targetType, uint16_t * const curId
     size_t reserved = 0;
     for (uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
-            // kputc('a');
             // PRINT_WARN("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
             if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
-            // kputc('b');
             table[*i].reserved = 1;
             reserved++;
             // PRINT_WARN("Reserved %U pages\n", reserved);
@@ -137,8 +128,8 @@ static size_t createNeededTable(const uint8_t targetType, uint16_t * const curId
                 const PhysAddr phys = buddyAlloc(BUDDY_4K);
                 clearPageTable(phys);
                 if (!mapPage(curIdx, curType, phys, PTE_RW)) {
-                    PRINT_WARN("Failed to map new page\n");
-                    CRIT_HLT();
+                    PRINT_WARN("Failed to map new page\n"); // Memory map changed, range is not valid anymore
+                    return 0;
                 }
                 // invlpg((uint64_t)VA_ARRAY(curIdx));
                 PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
@@ -187,13 +178,22 @@ size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, con
     return count;
 }
 
-inline int mapPage(uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
+/**
+ * Map a page
+ * \param idx The idx array (`uint64_t[4]`) defining the slot in the mapping to use
+ * \param pageType The page type to map
+ * \param addr The physical address to map
+ * \param flags The flags to be used for the mapping, see `memTables.h`
+ * \return 1 if success, 0 if there were already a mapped page
+ */
+inline int mapPage(uint16_t idx[4], uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
     PageEntry *entry = &table[idx[pageType]];
-    if (entry->sreserved || entry->present) {
-        PRINT_WARN("Page used: SRES: %d, P: %d, abort mapping\n", entry->sreserved, entry->present);
+    if (entry->present) {
+        PRINT_WARN("Page used: P: %d, abort mapping\n", entry->present);
         return 0;
     }
+    entry->reserved = 0;
     table[idx[pageType]].whole = MAKE_PAGE_ENTRY(addr, flags);
     return 1;
 }
@@ -222,9 +222,10 @@ int unmapPage(VirtAddr virt, PhysAddr *phys) {
 
 unmap:
     *phys = entry->dest;
+    bool wasPresent = entry->present;
     entry->whole = 0;
     invlpg(virt);
-    return 1 + entry->present;
+    return 1 + wasPresent;
 }
 
 int reservePage(VirtAddr addr, PageType pageType)
@@ -237,7 +238,7 @@ int reservePage(VirtAddr addr, PageType pageType)
     };
     PageEntry *table = getTable(pageType, idx);
     if (table[idx[pageType]].sreserved || table[idx[pageType]].present) return 0;
-    table[idx[pageType]].whole = PTE_SRESERVED;
+    table[idx[pageType]].whole = PTE_SR;
     return 1;
 }
 

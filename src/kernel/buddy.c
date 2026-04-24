@@ -33,12 +33,11 @@ static void initBuddyChainedList(Buddy buf[]) {
     buf[count - 1].next = NULL;
 }
 
-// THOU SHALL NOT FAIL
 static Buddy *grabUsableBuddy(BuddyTable *src) {
     if (!src->usable) {
         PhysAddr addr = reservedBuddyForReplenishing;
         uint16_t idx[4] = {510, 508, 1, 0};
-        int found = findEmptySlotPageIdx(PTE_PD, idx);
+        int found = findEmptySlotPageIdx(PTE_PD, idx); // OOPS CYCLIC DEPENDENCY
         if(!found || idx[1] != 508) {
             PRINT_ERR("OOUB (Out-Of-Usable-Buddy)\n");
             PRINT_ERR("Failed to find empty space in mem management PD for new usable buddies\n");
@@ -69,7 +68,7 @@ PhysAddr buddyAlloc(uint8_t level) {
     while (curLevel != level) {
         // insert big one as its first half one level down
         uint64_t addr = levels[curLevel].list->start;
-        BUDDY_SET_BIT(level, addr);
+        BUDDY_TOGGLE_BIT(curLevel, addr);
         buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
         
         // insert its second half
@@ -86,11 +85,11 @@ PhysAddr buddyAlloc(uint8_t level) {
 }
 
 inline static Buddy *grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
-    PhysAddr nextLevelAlignedAddr = addr >> (level + 12 + 1);
+    PhysAddr nextLevelAlignedAddrHead = addr >> (level + 12 + 1);
     Buddy **buddy = &buddyTable.levels[level].list;
     for (; *buddy; buddy = &(*buddy)->next) {
         PhysAddr current = addr >> (level + 12 + 1);
-        if (current == nextLevelAlignedAddr) {
+        if (current == nextLevelAlignedAddrHead) {
             break;
         }
     }
@@ -110,6 +109,7 @@ inline static Buddy *grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
 }
 
 void buddyFree(uint8_t level, PhysAddr addr) {
+    // kprintf("Called buddyFree 0x%X, is level %u\n", addr, level);
     if (level >= BUDDY_MAX_ORDER) {
         PRINT_ERR("WTF");
         CRIT_HLT();
@@ -118,11 +118,14 @@ void buddyFree(uint8_t level, PhysAddr addr) {
     if (level < BUDDY_MAX_ORDER - 1 && BUDDY_STATE(level, addr)) {
         // need to seek and merge
         Buddy *friend = grabAssociatedBuddy(level, addr);
+        // kprintf("Found friend with phys addr: 0x%X\n", friend->start);
         BUDDY_REMOVE_BIT(level, addr);
+        // kprintf("Transfer friend struct (0x%X) to usable structs\n", friend);
         buddyTransfer(&friend, &buddyTable.usable);
         buddyFree(level + 1, ALIGN(addr, 1 << (level + 1 + 12)));
     } else {
         // need to insert
+        // kprintf("Friend not found (supposed to be the pair (0x%X, 0x%X)), inserting\n", ALIGN(addr, 1 << (level + 1 + 12)), ALIGN(addr, 1 << (level + 1 + 12)) + (1 << (level + 12)));
         buddyTransfer(&buddyTable.usable, &buddyTable.levels[level].list);
         buddyTable.levels[level].list->start = addr;
         BUDDY_SET_BIT(level, addr);
