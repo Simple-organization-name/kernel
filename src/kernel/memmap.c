@@ -12,7 +12,7 @@ inline void clearPageTable(const PhysAddr addr) {
     unmapPage(virt, NULL);
 }
 
-inline static PageEntry *getTable(const PageType type, uint16_t const * const idx) {
+inline static PageEntry *getTable(const PageType type, const uint16_t * const idx) {
     PageEntry *table;
     switch (type) {
         case PTE_PML4: // Searching for entry in pml4
@@ -62,7 +62,7 @@ static int _findEmptySlotPageIdx(const uint8_t targetType, uint16_t * const idx,
     return 0;
 }
 
-inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx) {
+inline int findEmptySlotPageIdx(uint8_t targetType, uint16_t * const idx) {
     return _findEmptySlotPageIdx(targetType, idx, PTE_PML4);
 }
 
@@ -161,7 +161,7 @@ static size_t createNeededTable(const uint8_t targetType, uint16_t * const curId
  * \param count The number of pages needed
  * \return The number of pages if successful, 0 else
  */
-size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, const size_t count) {
+size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t *idx, const size_t count) {
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     const size_t found = _findEmptyRangePageIdx(targetType, idx, count, PTE_PML4, curIdx, 0);
@@ -181,11 +181,11 @@ size_t findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const idx, con
 
 /**
  * Map a page
- * \param idx The idx array (`uint64_t[4]`) defining the slot in the mapping to use
+ * \param idx The idx array (`uint16_t[4]`) defining the slot in the mapping to use
  * \param pageType The page type to map
  * \param addr The physical address to map
  * \param flags The flags to be used for the mapping, see `memTables.h`
- * \return 1 if success, 0 if there were already a mapped page
+ * \return 1 if success, 0 if there were already a mapped page (`PTE_P`)
  */
 inline int mapPage(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = getTable(pageType, idx);
@@ -229,6 +229,20 @@ unmap:
     return 1 + wasPresent;
 }
 
+int sreservePage(VirtAddr addr, PageType pageType)
+{
+    uint16_t idx[4] = {
+        (addr >> 39) & 0x1FF,
+        (addr >> 30) & 0x1FF,
+        (addr >> 21) & 0x1FF,
+        (addr >> 12) & 0x1FF
+    };
+    PageEntry *table = getTable(pageType, idx);
+    if (!PAGE_TABLE_SLOT_AVAILABLE(table[idx[pageType]])) return 0;
+    table[idx[pageType]].whole = PTE_SR;
+    return 1;
+}
+
 int reservePage(VirtAddr addr, PageType pageType)
 {
     uint16_t idx[4] = {
@@ -238,8 +252,8 @@ int reservePage(VirtAddr addr, PageType pageType)
         (addr >> 12) & 0x1FF
     };
     PageEntry *table = getTable(pageType, idx);
-    if (table[idx[pageType]].sreserved || table[idx[pageType]].present) return 0;
-    table[idx[pageType]].whole = PTE_SR;
+    if (!PAGE_TABLE_SLOT_AVAILABLE(table[idx[pageType]])) return 0;
+    table[idx[pageType]].whole = PTE_R;
     return 1;
 }
 

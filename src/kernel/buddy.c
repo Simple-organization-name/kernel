@@ -4,15 +4,15 @@
 #include <memmap.h>
 #include <kmemory.h>
 
-static BuddyTable   buddyTable = {0};
-static PhysAddr     reservedBuddyForReplenishing = 0; // Yep
+static BuddyTable   _buddyTable = {0};
+static PhysAddr     _reservedBuddyForReplenishing = 0; // Yep
 
 #define BUDDY_SIZE(level)               ((1 << (level)) * (1 << 12))
 #define BUDDY_PAIR_ID(level, addr)      ((addr) >> ((level) + 12 + 1))
-#define BUDDY_STATE(level, addr)        (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &  (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
-#define BUDDY_SET_BIT(level, addr)      (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] |= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
-#define BUDDY_REMOVE_BIT(level, addr)   (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &= ~(1 << (BUDDY_PAIR_ID(level, addr) % 64)))
-#define BUDDY_TOGGLE_BIT(level, addr)   (buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] ^= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_STATE(level, addr)        (_buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &  (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_SET_BIT(level, addr)      (_buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] |= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_REMOVE_BIT(level, addr)   (_buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] &= ~(1 << (BUDDY_PAIR_ID(level, addr) % 64)))
+#define BUDDY_TOGGLE_BIT(level, addr)   (_buddyTable.levels[level].map[BUDDY_PAIR_ID(level, addr) / 64] ^= (1 << (BUDDY_PAIR_ID(level, addr) % 64)))
 
 static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
     if (!src || !*src) return ADDR_MAX;
@@ -24,7 +24,7 @@ static PhysAddr buddyTransfer(Buddy **src, Buddy **dest) {
 }
 
 // Uses only 2MiB pages
-static void initBuddyChainedList(Buddy buf[]) {
+static void initBuddyChainedList(Buddy *buf) {
     // Linked list init for the usable buddies :)
     uint64_t count = (1 << 21) / sizeof(Buddy);
     for (uint64_t i = 0; i < (count - 1); i++) {
@@ -35,7 +35,7 @@ static void initBuddyChainedList(Buddy buf[]) {
 
 static Buddy *grabUsableBuddy(BuddyTable *src) {
     if (!src->usable) {
-        PhysAddr addr = reservedBuddyForReplenishing;
+        PhysAddr addr = _reservedBuddyForReplenishing;
         uint16_t idx[4] = {510, 508, 1, 0};
         int found = findEmptySlotPageIdx(PTE_PD, idx); // OOPS CYCLIC DEPENDENCY
         if(!found || idx[1] != 508) {
@@ -46,9 +46,9 @@ static Buddy *grabUsableBuddy(BuddyTable *src) {
         mapPage(idx, PTE_PD, addr, PTE_PS | PTE_RW | PTE_NX);
         Buddy *buf = VA_ARRAY(idx);
         initBuddyChainedList(buf);
-        buddyTable.usable = buf;
+        _buddyTable.usable = buf;
         // We replenished the usable buddies, so we can call buddyAlloc safely
-        reservedBuddyForReplenishing = buddyAlloc(BUDDY_2M);
+        _reservedBuddyForReplenishing = buddyAlloc(BUDDY_2M);
     }
     Buddy *out = src->usable;
     src->usable = src->usable->next;
@@ -57,39 +57,41 @@ static Buddy *grabUsableBuddy(BuddyTable *src) {
 }
 
 PhysAddr buddyAlloc(uint8_t level) {
-    BuddyLevel* levels = buddyTable.levels;
-
     uint8_t curLevel;
-    for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
+    for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !_buddyTable.levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
     if (curLevel == BUDDY_MAX_ORDER) {
         PRINT_ERR("[FATAL] OOM :p\n");
         CRIT_HLT();
     }
     while (curLevel != level) {
         // insert big one as its first half one level down
-        uint64_t addr = levels[curLevel].list->start;
+        uint64_t addr = _buddyTable.levels[curLevel].list->start;
         BUDDY_TOGGLE_BIT(curLevel, addr);
-        buddyTransfer(&levels[curLevel].list, &levels[curLevel-1].list);
-        
+        buddyTransfer(&_buddyTable.levels[curLevel].list, &_buddyTable.levels[curLevel-1].list);
+
         // insert its second half
-        Buddy *tmp = grabUsableBuddy(&buddyTable);
-        tmp->next = levels[curLevel - 1].list;
-        levels[curLevel - 1].list = tmp;
+        Buddy *tmp = grabUsableBuddy(&_buddyTable);
+        tmp->next = _buddyTable.levels[curLevel - 1].list;
+        _buddyTable.levels[curLevel - 1].list = tmp;
         tmp->start = addr + (1 << ((curLevel - 1) + 12));
         curLevel--;
     }
     // we are sure that we've got memory and grabUsableBuddy handles
     // ooms on its own so we can assume levels[level].list != NULL
     kprintcheck("a");
-    PRINT_WARN("level=%u, addr=0x%X\n", level, levels[level].list->start);
-    BUDDY_TOGGLE_BIT(level, levels[level].list->start);
+    PRINT_WARN("level=%u, pa=0x%X\n", level, _buddyTable.levels[level].list->start);
+    uint64_t id = BUDDY_PAIR_ID(level, _buddyTable.levels[level].list->start);
+    PRINT_WARN("pair id: %U\n", id);
+    PRINT_WARN("buddy state: %u\n", BUDDY_STATE(level, _buddyTable.levels[level].list->start));
+    PRINT_WARN("buddy bit in the map: %p\n", &_buddyTable.levels[level].map);
+    BUDDY_TOGGLE_BIT(level, _buddyTable.levels[level].list->start);
     kprintcheck("b");
-    return buddyTransfer(&levels[level].list, &buddyTable.usable);
+    return buddyTransfer(&_buddyTable.levels[level].list, &_buddyTable.usable);
 }
 
 inline static Buddy *grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
     PhysAddr nextLevelAlignedAddrHead = addr >> (level + 12 + 1);
-    Buddy **buddy = &buddyTable.levels[level].list;
+    Buddy **buddy = &_buddyTable.levels[level].list;
     for (; *buddy; buddy = &(*buddy)->next) {
         PhysAddr current = addr >> (level + 12 + 1);
         if (current == nextLevelAlignedAddrHead) {
@@ -101,7 +103,7 @@ inline static Buddy *grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
         PRINT_ERR("level = %u, addr = 0x%X\n", (unsigned)level, addr);
         PRINT_ERR("map (first bytes):");
         for (int i = 0; i < 10; i++) {
-            kprintf(" 0x%x", ((uint8_t *)buddyTable.levels[level].map)[i]);
+            kprintf(" 0x%x", ((uint8_t *)_buddyTable.levels[level].map)[i]);
         }
         kputc('\n');
         CRIT_HLT();
@@ -124,13 +126,13 @@ void buddyFree(uint8_t level, PhysAddr addr) {
         // kprintf("Found friend with phys addr: 0x%X\n", friend->start);
         BUDDY_REMOVE_BIT(level, addr);
         // kprintf("Transfer friend struct (0x%X) to usable structs\n", friend);
-        buddyTransfer(&friend, &buddyTable.usable);
+        buddyTransfer(&friend, &_buddyTable.usable);
         buddyFree(level + 1, ALIGN(addr, 1 << (level + 1 + 12)));
     } else {
         // need to insert
         // kprintf("Friend not found (supposed to be the pair (0x%X, 0x%X)), inserting\n", ALIGN(addr, 1 << (level + 1 + 12)), ALIGN(addr, 1 << (level + 1 + 12)) + (1 << (level + 12)));
-        buddyTransfer(&buddyTable.usable, &buddyTable.levels[level].list);
-        buddyTable.levels[level].list->start = addr;
+        buddyTransfer(&_buddyTable.usable, &_buddyTable.levels[level].list);
+        _buddyTable.levels[level].list->start = addr;
         BUDDY_SET_BIT(level, addr);
     }
 }
@@ -139,19 +141,20 @@ static void initBuddyMap(EfiMemMap *map) {
     // Init buddy map for each levels
     uint16_t pdIdx = 1, ptIdx = 0;
     for (uint8_t level = 0; level < BUDDY_MAX_ORDER; level++) {
-        uint64_t neededPages = (buddyTable.totalRAM >> (
+        uint64_t neededPages = (_buddyTable.totalRAM >> (
             12 +    // group ram bytes by page
             1 +     // group buddy pages by pair
             level + // each levels requires 2 times less bits
             3 +     // bits -> bytes
             12      // bytes -> pages
         )) + 1;
+        kprintf("needed pages: %U\n", neededPages);
 
         // Allocate and map each needed pages
         // Map the memory as PT entries (4KiB pages)
         for (uint64_t i = 0; i < neededPages; i++) {
             // Need to create a new PT
-            // kprintf("pd: %u, pt: %u\n", pdIdx, ptIdx);
+            kprintf("pd: %u, pt: %u\n", pdIdx, ptIdx);
             if (ptIdx == 0) {
                 if (pdIdx > 510) {
                     PRINT_ERR("ERRM THIS SHOULDN'T HAPPEN\n");
@@ -184,12 +187,13 @@ static void initBuddyMap(EfiMemMap *map) {
                 PRINT_ERR("welp");
                 CRIT_HLT();
             }
-            // ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
-            uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
-            // invlpg((uint64_t)addr);
-
+            
             if (i == 0) {
-                buddyTable.levels[level].map = addr;
+                // ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
+                uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
+                // invlpg((uint64_t)addr);
+                _buddyTable.levels[level].map = addr;
+                PRINT_WARN("addr: 0x%X\n", addr);
             }
 
             // Clear the whole page
@@ -211,7 +215,7 @@ void initBuddy(EfiMemMap *physMemMap) {
         PRINT_ERR("HOW MUCH RAM DO YOU HAVE ??????\n");
         CRIT_HLT();
     }
-    buddyTable.totalRAM = totalRAM;
+    _buddyTable.totalRAM = totalRAM;
 
     // Get memory to make usable buddies
     PhysAddr memoryChunk = _getPhysMemoryFromEFIMemMap(physMemMap, 1<<(21 - 12));
@@ -225,7 +229,7 @@ void initBuddy(EfiMemMap *physMemMap) {
     invlpg((uint64_t)buf);
     // Make the buddies
     initBuddyChainedList(buf);
-    buddyTable.usable = buf;
+    _buddyTable.usable = buf;
 
     // Init buddy map
     initBuddyMap(physMemMap);
@@ -257,7 +261,7 @@ void initBuddy(EfiMemMap *physMemMap) {
         }
     }
 
-    reservedBuddyForReplenishing = buddyAlloc(BUDDY_2M); // reserve a page of 2MiB
+    _reservedBuddyForReplenishing = buddyAlloc(BUDDY_2M); // reserve a page of 2MiB
 }
 
 void printBuddyTableInfo() {
@@ -265,8 +269,21 @@ void printBuddyTableInfo() {
     for (uint8_t i = 0; i < BUDDY_MAX_ORDER; i++) {
         kprintf("Level %u informations: \n", i);
         volatile uint64_t buddyCount = 0;
-        for (Buddy *bud = buddyTable.levels[i].list; bud; bud = bud->next) buddyCount++;
-        kprintf("Number of buddies: %U\n", buddyCount);
+        for (Buddy *bud = _buddyTable.levels[i].list; bud; bud = bud->next) buddyCount++;
+        uint64_t neededPages = (_buddyTable.totalRAM >> (
+            12 +    // group ram bytes by page
+            1 +     // group buddy pages by pair
+            i +     // each levels requires 2 times less bits
+            3 +     // bits -> bytes
+            12      // bytes -> pages
+        )) + 1;
+        kprintf(
+            "   Number of buddies: %U | Map start: [pa: 0x%X, va: 0x%X]\n"
+            "   Theoric needed 4K pages nb: %U | Theoric max number of buddies: %U\n",
+            buddyCount, 
+            getMapping((VirtAddr)_buddyTable.levels[i].map, NULL), _buddyTable.levels[i].map, 
+            neededPages, _buddyTable.totalRAM >> (12 + i)
+        );
     }
     kputc('\n');
 }

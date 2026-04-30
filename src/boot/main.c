@@ -1,7 +1,6 @@
-#include <asm.h>
-
-#include <boot/bootInfo.h>
 #include <boot/efi/efi.h>
+#include <boot/bootInfo.h>
+#include <asm.h>
 #include <elf.h>
 #include <memTables.h>
 

@@ -47,7 +47,7 @@ static idt_entry_t _IDT[NUM_IDTE] __attribute__((aligned(4096)));
 #define PIC_IRQ_OFFSET  32
 
 inline void registerDump(const register_state_t *reg) {
-    kputs("\n  ---==== REGISTERS ====---\n");
+    kputs("\n  ---====  REGISTERS  ====---\n");
     kprintf("RAX = 0x%X | RBX = 0x%X\n", reg->rax, reg->rbx);
     kprintf("RCX = 0x%X | RDX = 0x%X\n", reg->rcx, reg->rdx);
     kprintf("RDI = 0x%X | RSI = 0x%X\n", reg->rdi, reg->rsi);
@@ -192,7 +192,7 @@ void interrupt_handler(interrupt_frame_t* context)
         kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
         kprintf("Caused at RIP=0x%X, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
         registerDump(&context->registers);
-        kputs("\n  ---=== STACK TRACE ===---\n");
+        kputs("\n  ---==== STACK TRACE ====---\n");
         {
             const char *symbol;
             uint64_t offset;
@@ -202,14 +202,19 @@ void interrupt_handler(interrupt_frame_t* context)
         uint64_t *rbp;
         __asm__ volatile ("movq %%rbp, %0" : "=r"(rbp) :: );
         print_stack_trace(*rbp);
-        kputs("\n  ---==== CODE DUMP ====---\n");
+        kputs("\n  ---====  CODE DUMP  ====---\n");
         if (context->err_code & 32) {
             kputs("Error due to code fetch; will not fetch code\n");
         } else {
-            for (unsigned i = 0; i < 20; i++) {
-                kprintf("%x ", ((uint8_t *)context->rip)[i]);
+            for (uint8_t i = 0; i < 10; i++) {
+                for (uint8_t j = 0; j < 16; j++) {
+                    uint8_t value = ((uint8_t *)context->rip)[i * 16 + j];
+                    kprintf(value < 16 ? "0%x " : "%x ", value);
+                }
+                kputc('\n');
             }
         }
+        kputc('\n');
         hlt();
         return;
 

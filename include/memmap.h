@@ -30,6 +30,7 @@ int mapPage(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags
 int unmapPage(VirtAddr virt, PhysAddr *phys);
 
 int reservePage(VirtAddr addr, PageType pageType);
+int sreservePage(VirtAddr addr, PageType pageType);
 int unReservePage(VirtAddr addr);
 
 #endif
