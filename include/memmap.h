@@ -32,5 +32,6 @@ int unmapPage(VirtAddr virt, PhysAddr *phys);
 int reservePage(VirtAddr addr, PageType pageType);
 int sreservePage(VirtAddr addr, PageType pageType);
 int unReservePage(VirtAddr addr);
+int unSReservePage(VirtAddr addr);
 
 #endif

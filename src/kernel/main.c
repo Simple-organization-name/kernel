@@ -16,9 +16,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
     if (kterminit(bootInfo, 1, 0)) CRIT_HLT();
     kfillscreen(0xFF000000);
 
-    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000, NULL);
+    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000UL, NULL);
     PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
-    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000, NULL);
+    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000UL, NULL);
     PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
 
     init_kdbg(&bootInfo->files->files[0]);

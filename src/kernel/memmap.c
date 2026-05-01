@@ -88,7 +88,7 @@ static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const 
         }
         if (targetType != curType) { // If the current level is not the targeted level
             if (!table[*i].present) { // If the page isn't present
-                found += 512 * (1<<(9 * (curType - targetType)));
+                found += 512 * (1UL<<(9 * (curType - targetType)));
             } else {
                 found = _findEmptyRangePageIdx(targetType, idx, count, curType + 1, curIdx, found); // Recurse in the next level
                 curIdx[curType + 1] = 0;
@@ -258,6 +258,30 @@ int reservePage(VirtAddr addr, PageType pageType)
 }
 
 int unReservePage(VirtAddr addr)
+{
+    uint16_t idx[4] = {
+        (addr >> 39) & 0x1FF,
+        (addr >> 30) & 0x1FF,
+        (addr >> 21) & 0x1FF,
+        (addr >> 12) & 0x1FF
+    };
+    if (PML4()[idx[0]].reserved) {
+        PML4()[idx[0]].whole = 0;
+        return 1;
+    } else if (PDPT(idx[0])[idx[1]].reserved) {
+        PDPT(idx[0])[idx[1]].whole = 0;
+        return 1;
+    } else if (PD(idx[0],idx[1])[idx[2]].reserved) {
+        PD(idx[0],idx[1])[idx[2]].whole = 0;
+        return 1;
+    } else if (PT(idx[0], idx[1], idx[2])[idx[3]].reserved) {
+        PT(idx[0], idx[1], idx[2])[idx[3]].whole = 0;
+        return 1;
+    }
+    return 0;
+}
+
+int unSReservePage(VirtAddr addr)
 {
     uint16_t idx[4] = {
         (addr >> 39) & 0x1FF,

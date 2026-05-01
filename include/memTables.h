@@ -50,7 +50,7 @@ typedef union _PageEntry {
 #define PTE_ADDR    (0x000FFFFFFFFFF000)
 
 #define MAKE_PAGE_ENTRY(addr, flags) ((uint64_t)(((uintptr_t)(addr) & PTE_ADDR) | PTE_P | ((uint64_t)(flags))))
-// Check if the slot in the table is available, i.e. not `PTE_P`, `PTE_R`, `PTE_SR` flags not toggled
+// Check if the slot in the table is available, i.e. `PTE_P`, `PTE_R`, `PTE_SR` flags not toggled
 #define PAGE_TABLE_SLOT_AVAILABLE(entry) (!((entry).present || (entry).sreserved || (entry).reserved))
 
 #endif
