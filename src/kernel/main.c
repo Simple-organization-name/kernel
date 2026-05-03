@@ -17,9 +17,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
     kfillscreen(0xFF000000);
 
     PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000UL, NULL);
-    PRINT_WARN("Kernel at 0x%X\n", kernelPhysAddr);
+    PRINT_DEBUG("Kernel at %p\n", kernelPhysAddr);
     PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000UL, NULL);
-    PRINT_WARN("Framebuffer at 0x%X\n\n", fbPhysAddr);
+    PRINT_DEBUG("Framebuffer at %p\n\n", fbPhysAddr);
 
     init_kdbg(&bootInfo->files->files[0]);
 
@@ -30,13 +30,14 @@ _Noreturn void kmain(BootInfo* bootInfo)
     printBuddyTableInfo();
 
     #define nb 100
+    PRINT_DEBUG("\nTest with %U pages (%UB)\n", nb, nb*(1<<12));
     __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
     if (test) {
         for (int i = 0; i < 1024*nb; i++) {
             test[i] = i;
             // kprintf("%d ", test[i]);
         }
-        kprintf("\ntest at: 0x%X\n", test);
+        PRINT_DEBUG("Test at: %p\n", test);
     } else PRINT_WARN("MSLQDKQSMLDK\n");
 
     kputs("\nHello from SOS kernel !\n");

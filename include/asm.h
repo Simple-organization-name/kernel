@@ -94,4 +94,10 @@ inline static uint64_t lzcnt64(uint64_t n) {
     return ret;
 }
 
+inline static void flushTLB() {
+    uint64_t cr3;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile("mov %0, %%cr3" :: "r"(cr3) : "memory");
+}
+
 #endif

@@ -5,5 +5,6 @@
 
 #define PRINT_ERR(format, ...)  kprintf("[ERROR][%s:%u] " format, __func__, __LINE__, ##__VA_ARGS__)
 #define PRINT_WARN(format, ...) kprintf("[WARNING][%s:%u] " format, __func__, __LINE__, ##__VA_ARGS__)
+#define PRINT_DEBUG(format, ...) kprintf("[DEBUG][%s:%u] " format, __func__, __LINE__, ##__VA_ARGS__)
 
 #endif

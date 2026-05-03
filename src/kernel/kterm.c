@@ -303,6 +303,11 @@ void kprintf(const char *format, ...) {
                             return;
                     }
                     break;
+                case 'p':
+                    uintptr_t lp = va_arg(args, uintptr_t);
+                    kputs("0x");
+                    kprinthex((uint64_t)lp);
+                    break;
                 case '%':
                     kputc('%');
                     break;

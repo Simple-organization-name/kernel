@@ -113,17 +113,17 @@ static size_t _findEmptyRangePageIdx(const uint8_t targetType, uint16_t * const 
  * \param curType The current type (recursion)
  */
 static size_t createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType) {
-    PRINT_WARN("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
+    // PRINT_DEBUG("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
     PageEntry * const table = getTable(curType, curIdx);
     const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     size_t reserved = 0;
     for (uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
-            // PRINT_WARN("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
+            // PRINT_DEBUG("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
             if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
             table[*i].reserved = 1;
             reserved++;
-            // PRINT_WARN("Reserved %U pages\n", reserved);
+            // PRINT_DEBUG("Reserved %U pages\n", reserved);
         } else {
             if (!table[*i].present) {
                 const PhysAddr phys = buddyAlloc(BUDDY_4K);
@@ -132,20 +132,13 @@ static size_t createNeededTable(const uint8_t targetType, uint16_t * const curId
                     PRINT_WARN("Failed to map new page\n"); // Memory map changed, range is not valid anymore
                     return 0;
                 }
-                // invlpg((uint64_t)VA_ARRAY(curIdx));
-                PRINT_WARN("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
-                PRINT_WARN("Testing new page...\n");
-                PageEntry * const test = getTable(curType + 1, curIdx);
-                uint64_t tmp = 0;
-                for (uint16_t _ = 0; _ < 512; _++) {
-                    tmp += test[_].present;
-                }
-                PRINT_WARN("Read test successful: read present: %U\n", tmp);
+                // flushTLB((uint64_t)VA_ARRAY(curIdx));
+                // PRINT_DEBUG("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
             }
-            PRINT_WARN("Recursive call\n");
+            // PRINT_DEBUG("Recursive call\n");
             reserved += createNeededTable(targetType, curIdx, count - reserved, curType + 1);
-            PRINT_WARN("End of recursive call\n");
-            // PRINT_WARN("Reserved %U pages\n", reserved);
+            // PRINT_DEBUG("End of recursive call\n");
+            // PRINT_DEBUG("Reserved %U pages\n", reserved);
             curIdx[curType + 1] = 0;
         }
 
@@ -195,12 +188,12 @@ inline int mapPage(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_
         return 0;
     }
     entry->whole = MAKE_PAGE_ENTRY(addr, flags);
-    invlpg((uint64_t)VA_ARRAY(idx));
+    flushTLB((uint64_t)VA_ARRAY(idx));
     return 1;
 }
 
-// return 0 if failed, 1 if unmapped a mapped physical page,
-// 2 if the address was only reserved but not mapped to an actual physical page
+// return 0 if failed, 2 if unmapped a mapped physical page,
+// 1 if the address was only reserved but not mapped to an actual physical page
 int unmapPage(VirtAddr virt, PhysAddr *phys) {
     uint16_t pml4_index = (virt >> 39) & 0x1FF;
     PageEntry *entry = PML4() + pml4_index;
@@ -222,10 +215,10 @@ int unmapPage(VirtAddr virt, PhysAddr *phys) {
     if (!entry->reserved && !entry->present) return 0;
 
 unmap:
-    *phys = entry->dest;
+    if (phys) *phys = entry->dest;
     bool wasPresent = entry->present;
     entry->whole = 0;
-    invlpg(virt);
+    flushTLB(virt);
     return 1 + wasPresent;
 }
 

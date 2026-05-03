@@ -148,33 +148,33 @@ void interrupt_handler(interrupt_frame_t* context)
     switch (context->int_no)
     {
     case 0x00:  // division error
-        kprintf("A division error has occured at RIP=0x%X.\n", context->rip);
+        kprintf("A division error has occured at RIP=%p.\n", context->rip);
         hlt();
         return;
     
     case 0x06:  // invalid opcode
-        kprintf("An invalid opcode was encountered at RIP=0x%X.\n", context->rip);
+        kprintf("An invalid opcode was encountered at RIP=%p.\n", context->rip);
         hlt();
         return;
 
     case 0x07:
-        kprintf("Tried to execute an FPU instruction while it was absent or disabled at RIP=0x%X.\n", context->rip);
+        kprintf("Tried to execute an FPU instruction while it was absent or disabled at RIP=%p.\n", context->rip);
         hlt();
         return;
 
     case 0x08:  // double fault
-        kprintf("A double fault has occured at RIP=0x%X.\n", context->rip);
+        kprintf("A double fault has occured at RIP=%p.\n", context->rip);
         kputs("Execution will be frozen to prevent an automatic reboot.\n");
         CRIT_HLT();
 
     case 0x0C: // Stack-Segment fault
-        kprintf("A stack-segment fault has occured at RIP=0x%X.\n", context->rip);
+        kprintf("A stack-segment fault has occured at RIP=%p.\n", context->rip);
         if (context->err_code != 0) kprintf("Related segment: %X\n", context->err_code);
         registerDump(&context->registers);
         return;
 
     case 0x0D:  // general protection fault
-        kprintf("A general protection fault was triggered at RIP=0x%x.\n", context->rip);
+        kprintf("A general protection fault was triggered at RIP=%p.\n", context->rip);
         if (context->err_code != 0) {
             kprintf("It was related to segment selector number %X.\n", context->err_code);
         }
@@ -188,16 +188,16 @@ void interrupt_handler(interrupt_frame_t* context)
             : "=r"(addr)
             :: "memory"
         );
-        kprintf("\nPage fault at address 0x%X, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
+        kprintf("\nPage fault at address %p, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
         kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
-        kprintf("Caused at RIP=0x%X, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
+        kprintf("Caused at RIP=%p, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
         registerDump(&context->registers);
         kputs("\n  ---==== STACK TRACE ====---\n");
         {
             const char *symbol;
             uint64_t offset;
             get_symbol_offset(context->rip, &symbol, &offset);
-            kprintf("RIP=0x%X => %s + 0x%X\n", context->rip, symbol, offset);
+            kprintf("RIP=%p => %s + 0x%X\n", context->rip, symbol, offset);
         }
         uint64_t *rbp;
         __asm__ volatile ("movq %%rbp, %0" : "=r"(rbp) :: );

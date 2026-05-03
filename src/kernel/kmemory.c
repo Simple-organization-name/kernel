@@ -40,7 +40,7 @@ void *memcpy(void * restrict dest, const void * restrict src, size_t n) {
     return dest;
 }
 
-static int isValidMem(MemoryDescriptor *desc) {
+int isValidMem(MemoryDescriptor *desc) {
     switch (desc->Type) {
         case EfiLoaderCode:
         case EfiLoaderData:
@@ -68,7 +68,7 @@ void printEFIMemMap(EfiMemMap *physMemMap) {
     kputs("----==== EfiMemMap ====----\n");
     for (uint64_t i = 0; i < physMemMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
-        kprintf("start: 0x%X, end: 0x%X, nb of pages: %U\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * 4096, desc->NumberOfPages);
+        kprintf("start: %p, end: %p, nb of pages: %U\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * 4096, desc->NumberOfPages);
     }
     kputs("----===================----\n\n");
 }
@@ -85,7 +85,7 @@ PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
             desc->NumberOfPages == 0 ||
             (i != iStart && end->PhysicalStart + end->NumberOfPages * 4096 != desc->PhysicalStart)
         ) { // Memory is not usable
-            // kprintf("end of range: 0x%X, current start : 0x%X\n", end->PhysicalStart + end->NumberOfPages * 4096, desc->PhysicalStart);
+            // kprintf("end of range: %p, current start : %p\n", end->PhysicalStart + end->NumberOfPages * 4096, desc->PhysicalStart);
             found = 0;
             iStart = iEnd = i + 1;
             continue;

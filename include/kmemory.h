@@ -43,6 +43,7 @@ void *memcpy(void * restrict dest, const void * restrict src, size_t n);
 
 uint64_t getTotalRAM(EfiMemMap *physMemMap);
 void printEFIMemMap(EfiMemMap *physMemMap);
+int isValidMem(MemoryDescriptor *desc);
 PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *map, size_t nbpages);
 
 #endif

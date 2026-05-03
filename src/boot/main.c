@@ -722,21 +722,19 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
 
     // this maps all of lower 1GiB by identity
     pdp_low[0].whole = MAKE_PAGE_ENTRY(0, PTE_RW | PTE_PS);
-
-    pdp_high[509].whole = MAKE_PAGE_ENTRY(pd_framebuffer, PTE_RW);
-    for (uint16_t i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
-        pd_framebuffer[i].whole = MAKE_PAGE_ENTRY(framebuffer.addr + (i<<21), PTE_RW | PTE_PS | PTE_PCD);
-
-    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_RW | PTE_G);
-
+    
+    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_RW | PTE_G);    
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
         EfiPrintError(-1, u"Bad kernel alignment (dev fault lmao)");
         return -1;
     }
-
     for (uint16_t i = 0; i < (kernel_size + (1<<21) - 1) >> 21; i++)
         pd_kernel[i].whole = MAKE_PAGE_ENTRY(kernel_pa + (i<<21), PTE_RW | PTE_PS);
+
+    pdp_high[509].whole = MAKE_PAGE_ENTRY(pd_framebuffer, PTE_RW);
+    for (uint16_t i = 0; i < (framebuffer.size + (1<<21) - 1) / (1<<21); i++)
+        pd_framebuffer[i].whole = MAKE_PAGE_ENTRY(framebuffer.addr + (i<<21), PTE_RW | PTE_PS | PTE_PCD);
 
     pdp_high[508].whole = MAKE_PAGE_ENTRY(pd_memManagement, PTE_RW | PTE_NX);
     pd_memManagement[511].whole = MAKE_PAGE_ENTRY(pt_temp, PTE_RW | PTE_NX);
