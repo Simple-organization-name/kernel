@@ -6,21 +6,17 @@
 #include <asm.h>
 #include <kerror.h>
 
-static atomic_flag kvmallocLock = ATOMIC_FLAG_INIT;
-
-inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
-    while (atomic_flag_test_and_set(&kvmallocLock)) { // Lock
-        __builtin_ia32_pause();
-    }
-
-    if (findEmptyRangePageIdx(PTE_PT, idx, nbPages) != nbPages) {
+void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
+    if (memmap_findRange(PTE_PT, idx, nbPages) != nbPages) {
         return NULL;
     }
+
     void *ptr = VA_ARRAY(idx);
+    PRINT_DEBUG("Address if successfully mapped: %p\n", ptr);
     for (size_t i = 0; i < nbPages; i++) {
-        PhysAddr phys = buddyAlloc(BUDDY_4K);
-        if (!mapPage(idx, PTE_PT, phys, PTE_RW | flags)) {
-            PRINT_ERR("Lock did not lock...\n");
+        PhysAddr phys = buddy_alloc(BUDDY_4K);
+        if (!memmap_map(idx, PTE_PT, phys, PTE_RW | flags)) {
+            PRINT_ERR("Failed to map page idx: {%u, %u, %u, %u}\n", idx[0], idx[1], idx[2], idx[3]);
             CRIT_HLT();
         }
         idx[3]++;
@@ -36,7 +32,6 @@ inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
         }
     }
 
-    atomic_flag_clear(&kvmallocLock); // Release
     return ptr;
 }
 
@@ -44,7 +39,7 @@ inline void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
  * Allocate memory
  * Maps physical pages to virtual memory
  */
-inline void *_kvmalloc(size_t nbPages, uint64_t flags) {
+void *_kvmalloc(size_t nbPages, uint64_t flags) {
     uint16_t idx[4] = {1, 0, 0, 0};
     return __kvmalloc(idx, nbPages, flags);
 }

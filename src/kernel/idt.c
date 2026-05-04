@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#include <idt.h>
+#include <IDT.h>
 #include <kterm.h>
 #include <kdbg.h>
 

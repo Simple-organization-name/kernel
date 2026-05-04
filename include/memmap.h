@@ -13,25 +13,19 @@ typedef enum _PageType {
     PTE_PT,     // PageTable:               4kiB
 } PageType;
 
-void clearPageTable(PhysAddr addr);
+void memmap_clearPage(PhysAddr addr);
 
-PhysAddr getMapping(VirtAddr virtual, uint8_t *pageLevel);
+PhysAddr memmap_getMapping(VirtAddr virtual, uint8_t *pageLevel);
 
-/**
- * Get an empty slot starting at indexes in idx
- * \param targetType The page type needed
- * \param idx An array of 4 `uint16_t` to store the indexes of the empty slot if found any
- * \return 1 if slot found, 0 else
- */
-int findEmptySlotPageIdx(uint8_t targetType, uint16_t *idx);
-size_t findEmptyRangePageIdx(uint8_t targetType, uint16_t *idx, size_t count);
+int memmap_findSlot(uint8_t targetType, uint16_t *idx);
+size_t memmap_findRange(uint8_t targetType, uint16_t *idx, size_t count);
 
-int mapPage(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
-int unmapPage(VirtAddr virt, PhysAddr *phys);
+int memmap_map(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
+int memmap_unmap(VirtAddr virt, PhysAddr *phys);
 
-int reservePage(VirtAddr addr, PageType pageType);
-int sreservePage(VirtAddr addr, PageType pageType);
-int unReservePage(VirtAddr addr);
-int unSReservePage(VirtAddr addr);
+int memmap_reserve(VirtAddr addr, PageType pageType);
+int memmap_sreserve(VirtAddr addr, PageType pageType);
+int memmap_unReserve(VirtAddr addr);
+int memmap_unSReserve(VirtAddr addr);
 
 #endif

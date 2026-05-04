@@ -42,9 +42,9 @@ typedef struct _BuddyTable {
 } BuddyTable;
 
 
-void initBuddy(EfiMemMap *physMemMap);
-PhysAddr buddyAlloc(uint8_t level);
-void buddyFree(uint8_t level, PhysAddr addr);
-void printBuddyTableInfo();
+void buddy_init(EfiMemMap *physMemMap);
+PhysAddr buddy_alloc(uint8_t level);
+void buddy_free(uint8_t level, PhysAddr addr);
+void buddy_printTable();
 
 #endif

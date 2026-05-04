@@ -1,6 +1,6 @@
 #include <attribute.h>
 #include <boot/bootInfo.h>
-#include <idt.h>
+#include <IDT.h>
 #include <kterm.h>
 #include <asm.h>
 #include <buddy.h>
@@ -16,9 +16,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
     if (kterminit(bootInfo, 1, 0)) CRIT_HLT();
     kfillscreen(0xFF000000);
 
-    PhysAddr kernelPhysAddr = getMapping(0xFFFFFF7F80000000UL, NULL);
+    PhysAddr kernelPhysAddr = memmap_getMapping(0xFFFFFF7F80000000UL, NULL);
     PRINT_DEBUG("Kernel at %p\n", kernelPhysAddr);
-    PhysAddr fbPhysAddr = getMapping(0xFFFFFF7F40000000UL, NULL);
+    PhysAddr fbPhysAddr = memmap_getMapping(0xFFFFFF7F40000000UL, NULL);
     PRINT_DEBUG("Framebuffer at %p\n\n", fbPhysAddr);
 
     init_kdbg(&bootInfo->files->files[0]);
@@ -26,11 +26,11 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // printEFIMemMap(bootInfo->memMap);
     // CRIT_HLT();
 
-    initBuddy(bootInfo->memMap);
-    printBuddyTableInfo();
+    buddy_init(bootInfo->memMap);
+    // buddy_printTable();
 
     #define nb 100
-    PRINT_DEBUG("\nTest with %U pages (%UB)\n", nb, nb*(1<<12));
+    PRINT_DEBUG("Test with %U pages (%UB)\n", nb, nb*(1<<12));
     __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
     if (test) {
         for (int i = 0; i < 1024*nb; i++) {
