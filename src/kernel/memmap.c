@@ -168,7 +168,7 @@ static size_t _findEmptyRange(const uint8_t targetType, uint16_t * const idx, co
  * \param curType The current type (recursion)
  */
 static size_t _createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType) {
-    // PRINT_DEBUG("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
+    PRINT_DEBUG("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
     PageEntry * const table = _getTable(curType, curIdx);
     const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
     size_t reserved = 0;
@@ -188,12 +188,12 @@ static size_t _createNeededTable(const uint8_t targetType, uint16_t * const curI
                     return 0;
                 }
                 // invlpg((uint64_t)VA_ARRAY(curIdx));
-                // PRINT_DEBUG("Mapped new table at idx: %u %u %u %u, pa: %X, va: %X, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
+                PRINT_DEBUG("Mapped new table at idx: %u %u %u %u, pa: %p, va: %p, type: %u\n", curIdx[0], curIdx[1], curIdx[2], curIdx[3], phys, VA_ARRAY(curIdx), curType);
             }
-            // PRINT_DEBUG("Recursive call\n");
+            PRINT_DEBUG("Recursive call\n");
             reserved += _createNeededTable(targetType, curIdx, count - reserved, curType + 1);
-            // PRINT_DEBUG("End of recursive call\n");
-            // PRINT_DEBUG("Reserved %U pages\n", reserved);
+            PRINT_DEBUG("End of recursive call\n");
+            PRINT_DEBUG("Reserved %U pages\n", reserved);
             curIdx[curType + 1] = 0;
         }
 
@@ -308,10 +308,9 @@ static int _memmap_unSReserve(VirtAddr addr)
 }
 
 void memmap_clearPage(const PhysAddr addr) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     _memmap_clearPage(addr);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
 }
 
 /**
@@ -321,10 +320,9 @@ void memmap_clearPage(const PhysAddr addr) {
  * \return 1 if slot found, 0 else
  */
 int memmap_findSlot(uint8_t targetType, uint16_t * const idx) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int found = _findEmptySlot(targetType, idx, PTE_PML4);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return found;
 }
 
@@ -337,15 +335,16 @@ int memmap_findSlot(uint8_t targetType, uint16_t * const idx) {
 size_t memmap_findRange(const uint8_t targetType, uint16_t *idx, const size_t count) {
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
+    PRINT_DEBUG("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
 
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     const size_t found = _findEmptyRange(targetType, idx, count, PTE_PML4, curIdx, 0);
     // PRINT_WARN("found: %U, at: %u %u %u %u\n", found, curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     if (found < count) {
-        LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+        LOCK_RELEASE(&_memmapLock);
         return 0;
     }
+    PRINT_DEBUG("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
 
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     const size_t mappedPages = _createNeededTable(targetType, curIdx, count, 0);
@@ -353,11 +352,12 @@ size_t memmap_findRange(const uint8_t targetType, uint16_t *idx, const size_t co
     // PRINT_WARN("mapped pages: %U\n", mappedPages);
     if (mappedPages != count) {
         // TODO: NEED TO CLEAR THE RESERVED FLAGS OF THE ALREADY MAPPED PAGES
-        LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+        LOCK_RELEASE(&_memmapLock);
         return 0;
     }
-
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
+    
+    PRINT_DEBUG("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     return count;
 }
 
@@ -370,57 +370,50 @@ size_t memmap_findRange(const uint8_t targetType, uint16_t *idx, const size_t co
  * \return 1 if success, 0 if there were already a mapped page (`PTE_P`)
  */
 int memmap_map(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_map(idx, pageType, addr, flags);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return status;
 }
 
 int memmap_unmap(VirtAddr virt, PhysAddr *phys) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_unmap(virt, phys);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return status;
 }
 
 int memmap_reserve(VirtAddr addr, PageType pageType) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_reserve(addr, pageType);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return status;
 }
 
 int memmap_sreserve(VirtAddr addr, PageType pageType) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_sreserve(addr, pageType);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return status;
 }
 
 int memmap_unReserve(VirtAddr addr) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_unReserve(addr);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return status;
 }
 
 int memmap_unSReserve(VirtAddr addr) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_unSReserve(addr);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return status;
 }
 
 PhysAddr memmap_getMapping(VirtAddr virtual, uint8_t *pageLevel) {
-    uint64_t irq_state;
-    LOCK_SPINLOCK_IRQSAVE(&_memmapLock, irq_state);
+    LOCK_SPINLOCK(&_memmapLock);
     PhysAddr addr = _memmap_getMapping(virtual, pageLevel);
-    LOCK_RELEASE_IRQRESTORE(&_memmapLock, irq_state);
+    LOCK_RELEASE(&_memmapLock);
     return addr;
 }

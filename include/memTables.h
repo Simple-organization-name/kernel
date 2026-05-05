@@ -43,8 +43,8 @@ typedef union _PageEntry {
 #define PTE_G       (1ULL<<8)   // global
 
 // custom bits
-#   define PTE_SR   (1ULL<<9) | (1ULL<<10)  // special/system reserved
-#   define PTE_R    (1ULL<<10)              // reserved
+#   define PTE_SR   (1ULL<<9)   // special/system reserved
+#   define PTE_R    (1ULL<<10)  // reserved
 
 #define PTE_NX      (1ULL<<63)  // not exec
 #define PTE_ADDR    (0x000FFFFFFFFFF000)

@@ -29,7 +29,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     buddy_init(bootInfo->memMap);
     // buddy_printTable();
 
-    #define nb 100
+    #define nb 5000
     PRINT_DEBUG("Test with %U pages (%UB)\n", nb, nb*(1<<12));
     __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
     if (test) {
