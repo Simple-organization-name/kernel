@@ -17,7 +17,7 @@ static kernel_lock _buddyLock = LOCK_INIT;
 static BuddyTable   _buddyTable = {0};
 static PhysAddr     _reservedBuddyForReplenishing = 0; // Yep
 
-static PhysAddr _buddyTransfer(Buddy **src, Buddy **dest);
+static PhysAddr _buddyTransfer(Buddy * restrict * restrict src, Buddy * restrict * restrict dest);
 static void     _initBuddyChainedList(Buddy *buf);
 static Buddy    *_grabUsableBuddy(BuddyTable *src);
 static Buddy    *_grabAssociatedBuddy(uint8_t level, PhysAddr addr);
@@ -25,7 +25,7 @@ static PhysAddr _buddy_alloc(uint8_t level);
 static void     _buddy_free(uint8_t level, PhysAddr addr);
 
 
-static PhysAddr _buddyTransfer(Buddy **src, Buddy **dest) {
+static PhysAddr _buddyTransfer(Buddy * restrict * restrict src, Buddy * restrict * restrict dest) {
     if (!src || !*src) return ADDR_MAX;
     Buddy *tmp = *src;
     *src = (*src)->next;
@@ -294,7 +294,7 @@ void buddy_printTable() {
     kprintf("\n   ----==== Buddy Table infos ====----   \n");
     for (uint8_t i = 0; i < BUDDY_MAX_ORDER; i++) {
         kprintf("Level %u informations: \n", i);
-        volatile uint64_t buddyCount = 0;
+        uint64_t buddyCount = 0;
         for (Buddy *bud = _buddyTable.levels[i].list; bud; bud = bud->next) buddyCount++;
         uint64_t neededPages = (_buddyTable.totalRAM >> (
             12 +    // group ram bytes by page

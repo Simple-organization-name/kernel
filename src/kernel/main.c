@@ -23,7 +23,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
 
     init_kdbg(&bootInfo->files->files[0]);
 
-    // printEFIMemMap(bootInfo->memMap);
+    printEFIMemMap(bootInfo->memMap);
     // CRIT_HLT();
 
     buddy_init(bootInfo->memMap);

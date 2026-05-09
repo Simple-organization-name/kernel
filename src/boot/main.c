@@ -17,8 +17,8 @@
 
 #define STATUS_TO_STRING(status, buffer, bufferSize) intToString(status^(1ULL<<63), buffer, bufferSize)
 
-#define KERNEL_VA       0xFFFFFF7F80000000UL
-#define FRAMEBUFFER_VA  0xFFFFFF7F40000000UL
+#define KERNEL_VA       0xFFFFFF7F80000000ULL
+#define FRAMEBUFFER_VA  0xFFFFFF7F40000000ULL
 
 // Global variables passed to kernel
 static Framebuffer framebuffer = {0};

@@ -68,7 +68,7 @@ void printEFIMemMap(EfiMemMap *physMemMap) {
     kputs("----==== EfiMemMap ====----\n");
     for (uint64_t i = 0; i < physMemMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
-        kprintf("start: %p, end: %p, nb of pages: %U\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * 4096, desc->NumberOfPages);
+        kprintf("start: %p, end: %p, nb of pages: %U, type: %u\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * 4096, desc->NumberOfPages, desc->Type);
     }
     kputs("----===================----\n\n");
 }
