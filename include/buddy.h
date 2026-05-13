@@ -11,7 +11,7 @@
 
 #define BUDDY_IDX_BLOCK_SIZE(n) ((size_t)(1UL << (12 + (n))))
 
-typedef enum _BuddyType {
+typedef enum _BuddyType : uint8_t {
     BUDDY_4K = 0,
     BUDDY_8K,
     BUDDY_16K,

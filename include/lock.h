@@ -4,7 +4,7 @@
 #include <stdatomic.h>
 #include <kerror.h>
 
-typedef atomic_flag kernel_lock;
+typedef volatile atomic_flag kernel_lock;
 
 #define LOCK_INIT ATOMIC_FLAG_INIT
 

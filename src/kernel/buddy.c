@@ -279,6 +279,7 @@ PhysAddr buddy_alloc(uint8_t level) {
     uint64_t irq_state;
     LOCK_SPINLOCK_IRQSAVE(&_buddyLock, irq_state);
     PhysAddr addr = _buddy_alloc(level);
+    PRINT_DEBUG("Buddy alloc: %p\n", addr);
     LOCK_RELEASE_IRQRESTORE(&_buddyLock, irq_state);
     return addr;
 }
@@ -312,4 +313,17 @@ void buddy_printTable() {
         );
     }
     kputc('\n');
+}
+
+int buddy_addrAvl(PhysAddr addr, BuddyType type) {
+    LOCK_SPINLOCK(&_buddyLock);
+    Buddy *bud = _buddyTable.levels[type].list;
+    while (bud) {
+        if (bud->start <= addr && addr <= bud->start + (1 << (12 + type)))
+            return 1;
+
+        bud = bud->next;
+    }
+    LOCK_RELEASE(&_buddyLock);
+    return 0;
 }

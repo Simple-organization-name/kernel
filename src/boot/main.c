@@ -77,7 +77,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     // Open root
     EfiPrint(u"Getting root directory...\r\n");
-    status = openRootDir(&root);
+    status = openRootDir();
     if (EFI_ERROR(status)) {
         EfiPrintAttr(u"Failed to open root dir\r\n", EFI_MAGENTA);
         cli();
@@ -86,7 +86,7 @@ EFI_STATUS EfiMain(EFI_HANDLE _imageHandle, EFI_SYSTEM_TABLE *_systemTable) {
 
     // Create log file
     EfiPrint(u"Creating log file...\r\n");
-    status = createLogFile(root, &logFile);
+    status = createLogFile();
     if (EFI_ERROR(status)) EfiPrintAttr(u"Failed to create log file\r\n", EFI_MAGENTA);
     else EfiPrintAttr(u"Log file successfully created !\r\n", EFI_CYAN);
 

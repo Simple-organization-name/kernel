@@ -174,7 +174,7 @@ static size_t _createNeededTable(const uint8_t targetType, uint16_t * const curI
     size_t reserved = 0;
     for (uint16_t *i = &curIdx[curType]; *i < maxIdx; ++*i) {
         if (curType == targetType) {
-            // PRINT_DEBUG("i: %u, &table[*i]: %X\n", *i, &table[*i]); // Page fault here: table[*i] not present
+            // PRINT_DEBUG("i: %u, &table[*i]: %X\n", *i, &table[*i]);
             if (table[*i].present) return 0; // Memory map changed, range is not valid anymore
             table[*i].reserved = 1;
             reserved++;

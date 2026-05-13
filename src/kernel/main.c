@@ -32,7 +32,7 @@ _Noreturn void kmain(BootInfo* bootInfo)
     #define nb 5000
     PRINT_DEBUG("Test with %U pages (%UB)\n", nb, nb*(1<<12));
     __attribute_maybe_unused__ uint64_t *test = kvmalloc(nb, 0);
-    PRINT_DEBUG("c");
+    PRINT_DEBUG("c\n");
     if (test) {
         for (uint64_t i = 0; i < ((1<<12)*nb) / sizeof(uint64_t); i++) {
             test[i] = i;

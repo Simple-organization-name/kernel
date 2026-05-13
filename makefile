@@ -3,12 +3,12 @@ BOOT_NAME				= BOOTX64.EFI
 ISO_ENTRY				= EFI/BOOT/$(BOOT_NAME)
 
 BOOT_CC 				= x86_64-w64-mingw32-gcc
-BOOT_CFLAGS 			= -std=c17 -ffreestanding -fno-stack-protector -m64 -nostdlib \
+BOOT_CFLAGS 			= -std=c23 -ffreestanding -fno-stack-protector -m64 -nostdlib \
 						-fno-stack-check -maccumulate-outgoing-args -fpic -fshort-wchar -mno-red-zone \
 						-Wall -Wextra -Werror -I include -Wl,--subsystem,10 -e EfiMain -O2 -nostartfiles
 
 KERNEL_CC				= gcc
-KERNEL_CFLAGS			= -std=c17 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
+KERNEL_CFLAGS			= -std=c23 -ffreestanding -pie -fPIE -m64 -mno-red-zone -Wall -Wextra -Werror -nostdlib \
 						-I include -nostartfiles -fno-stack-protector -fno-builtin \
 						-DPRINT_SERIAL -DDEBUG
 KERNEL_CFLAGS_OPTI		= -O2 #-LTO
@@ -20,7 +20,7 @@ KERNEL_ASMFLAGS 		= -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror
 KERNEL					= kernel
 
 OVMF_PATH 				= OVMF.fd
-EMUL_ARGS				= -net none -serial file:serial.log -no-reboot -no-shutdown -d guest_errors -cpu host -enable-kvm # -d int 2> stderr.log
+EMUL_ARGS				= -net none -serial file:serial.log -no-reboot -no-shutdown -d guest_errors #-cpu host #-enable-kvm # -d int 2> stderr.log
 
 KERNEL_SOURCES_ASM 		= $(wildcard src/kernel/*.asm)
 KERNEL_OBJECTS_ASM 		= $(patsubst src/kernel/%.asm,build/kernel/%.o,$(KERNEL_SOURCES_ASM))
