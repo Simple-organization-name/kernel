@@ -25,19 +25,19 @@ static Bmft     *font;
 static uint16_t scale;
 
 // Put a pixel at a real position
-void kputpixel(uint32_t color, uint16_t x, uint16_t y) {
+inline void kputpixel(uint32_t color, uint16_t x, uint16_t y) {
     cursor.screen[y * (cursor.s_pitch) + x] = color;
 }
 
 // Put a pixel at a virtual position
-void kvputpixel(uint32_t color, uint16_t x, uint16_t y) {
+inline void kvputpixel(uint32_t color, uint16_t x, uint16_t y) {
     for (uint16_t i = 0; i < scale; i++)
     for (uint16_t j = 0; j < scale; j++)
         kputpixel(color, x * scale + i, y * scale + j);
 }
 
 // Put the cursor at a real position
-inline static void setcursor(uint16_t x, uint16_t y) {
+inline void ksetcursor(uint16_t x, uint16_t y) {
     cursor.x = x;
     cursor.y = y;
     cursor.vx = x / scale;
@@ -45,7 +45,7 @@ inline static void setcursor(uint16_t x, uint16_t y) {
 }
 
 // Put the cursor at a virtual position
-inline static void setvcursor(uint16_t x, uint16_t y) {
+inline void ksetvcursor(uint16_t x, uint16_t y) {
     cursor.x = x * scale;
     cursor.y = y * scale;
     cursor.vx = x;
@@ -53,25 +53,25 @@ inline static void setvcursor(uint16_t x, uint16_t y) {
 }
 
 // Set the x coordinate of the real cursor
-inline static void setcursorx(uint16_t x) {
+inline void ksetcursorx(uint16_t x) {
     cursor.x = x;
     cursor.vx = x / scale;
 }
 
 // Set the x coordinate of the virtual cursor
-inline static void setvcursorx(uint16_t x) {
+inline void ksetvcursorx(uint16_t x) {
     cursor.x = x * scale;
     cursor.vx = x;
 }
 
 // Set the y coordinate of the real cursor
-inline static void setcursory(uint16_t y) {
+inline void ksetcursory(uint16_t y) {
     cursor.y = y;
     cursor.vy = y / scale;
 }
 
 // Set the y coordinate of the virtual cursor
-inline static void setvcursory(uint16_t y) {
+inline void ksetvcursory(uint16_t y) {
     cursor.y = y * scale;
     cursor.vy = y;
 }
@@ -144,8 +144,8 @@ void knewline()
         }
         kclearline();
     }
-    else setcursory(cursor.y + cursor.height);
-    setcursorx(0);
+    else ksetcursory(cursor.y + cursor.height);
+    ksetcursorx(0);
 }
 
 #ifdef PRINT_SERIAL
@@ -165,14 +165,14 @@ void kputc(unsigned char chr)
             knewline();
             break;
         case '\r':  // carriage return
-            setcursorx(0);
+            ksetcursorx(0);
             break;
         case '\t':  // horz tab
-            setcursorx(cursor.x + 4 * cursor.width);
+            ksetcursorx(cursor.x + 4 * cursor.width);
             break;
         case '\b':  // backspace
             if (cursor.x == 0) break;
-            setcursorx(cursor.x - cursor.width);
+            ksetcursorx(cursor.x - cursor.width);
             for (uint32_t i = 0; i < cursor.width; i++)
             for (uint32_t j = 0; j < cursor.height; j++)
                 kputpixel(0xFF000000, cursor.x + i, cursor.y + j);
@@ -181,7 +181,7 @@ void kputc(unsigned char chr)
             kfillscreen(0xFFFF0000);
             break;
         default:
-            setcursorx(cursor.x + cursor.width);
+            ksetcursorx(cursor.x + cursor.width);
             break;
         }
     } else {
@@ -202,7 +202,7 @@ void kputc(unsigned char chr)
             }
             kvputpixel(pixel ? 0xFFFFFFFF : 0, cursor.vx + x, cursor.vy + y);
         }
-        setcursorx(cursor.x + cursor.width);
+        ksetcursorx(cursor.x + cursor.width);
     }
 }
 

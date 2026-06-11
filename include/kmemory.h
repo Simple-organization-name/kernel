@@ -31,6 +31,13 @@
 )
 #define VA_ARRAY(arr) VA((arr)[0], (arr)[1], (arr)[2], (arr)[3])
 
+typedef enum _PageType: uint8_t {
+    PTE_PML4 = 0,
+    PTE_PDP,    // PageDirectoryPointer:    1GiB
+    PTE_PD,     // PageDirectory:           2MiB
+    PTE_PT,     // PageTable:               4kiB
+} PageType;
+
 // Address types
 #define PHYSICAL
 #define VIRTUAL
@@ -44,6 +51,6 @@ void *memcpy(void * restrict dest, const void * restrict src, size_t n);
 uint64_t getTotalRAM(EfiMemMap *physMemMap);
 void printEFIMemMap(EfiMemMap *physMemMap);
 int isValidMem(MemoryDescriptor *desc);
-PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *map, size_t nbpages);
+PhysAddr _getPagesFromEFIMemMap(EfiMemMap *map, size_t nbpages);
 
 #endif

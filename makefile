@@ -74,7 +74,7 @@ emul:
 
 setup-ubuntu:
 	sudo apt update && sudo apt upgrade
-	sudo apt install xorriso qemu-system gcc-mingw-w64
+	sudo apt install xorriso qemu-system gcc-mingw-w64 nasm
 
 setup-arch:
 	sudo pacman -Syu
@@ -82,6 +82,6 @@ setup-arch:
 
 setup-msys:
 	pacman -Syu
-	pacman -S xorriso mingw-w64-x86_64-qemu mingw-w64-x86_64-gcc
+	pacman -S xorriso mingw-w64-x86_64-qemu mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm
 
 .PHONY: all emul setup kernel iso bootloader initBootDir

@@ -32,7 +32,7 @@ void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
         }
         // kprintf("next idx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3]);
         if (idx[0] >= 511) {
-            PRINT_ERR("Found range exceeds PML4[511] ???\n");    
+            PRINT_ERR("Found range exceeds PML4[511] ???\n");
             CRIT_HLT();
         }
         // PRINT_DEBUG("a\n");

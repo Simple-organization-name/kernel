@@ -29,19 +29,28 @@ _Noreturn void kmain(BootInfo* bootInfo)
     buddy_init(bootInfo->memMap);
     // buddy_printTable();
 
+    printEFIMemMap(bootInfo->memMap);
+    memmap_printMapping();
+
     #define nb 5000
     PRINT_DEBUG("Test with %U pages (%UB)\n", nb, nb*(1<<12));
-    __attribute_maybe_unused__ uint64_t *test = kvmalloc(nb, 0);
+    __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
     PRINT_DEBUG("c\n");
+
+    memmap_printMapping();
+
     if (test) {
-        for (uint64_t i = 0; i < ((1<<12)*nb) / sizeof(uint64_t); i++) {
-            test[i] = i;
+        for (uint64_t i = 0; i < ((1<<12)*nb) / sizeof(int); i++) {
             if (i % (1<<10) == 0 && (VirtAddr)(test + i) > 0x8000BF4000)
-                PRINT_DEBUG("va: %p, pa: %p\n", test + i, memmap_getMapping((VirtAddr)test + i, NULL));
+                PRINT_DEBUG("va: %p, pa: %p, val: %x\n", test + i, memmap_getMapping((VirtAddr)(test + i), NULL), test[i]);
+            test[i] = i;
+
+            if (i % (1<<10) == 0 && (VirtAddr)(test + i) > 0x8000BF4000)
+                PRINT_DEBUG("va: %p, pa: %p, val: %x\n", test + i, memmap_getMapping((VirtAddr)(test + i), NULL), test[i]);
             // kprintf("%d ", test[i]);
         }
         PRINT_DEBUG("Test at: %p\n", test);
-    } else PRINT_WARN("MSLQDKQSMLDK\n");
+    } else PRINT_WARN("Failed to get memory from kvmalloc\n");
 
     kputs("\nHello from SOS kernel !\n");
 

@@ -8,13 +8,13 @@
 static kernel_lock  _memmapLock = LOCK_INIT;
 
 static PageEntry    *_getTable(const PageType type, const uint16_t * const idx);
-static int          _memmap_map(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags);
+static int          _memmap_map(const uint16_t *idx, PageType pageType, PhysAddr addr, uint64_t flags);
 static int          _memmap_unmap(VirtAddr virt, PhysAddr *phys);
 static void         _memmap_clearPage(const PhysAddr addr);
-static int          _findEmptySlot(const uint8_t targetType, uint16_t * const idx, const uint8_t curType);
-static size_t       _findEmptyRange(const uint8_t targetType, uint16_t * const idx, const size_t count, const uint8_t curType, uint16_t * const curIdx, size_t found);
-static size_t       _createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType);
-static PhysAddr     _memmap_getMapping(VirtAddr virtual, uint8_t *pageLevel);
+static int          _findEmptySlot(const PageType targetType, uint16_t * const idx, const PageType curType);
+static size_t       _findEmptyRange(const PageType targetType, uint16_t * const idx, const size_t count, const PageType curType, uint16_t * const curIdx, size_t found);
+static size_t       _createNeededTable(const PageType targetType, uint16_t * const curIdx, const size_t count, const PageType curType);
+static PhysAddr     _memmap_getMapping(VirtAddr virtual, PageType *pageLevel);
 static int          _memmap_reserve(VirtAddr addr, PageType pageType);
 static int          _memmap_sreserve(VirtAddr addr, PageType pageType);
 static int          _memmap_unReserve(VirtAddr addr);
@@ -43,7 +43,7 @@ static PageEntry *_getTable(const PageType type, const uint16_t * const idx) {
     return table;
 }
 
-static int _memmap_map(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
+static int _memmap_map(const uint16_t *idx, PageType pageType, PhysAddr addr, uint64_t flags) {
     PageEntry *table = _getTable(pageType, idx);
     PageEntry *entry = &table[idx[pageType]];
     if (entry->present) {
@@ -93,7 +93,7 @@ static void _memmap_clearPage(const PhysAddr addr) {
     _memmap_unmap(virt, NULL);
 }
 
-static int _findEmptySlot(const uint8_t targetType, uint16_t * const idx, const uint8_t curType) {
+static int _findEmptySlot(const PageType targetType, uint16_t * const idx, const PageType curType) {
     PageEntry * const table = _getTable(curType, idx);
 
     for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 511 : 512); i++) {
@@ -121,7 +121,7 @@ static int _findEmptySlot(const uint8_t targetType, uint16_t * const idx, const 
     return 0;
 }
 
-static size_t _findEmptyRange(const uint8_t targetType, uint16_t * const idx, const size_t count, const uint8_t curType, uint16_t * const curIdx, size_t found) {
+static size_t _findEmptyRange(const PageType targetType, uint16_t * const idx, const size_t count, const PageType curType, uint16_t * const curIdx, size_t found) {
     // Get the page table associated with the current type at the current index in the paging
     PageEntry * const table = _getTable(curType, curIdx);
 
@@ -167,7 +167,7 @@ static size_t _findEmptyRange(const uint8_t targetType, uint16_t * const idx, co
  * \param count The number of pages wanted by the caller
  * \param curType The current type (recursion)
  */
-static size_t _createNeededTable(const uint8_t targetType, uint16_t * const curIdx, const size_t count, const uint8_t curType) {
+static size_t _createNeededTable(const PageType targetType, uint16_t * const curIdx, const size_t count, const PageType curType) {
     PRINT_DEBUG("Called with targetType: %u, curIdx: {%u %u %u %u}, count: %U, curType: %u\n", targetType, curIdx[0], curIdx[1], curIdx[2], curIdx[3], count, curType);
     PageEntry * const table = _getTable(curType, curIdx);
     const uint16_t maxIdx = curType == PTE_PML4 ? 511 : 512;
@@ -203,7 +203,7 @@ static size_t _createNeededTable(const uint8_t targetType, uint16_t * const curI
     return reserved;
 }
 
-static PhysAddr _memmap_getMapping(VirtAddr virtual, uint8_t *pageLevel) {
+static PhysAddr _memmap_getMapping(VirtAddr virtual, PageType *pageLevel) {
     uint16_t pml4_index = (virtual >> 39) & 0x1FF;
     PageEntry entry = PML4()[pml4_index];
     if (!entry.present) return -1;
@@ -307,6 +307,43 @@ static int _memmap_unSReserve(VirtAddr addr)
     return 0;
 }
 
+const char *_pageTypeToStr(PageType type) {
+    switch (type) {
+        case PTE_PML4: return "PML4";
+        case PTE_PDP: return "PDPT";
+        case PTE_PD: return "PD";
+        case PTE_PT: return "PT";
+    }
+    return "";
+}
+
+static void _printMapping(uint16_t *idx, PageType type) {
+    PageEntry *table = _getTable(type, idx);
+    for (idx[type] = 0; idx[type] < 512; idx[type]++) {
+        PageEntry *entry = &table[idx[type]];
+        if (!entry->present) continue;
+        for (uint8_t i = 0; i < type * 4; i++) kputc(' ');
+        kprintf(
+            "[%s (%u)] idx: {%u, %u, %u, %u} | RW: %u | PS: %u | G: %u | SR/R: %u/%u | NX: %u | va: %p, pa: %p\n",
+            _pageTypeToStr(type), type, idx[0], idx[1], idx[2], idx[3],
+            entry->rw, entry->pageSize, entry->global, entry->sreserved, entry->reserved, entry->xd,
+            VA_ARRAY(idx), entry->dest << 12
+        );
+        if (type != PTE_PT && !entry->pageSize) {
+            _printMapping(idx, type + 1);
+            for (PageType i = type + 1; i <= PTE_PT; i++)
+                idx[i] = 0;
+        }
+    }
+}
+
+void memmap_printMapping() {
+    kprintf("  ---==== Mapping ====---\n");
+    uint16_t idx[4] = {0};
+    _printMapping(idx, 0);
+    kprintf("  ---=================---\n\n");
+}
+
 void memmap_clearPage(const PhysAddr addr) {
     LOCK_SPINLOCK(&_memmapLock);
     _memmap_clearPage(addr);
@@ -319,7 +356,7 @@ void memmap_clearPage(const PhysAddr addr) {
  * \param idx An array of 4 `uint16_t` to store the indexes of the empty slot if found any
  * \return 1 if slot found, 0 else
  */
-int memmap_findSlot(uint8_t targetType, uint16_t * const idx) {
+int memmap_findSlot(PageType targetType, uint16_t * const idx) {
     LOCK_SPINLOCK(&_memmapLock);
     int found = _findEmptySlot(targetType, idx, PTE_PML4);
     LOCK_RELEASE(&_memmapLock);
@@ -332,7 +369,7 @@ int memmap_findSlot(uint8_t targetType, uint16_t * const idx) {
  * \param count The number of pages needed
  * \return The number of pages if successful, 0 else
  */
-size_t memmap_findRange(const uint8_t targetType, uint16_t *idx, const size_t count) {
+size_t memmap_findRange(const PageType targetType, uint16_t *idx, const size_t count) {
     uint16_t curIdx[4];
     memcpy(curIdx, idx, sizeof(uint16_t) * 4);
     PRINT_DEBUG("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
@@ -356,7 +393,7 @@ size_t memmap_findRange(const uint8_t targetType, uint16_t *idx, const size_t co
         return 0;
     }
     LOCK_RELEASE(&_memmapLock);
-    
+
     PRINT_DEBUG("idx: %u %u %u %u, curIdx: %u %u %u %u\n", idx[0], idx[1], idx[2], idx[3], curIdx[0], curIdx[1], curIdx[2], curIdx[3]);
     return count;
 }
@@ -369,7 +406,7 @@ size_t memmap_findRange(const uint8_t targetType, uint16_t *idx, const size_t co
  * \param flags The flags to be used for the mapping, see `memTables.h`
  * \return 1 if success, 0 if there were already a mapped page (`PTE_P`)
  */
-int memmap_map(const uint16_t *idx, uint8_t pageType, PhysAddr addr, uint64_t flags) {
+int memmap_map(const uint16_t *idx, PageType pageType, PhysAddr addr, uint64_t flags) {
     LOCK_SPINLOCK(&_memmapLock);
     int status = _memmap_map(idx, pageType, addr, flags);
     LOCK_RELEASE(&_memmapLock);
@@ -411,7 +448,7 @@ int memmap_unSReserve(VirtAddr addr) {
     return status;
 }
 
-PhysAddr memmap_getMapping(VirtAddr virtual, uint8_t *pageLevel) {
+PhysAddr memmap_getMapping(VirtAddr virtual, PageType *pageLevel) {
     LOCK_SPINLOCK(&_memmapLock);
     PhysAddr addr = _memmap_getMapping(virtual, pageLevel);
     LOCK_RELEASE(&_memmapLock);

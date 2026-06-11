@@ -167,7 +167,7 @@ static void initBuddyMap(EfiMemMap *map) {
                     PRINT_ERR("ERRM THIS SHOULDN'T HAPPEN\n");
                     CRIT_HLT();
                 } else {
-                    PhysAddr physPage = _getPhysMemoryFromEFIMemMap(map, 1);
+                    PhysAddr physPage = _getPagesFromEFIMemMap(map, 1);
                     if (physPage == ADDR_MAX) {
                         PRINT_ERR("Failed to get memory for buddy map\n");
                         CRIT_HLT();
@@ -184,7 +184,7 @@ static void initBuddyMap(EfiMemMap *map) {
             }
 
             // Map a physical page
-            PhysAddr page = _getPhysMemoryFromEFIMemMap(map, 1);
+            PhysAddr page = _getPagesFromEFIMemMap(map, 1);
             if (page == ADDR_MAX) {
                 PRINT_ERR("Faild to get memory for buddy map\n");
                 CRIT_HLT();
@@ -194,7 +194,7 @@ static void initBuddyMap(EfiMemMap *map) {
                 PRINT_ERR("welp");
                 CRIT_HLT();
             }
-            
+
             if (i == 0) {
                 // ((PageEntry *)PT(510, 508, pdIdx))[ptIdx].whole = MAKE_PAGE_ENTRY(page, PTE_RW | PTE_NX);
                 uint64_t *addr = VA(510, 508, pdIdx, ptIdx);
@@ -226,7 +226,7 @@ void buddy_init(EfiMemMap *physMemMap) {
     _buddyTable.totalRAM = totalRAM;
 
     // Get memory to make usable buddies
-    PhysAddr memoryChunk = _getPhysMemoryFromEFIMemMap(physMemMap, 1U<<(21 - 12));
+    PhysAddr memoryChunk = _getPagesFromEFIMemMap(physMemMap, 1U<<(21 - 12));
     const uint16_t idx[] = {510, 508, 0, 0};
     if (!memmap_map(idx, PTE_PD, memoryChunk, PTE_RW | PTE_PS | PTE_NX)) {
         PRINT_ERR("welp");
@@ -279,7 +279,6 @@ PhysAddr buddy_alloc(uint8_t level) {
     uint64_t irq_state;
     LOCK_SPINLOCK_IRQSAVE(&_buddyLock, irq_state);
     PhysAddr addr = _buddy_alloc(level);
-    PRINT_DEBUG("Buddy alloc: %p\n", addr);
     LOCK_RELEASE_IRQRESTORE(&_buddyLock, irq_state);
     return addr;
 }
@@ -307,8 +306,8 @@ void buddy_printTable() {
         kprintf(
             "   Number of buddies: %U | Map start: [pa: %p, va: %p]\n"
             "   Theoric needed 4K pages nb: %U | Theoric max number of buddies: %U\n",
-            buddyCount, 
-            memmap_getMapping((VirtAddr)_buddyTable.levels[i].map, NULL), _buddyTable.levels[i].map, 
+            buddyCount,
+            memmap_getMapping((VirtAddr)_buddyTable.levels[i].map, NULL), _buddyTable.levels[i].map,
             neededPages, _buddyTable.totalRAM >> (12 + i)
         );
     }

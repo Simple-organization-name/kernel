@@ -74,14 +74,14 @@ void printEFIMemMap(EfiMemMap *physMemMap) {
 }
 
 // Side effects: Modifies the EfiMemMap (removes some pages)
-PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
+PhysAddr _getPagesFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     size_t found = 0;
     uint64_t iStart = 0, iEnd = 0;
     for (uint64_t i = 0; i < physMemMap->count && found < nbpages; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
         MemoryDescriptor *end = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * iEnd);
         if (
-            !isValidMem(desc) || 
+            !isValidMem(desc) ||
             desc->NumberOfPages == 0 ||
             (i != iStart && end->PhysicalStart + end->NumberOfPages * 4096 != desc->PhysicalStart)
         ) { // Memory is not usable
@@ -96,7 +96,7 @@ PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
     }
 
     if (found >= nbpages) {
-        // Consume pages from the end of the range backwards
+        // Consume pages from the end of the range backwards to optimize (one write for backward vs two writes for forward)
         size_t remaining = nbpages;
         uint64_t i = iEnd;
         while (remaining != 0) {
@@ -104,11 +104,12 @@ PhysAddr _getPhysMemoryFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
             uint64_t min = desc->NumberOfPages < remaining ? desc->NumberOfPages : remaining;
             desc->NumberOfPages -= min;
             remaining -= min;
-            if (i == iStart) break;
+            if (remaining == 0) break;
             i--;
         }
         // The start address is at the end of the first partially-consumed descriptor
         MemoryDescriptor *start = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
+        PRINT_DEBUG("Reserved %U pages at %p\n", nbpages, start->PhysicalStart + start->NumberOfPages * 4096);
         return start->PhysicalStart + start->NumberOfPages * 4096;
     }
 
