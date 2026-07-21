@@ -30,9 +30,9 @@ _Noreturn void kmain(BootInfo* bootInfo)
     // buddy_printTable();
 
     printEFIMemMap(bootInfo->memMap);
-    memmap_printMapping();
+    // memmap_printMapping();
 
-    #define nb 5000
+    #define nb 3500
     PRINT_DEBUG("Test with %U pages (%UB)\n", nb, nb*(1<<12));
     __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
     PRINT_DEBUG("c\n");

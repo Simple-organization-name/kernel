@@ -44,18 +44,51 @@ static void _initBuddyChainedList(Buddy *buf) {
     buf[count - 1].next = NULL;
 }
 
-Buddy *_grabUsableBuddy(BuddyTable *src) {
-    if (!src->usable) {
-        PhysAddr addr = _reservedBuddyForReplenishing;
-        uint16_t idx[4] = {510, 508, 1, 0};
-        int found = memmap_findSlot(PTE_PD, idx); // OOPS CYCLIC DEPENDENCY
-        if(!found || idx[1] != 508) {
-            PRINT_ERR("OOUB (Out-Of-Usable-Buddy)\n");
-            PRINT_ERR("Failed to find empty space in mem management PD for new usable buddies\n");
-            CRIT_HLT();
+// Static variable to keep track of the used slot in the mem management mapping
+static bool _standalone_buddy_map_idx_inited = false;
+static uint16_t _standalone_buddy_map_idx = 0;
+
+inline static int _incStandaloneBuddyMapIdx() {
+    _standalone_buddy_map_idx++;
+    if (_standalone_buddy_map_idx > 511) return 0;
+    return 1;
+}
+
+/**
+ * Function used in `_grabUsableBuddy` if it needs to map any address
+ * \param addr The address to map to the memory. Should be a 2MiB page.
+ * \return The index of the mapping at paging [510][508]
+ */
+static uint16_t _standaloneBuddyMap(const PhysAddr addr) {
+    PageEntry *table = PD(510, 508);
+
+    if (!_standalone_buddy_map_idx_inited) {
+        while (table[_standalone_buddy_map_idx].present) {
+            if (!_incStandaloneBuddyMapIdx()) {
+                PRINT_ERR("OOUB !\n");
+                PRINT_ERR("Not enough reserved memory space for mem management (which is kinda weird as it can fit 128Go)");
+                CRIT_HLT();
+            }
         }
-        memmap_map(idx, PTE_PD, addr, PTE_PS | PTE_RW | PTE_NX);
-        Buddy *buf = VA_ARRAY(idx);
+        _standalone_buddy_map_idx_inited = true;
+    }
+
+    table[_standalone_buddy_map_idx].whole = MAKE_PAGE_ENTRY(addr, PTE_PS | PTE_RW | PTE_NX);
+    uint16_t ret = _standalone_buddy_map_idx;
+    if (!_incStandaloneBuddyMapIdx()) {
+        PRINT_ERR("Reached end of reserved memory for buddy allocator !");
+        CRIT_HLT();
+    }
+
+    return ret;
+}
+
+static Buddy *_grabUsableBuddy(BuddyTable *src) {
+    if (!src->usable) {
+        PRINT_DEBUG("No more usable buddies, refilling\n");
+        PhysAddr addr = _reservedBuddyForReplenishing;
+        uint16_t idx = _standaloneBuddyMap(addr);
+        Buddy *buf = VA(510, 508, idx, 0);
         _initBuddyChainedList(buf);
         _buddyTable.usable = buf;
         // We replenished the usable buddies, so we can call buddy_alloc safely
@@ -146,7 +179,7 @@ static void _buddy_free(uint8_t level, PhysAddr addr) {
     }
 }
 
-static void initBuddyMap(EfiMemMap *map) {
+static void _initBuddyMap(EfiMemMap *map) {
     // Init buddy map for each levels
     uint16_t pdIdx = 1, ptIdx = 0;
     for (uint8_t level = 0; level < BUDDY_MAX_ORDER; level++) {
@@ -212,6 +245,14 @@ static void initBuddyMap(EfiMemMap *map) {
     }
 }
 
+static void _buddyReservePageTableSlots() {
+    PageEntry *table = PD(510, 508);
+    uint16_t i = 0;
+    for (; i < 512 && !PAGE_TABLE_SLOT_AVAILABLE(table[i]); i++);
+    for (;i < 512; i++) {
+        table[i].sreserved = 1;
+    }
+}
 
 /**
  * SHOULD BE CALLED BEFORE MULTI THREADING
@@ -223,6 +264,8 @@ void buddy_init(EfiMemMap *physMemMap) {
         PRINT_ERR("HOW MUCH RAM DO YOU HAVE ??????\n");
         CRIT_HLT();
     }
+    _buddyReservePageTableSlots();
+
     _buddyTable.totalRAM = totalRAM;
 
     // Get memory to make usable buddies
@@ -240,7 +283,7 @@ void buddy_init(EfiMemMap *physMemMap) {
     _buddyTable.usable = buf;
 
     // Init buddy map
-    initBuddyMap(physMemMap);
+    _initBuddyMap(physMemMap);
 
     // Init buddy table with all the available memory
     for (uint64_t i = 0; i < physMemMap->count; i++) {

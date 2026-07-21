@@ -99,13 +99,13 @@ static int _findEmptySlot(const PageType targetType, uint16_t * const idx, const
     for (uint16_t i = idx[curType]; i < (curType == PTE_PML4 ? 511 : 512); i++) {
         // kprintf("targetType: %u, curType: %u, curIdx: %u\n", targetType, curType, i);
         idx[curType] = i;
-        if (curType == targetType && !table[i].sreserved) { // if it is the right level and the slot is free
+        if (curType == targetType && !PAGE_TABLE_SLOT_AVAILABLE(table[i])) { // if it is the right level and the slot is free
             table[i].whole = PTE_R;
             return 1;
         }
 
         else if (curType != targetType && !table[i].pageSize) {
-            if (!table[i].sreserved) {
+            if (!table[i].present) {
                 PhysAddr page = buddy_alloc(BUDDY_4K);
                 if (!_memmap_map(idx, curType, page, PTE_RW)) {
                     PRINT_ERR("Failed to map page\n");
