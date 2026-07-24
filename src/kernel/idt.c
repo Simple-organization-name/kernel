@@ -151,7 +151,7 @@ void interrupt_handler(interrupt_frame_t* context)
         kprintf("A division error has occured at RIP=%p.\n", context->rip);
         hlt();
         return;
-    
+
     case 0x06:  // invalid opcode
         kprintf("An invalid opcode was encountered at RIP=%p.\n", context->rip);
         hlt();
@@ -188,7 +188,7 @@ void interrupt_handler(interrupt_frame_t* context)
             : "=r"(addr)
             :: "memory"
         );
-        kprintf("\nPage fault at address %p, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
+        PRINT_ERR("\nPage fault at address %p, caused by a %s access during %s.\n", addr, context->err_code & 2 ? "write" : "read", context->err_code & 32 ? "an instruction fetch" : "a memory access");
         kprintf("Caused by a %s\n", context->err_code & 1 ? "page protection violation" : "non-present page");
         kprintf("Caused at RIP=%p, in %s mode.\n", context->rip, context->err_code & 4 ? "user" : "kernel");
         registerDump(&context->registers);
@@ -232,10 +232,10 @@ void interrupt_handler(interrupt_frame_t* context)
         }
         (void)bytes;
         (void)chr;
-        
-        
+
+
         return;
-    
+
     default:
         kprintf("Interrupt vector %X was triggered but is not handled.\n", context->int_no);
         return;

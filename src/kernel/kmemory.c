@@ -28,7 +28,7 @@ typedef enum {
 __attribute_maybe_unused__
 void *memset(void *dest, int val, size_t count) {
     for (size_t i = 0; i < count; i++)
-        ((uint8_t *)dest)[i] = val;
+        ((char *)dest)[i] = val;
     return dest;
 }
 

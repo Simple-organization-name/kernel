@@ -35,18 +35,19 @@ _Noreturn void kmain(BootInfo* bootInfo)
     #define nb 3500
     PRINT_DEBUG("Test with %U pages (%UB)\n", nb, nb*(1<<12));
     __attribute_maybe_unused__ int *test = kvmalloc(nb, 0);
-    PRINT_DEBUG("c\n");
 
     memmap_printMapping();
 
     if (test) {
         for (uint64_t i = 0; i < ((1<<12)*nb) / sizeof(int); i++) {
             if (i % (1<<10) == 0 && (VirtAddr)(test + i) > 0x8000BF4000)
-                PRINT_DEBUG("va: %p, pa: %p, val: %x\n", test + i, memmap_getMapping((VirtAddr)(test + i), NULL), test[i]);
+                // PRINT_DEBUG("va: %p, pa: %p, val: %x\n", test + i, memmap_getMapping((VirtAddr)(test + i), NULL), test[i]);
+                PRINT_DEBUG("va: %p, val: %x\n", test + i, test[i]);
             test[i] = i;
 
             if (i % (1<<10) == 0 && (VirtAddr)(test + i) > 0x8000BF4000)
-                PRINT_DEBUG("va: %p, pa: %p, val: %x\n", test + i, memmap_getMapping((VirtAddr)(test + i), NULL), test[i]);
+                // PRINT_DEBUG("va: %p, pa: %p, val: %x\n", test + i, memmap_getMapping((VirtAddr)(test + i), NULL), test[i]);
+                PRINT_DEBUG("va: %p, val: %x\n", test + i, test[i]);
             // kprintf("%d ", test[i]);
         }
         PRINT_DEBUG("Test at: %p\n", test);

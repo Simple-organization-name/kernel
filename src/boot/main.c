@@ -722,8 +722,8 @@ static EFI_STATUS makePageTables(uint64_t kernel_pa, uint64_t kernel_size, PageE
 
     // this maps all of lower 1GiB by identity
     pdp_low[0].whole = MAKE_PAGE_ENTRY(0, PTE_RW | PTE_PS);
-    
-    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_RW | PTE_G);    
+
+    pdp_high[510].whole = MAKE_PAGE_ENTRY(pd_kernel, PTE_RW | PTE_G);
     // page align these just in case of bad caller
     if (kernel_pa & ((1<<21)-1)) {
         EfiPrintError(-1, u"Bad kernel alignment (dev fault lmao)");
@@ -758,10 +758,10 @@ static EFI_STATUS loadTrampoline(OUT void (**trampoline)(PageEntry*, BootInfo*, 
     noPages += (sizeof(BootInfo) + sizeof(Framebuffer) + sizeof(EfiMemMap) + memmap.mapSize + sizeof(FileArray) + sizeof(FileData[files.count])) / EFI_PAGE_SIZE + 1;
 
     EFI_PHYSICAL_ADDRESS addr = 1 << 21;
-    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
+    systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiReservedMemoryType, noPages, &addr);
     EFI_CALL_ERROR {
         addr = 1 << 30;
-        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiLoaderCode, noPages, &addr);
+        systemTable->BootServices->AllocatePages(AllocateMaxAddress, EfiReservedMemoryType, noPages, &addr);
         EFI_CALL_FATAL_ERROR(u"WTF couldn't get a few pages under the 1GiB bar...");
     }
 

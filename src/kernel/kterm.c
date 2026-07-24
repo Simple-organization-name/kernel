@@ -326,6 +326,6 @@ void kprintcheck(const char *str)
     for (const char *i = str; *i; i++) outb(0x3F8, *i);
     outb(0x3F8, '\n');
 #else
-    kprintf("[CHECK] %s\n", str)
+    kprintf("[CHECK] %s\n", str);
 #endif
 }

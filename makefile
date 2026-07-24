@@ -20,7 +20,7 @@ KERNEL_ASMFLAGS 		= -f elf64 #-w+orphan-labels -w+number-overflow -w+all -Werror
 KERNEL					= kernel
 
 OVMF_PATH 				= OVMF.fd
-EMUL_ARGS				= -net none -serial file:serial.log -no-reboot -no-shutdown -d guest_errors #-cpu host #-enable-kvm # -d int 2> stderr.log
+EMUL_ARGS				= -net none -serial file:serial.log -no-reboot -no-shutdown -d guest_errors -M accel=tcg,smm=off -d int 2> stderr.log #-cpu host #-enable-kvm
 
 KERNEL_SOURCES_ASM 		= $(wildcard src/kernel/*.asm)
 KERNEL_OBJECTS_ASM 		= $(patsubst src/kernel/%.asm,build/kernel/%.o,$(KERNEL_SOURCES_ASM))
