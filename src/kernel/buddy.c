@@ -20,9 +20,9 @@ static PhysAddr     _reservedBuddyForReplenishing = 0; // Yep
 static PhysAddr _buddyTransfer(Buddy * restrict * restrict src, Buddy * restrict * restrict dest);
 static void     _initBuddyChainedList(Buddy *buf);
 static Buddy    *_grabUsableBuddy(BuddyTable *src);
-static Buddy    *_grabAssociatedBuddy(uint8_t level, PhysAddr addr);
-static PhysAddr _buddy_alloc(uint8_t level);
-static void     _buddy_free(uint8_t level, PhysAddr addr);
+static Buddy    *_grabAssociatedBuddy(BuddyType level, PhysAddr addr);
+static PhysAddr _buddy_alloc(BuddyType);
+static void     _buddy_free(BuddyType level, PhysAddr addr);
 
 
 static PhysAddr _buddyTransfer(Buddy * restrict * restrict src, Buddy * restrict * restrict dest) {
@@ -91,7 +91,7 @@ static Buddy *_grabUsableBuddy(BuddyTable *src) {
         Buddy *buf = VA(510, 508, idx, 0);
         _initBuddyChainedList(buf);
         _buddyTable.usable = buf;
-        // We replenished the usable buddies, so we can call buddy_alloc safely
+        // We replenished the usable buddies, so we can call buddy_alloc safely, no infinite recursion
         _reservedBuddyForReplenishing = _buddy_alloc(BUDDY_2M);
     }
     Buddy *out = src->usable;
@@ -100,7 +100,7 @@ static Buddy *_grabUsableBuddy(BuddyTable *src) {
     return out;
 }
 
-static PhysAddr _buddy_alloc(uint8_t level) {
+static PhysAddr _buddy_alloc(BuddyType level) {
     uint8_t curLevel;
     for (curLevel = level; curLevel < BUDDY_MAX_ORDER && !_buddyTable.levels[curLevel].list; curLevel++); // find nearest usable buddy iykyk
     if (curLevel == BUDDY_MAX_ORDER) {
@@ -131,7 +131,7 @@ static PhysAddr _buddy_alloc(uint8_t level) {
     return _buddyTransfer(&_buddyTable.levels[level].list, &_buddyTable.usable);
 }
 
-static Buddy *_grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
+static Buddy *_grabAssociatedBuddy(BuddyType level, PhysAddr addr) {
     PhysAddr nextLevelAlignedAddrHead = addr >> (level + 12 + 1);
     Buddy **buddy = &_buddyTable.levels[level].list;
     for (; *buddy; buddy = &(*buddy)->next) {
@@ -142,7 +142,7 @@ static Buddy *_grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
     }
     if (!*buddy) {
         PRINT_ERR("Buddy is gone...\n");
-        PRINT_ERR("level = %u, addr = %p\n", (unsigned)level, addr);
+        PRINT_ERR("level = %u, addr = %p\n", (uint32_t)level, addr);
         PRINT_ERR("map (first bytes):");
         for (int i = 0; i < 10; i++) {
             kprintf(" 0x%x", ((uint8_t *)_buddyTable.levels[level].map)[i]);
@@ -155,7 +155,7 @@ static Buddy *_grabAssociatedBuddy(uint8_t level, PhysAddr addr) {
     return ret;
 }
 
-static void _buddy_free(uint8_t level, PhysAddr addr) {
+static void _buddy_free(BuddyType level, PhysAddr addr) {
     // PRINT_DEBUG("Called buddy_free %p, is level %u\n", addr, level);
     if (level >= BUDDY_MAX_ORDER) {
         PRINT_ERR("WTF");
@@ -258,6 +258,7 @@ static void _buddyReservePageTableSlots() {
  * SHOULD BE CALLED BEFORE MULTI THREADING
  */
 void buddy_init(EfiMemMap *physMemMap) {
+    kprintf("Intitializing Buddy allocator");
     uint64_t totalRAM = getTotalRAM(physMemMap);
     PRINT_DEBUG("Total RAM: %UB (0x%X)\n", totalRAM, totalRAM);
     if (totalRAM >= (1UL<<40)) {
@@ -355,17 +356,4 @@ void buddy_printTable() {
         );
     }
     kputc('\n');
-}
-
-int buddy_addrAvl(PhysAddr addr, BuddyType type) {
-    LOCK_SPINLOCK(&_buddyLock);
-    Buddy *bud = _buddyTable.levels[type].list;
-    while (bud) {
-        if (bud->start <= addr && addr <= bud->start + (1 << (12 + type)))
-            return 1;
-
-        bud = bud->next;
-    }
-    LOCK_RELEASE(&_buddyLock);
-    return 0;
 }

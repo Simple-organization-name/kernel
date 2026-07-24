@@ -27,7 +27,7 @@ typedef enum _BuddyType : uint8_t {
 
 typedef struct _Buddy {
     PhysAddr        start;
-    struct _Buddy   *next;  
+    struct _Buddy   *next;
 } Buddy;
 
 typedef struct _BuddyArray {

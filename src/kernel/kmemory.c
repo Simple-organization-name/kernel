@@ -59,7 +59,7 @@ uint64_t getTotalRAM(EfiMemMap *physMemMap) {
     uint64_t total = 0;
     for (uint64_t i = 0; i < physMemMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
-        total += desc->NumberOfPages * 4096;
+        total += desc->NumberOfPages * PAGE_SIZE;
     }
     return total;
 }
@@ -68,13 +68,15 @@ void printEFIMemMap(EfiMemMap *physMemMap) {
     kputs("----==== EfiMemMap ====----\n");
     for (uint64_t i = 0; i < physMemMap->count; i++) {
         MemoryDescriptor *desc = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
-        kprintf("start: %p, end: %p, nb of pages: %U, type: %u\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * 4096, desc->NumberOfPages, desc->Type);
+        kprintf("start: %p, end: %p, nb of pages: %U, type: %u\n", desc->PhysicalStart, desc->PhysicalStart + desc->NumberOfPages * PAGE_SIZE, desc->NumberOfPages, desc->Type);
     }
     kputs("----===================----\n\n");
 }
 
 // Side effects: Modifies the EfiMemMap (removes some pages)
 PhysAddr _getPagesFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
+    if (nbpages == 0) return ADDR_MAX;
+
     size_t found = 0;
     uint64_t iStart = 0, iEnd = 0;
     for (uint64_t i = 0; i < physMemMap->count && found < nbpages; i++) {
@@ -83,9 +85,9 @@ PhysAddr _getPagesFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
         if (
             !isValidMem(desc) ||
             desc->NumberOfPages == 0 ||
-            (i != iStart && end->PhysicalStart + end->NumberOfPages * 4096 != desc->PhysicalStart)
+            (i != iStart && end->PhysicalStart + end->NumberOfPages * PAGE_SIZE != desc->PhysicalStart)
         ) { // Memory is not usable
-            // kprintf("end of range: %p, current start : %p\n", end->PhysicalStart + end->NumberOfPages * 4096, desc->PhysicalStart);
+            // kprintf("end of range: %p, current start : %p\n", end->PhysicalStart + end->NumberOfPages * PAGE_SIZE, desc->PhysicalStart);
             found = 0;
             iStart = iEnd = i + 1;
             continue;
@@ -109,8 +111,8 @@ PhysAddr _getPagesFromEFIMemMap(EfiMemMap *physMemMap, size_t nbpages) {
         }
         // The start address is at the end of the first partially-consumed descriptor
         MemoryDescriptor *start = (MemoryDescriptor *)((char *)physMemMap->map + physMemMap->descSize * i);
-        PRINT_DEBUG("Reserved %U pages at %p\n", nbpages, start->PhysicalStart + start->NumberOfPages * 4096);
-        return start->PhysicalStart + start->NumberOfPages * 4096;
+        PRINT_DEBUG("Reserved %U pages at %p\n", nbpages, start->PhysicalStart + start->NumberOfPages * PAGE_SIZE);
+        return start->PhysicalStart + start->NumberOfPages * PAGE_SIZE;
     }
 
     PRINT_ERR("Could not find enough contiguous memory\n");

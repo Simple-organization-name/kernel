@@ -10,6 +10,8 @@
 // Align address to `align` alignment
 #define ALIGN(addr, align) ((uint64_t)(addr) & ~(((uint64_t)(align)) - 1UL))
 
+#define PAGE_SIZE           4096
+
 #define RECURSIVE_BASE      0xFFFFFF8000000000UL
 #define RECURSIVE_SLOT      511UL
 
