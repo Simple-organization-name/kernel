@@ -317,6 +317,17 @@ const char *_pageTypeToStr(PageType type) {
     return "";
 }
 
+inline void memmap_printInfo(uint16_t *idx, PageType type) {
+    PageEntry *table = _getTable(type, idx);
+    PageEntry *entry = &table[idx[type]];
+    kprintf(
+        "[%s (%u)] idx: {%u, %u, %u, %u}, va: %p, pa: %p | P: %u | RW: %u | PS: %u | G: %u | SR/R: %u/%u | NX: %u\n",
+        _pageTypeToStr(type), type, idx[0], idx[1], idx[2], idx[3],
+        VA_ARRAY(idx), entry->dest << 12,
+        entry->present, entry->rw, entry->pageSize, entry->global, entry->sreserved, entry->reserved, entry->xd
+    );
+}
+
 static void _printMapping(uint16_t *idx, PageType type) {
     PageEntry *table = _getTable(type, idx);
     for (idx[type] = 0; idx[type] < 512; idx[type]++) {
@@ -324,10 +335,10 @@ static void _printMapping(uint16_t *idx, PageType type) {
         if (!entry->present) continue;
         for (uint8_t i = 0; i < type * 4; i++) kputc(' ');
         kprintf(
-            "[%s (%u)] idx: {%u, %u, %u, %u} | RW: %u | PS: %u | G: %u | SR/R: %u/%u | NX: %u | va: %p, pa: %p\n",
+            "[%s (%u)] idx: {%u, %u, %u, %u}, va: %p, pa: %p | P: %u | RW: %u | PS: %u | G: %u | SR/R: %u/%u | NX: %u\n",
             _pageTypeToStr(type), type, idx[0], idx[1], idx[2], idx[3],
-            entry->rw, entry->pageSize, entry->global, entry->sreserved, entry->reserved, entry->xd,
-            VA_ARRAY(idx), entry->dest << 12
+            VA_ARRAY(idx), entry->dest << 12,
+            entry->present, entry->rw, entry->pageSize, entry->global, entry->sreserved, entry->reserved, entry->xd
         );
         if (type != PTE_PT && !entry->pageSize) {
             _printMapping(idx, type + 1);
@@ -338,10 +349,12 @@ static void _printMapping(uint16_t *idx, PageType type) {
 }
 
 void memmap_printMapping() {
+    LOCK_SPINLOCK(&_memmapLock);
     kprintf("  ---==== Mapping ====---\n");
     uint16_t idx[4] = {0};
     _printMapping(idx, 0);
     kprintf("  ---=================---\n\n");
+    LOCK_RELEASE(&_memmapLock);
 }
 
 void memmap_clearPage(const PhysAddr addr) {

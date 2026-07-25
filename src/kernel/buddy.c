@@ -258,7 +258,7 @@ static void _buddyReservePageTableSlots() {
  * SHOULD BE CALLED BEFORE MULTI THREADING
  */
 void buddy_init(EfiMemMap *physMemMap) {
-    kprintf("Intitializing Buddy allocator");
+    kprintf("Intitializing Buddy allocator\n");
     uint64_t totalRAM = getTotalRAM(physMemMap);
     PRINT_DEBUG("Total RAM: %UB (0x%X)\n", totalRAM, totalRAM);
     if (totalRAM >= (1UL<<40)) {

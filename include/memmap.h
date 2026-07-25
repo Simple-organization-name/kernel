@@ -4,6 +4,7 @@
 #include <memTables.h>
 #include <kmemory.h>
 
+void memmap_printInfo(uint16_t *idx, PageType type);
 void memmap_printMapping();
 
 void memmap_clearPage(PhysAddr addr);

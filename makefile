@@ -69,7 +69,7 @@ emul:
 	-drive if=none,format=raw,id=live_usb,file=fat:rw:iso/ \
 	-usb \
 	-device usb-storage,bus=usb-bus.0,drive=live_usb \
-	-bios $(OVMF_PATH) $(EMUL_ARGS) -m 1G \
+	-bios $(OVMF_PATH) $(EMUL_ARGS) -m 4G \
 	2> stderr.log
 
 setup-ubuntu:

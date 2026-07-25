@@ -21,7 +21,8 @@ void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
         // PRINT_DEBUG("idx: %u %u %u %u (va: %p, mapped pa: %p)\n", idx[0], idx[1], idx[2], idx[3], VA_ARRAY(idx), phys);
         // PRINT_DEBUG("got phys: %p\n", phys);
         if (!memmap_map(idx, PTE_PT, phys, PTE_RW | flags)) {
-            PRINT_ERR("Failed to map page idx: {%u, %u, %u, %u}\n", idx[0], idx[1], idx[2], idx[3]);
+            PRINT_ERR("Failed to map page idx: {%u, %u, %u, %u}\n\t", idx[0], idx[1], idx[2], idx[3]);
+            memmap_printInfo(idx, PTE_PT);
             CRIT_HLT();
         }
         idx[3]++;
@@ -47,6 +48,6 @@ void *__kvmalloc(uint16_t *idx, size_t nbPages, uint64_t flags) {
  * Maps physical pages to virtual memory
  */
 void *_kvmalloc(size_t nbPages, uint64_t flags) {
-    uint16_t idx[4] = {1, 0, 0, 0};
+    uint16_t idx[4] = {2, 0, 0, 0};
     return __kvmalloc(idx, nbPages, flags);
 }
